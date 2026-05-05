@@ -367,6 +367,78 @@ select option { background: var(--surface2); }
   background: var(--green);
   transition: width 0.4s ease;
 }
+.matchup-base { font-size: 11px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Matchup detail panel ──────────────────────────────────── */
+#mu-detail { padding: 0 24px 32px; }
+.mu-detail-hdr {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.mu-back-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+.mu-back-btn:hover { color: var(--text2); border-color: var(--border2); }
+.mu-detail-title { font-family: var(--display); font-size: 16px; font-weight: 700; }
+.mu-detail-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.mu-detail-wr { margin-left: auto; font-family: var(--mono); font-size: 22px; font-weight: 500; flex-shrink: 0; }
+.mu-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.mu-section-hdr {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--border);
+}
+.mu-card-row {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.mu-card-row:hover { border-color: var(--border2); }
+.mu-card-art {
+  width: 30px; height: 30px;
+  border-radius: 3px;
+  background: var(--surface);
+  background-size: 200% auto;
+  background-position: 50% 20%;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.mu-card-art.loaded { opacity: 1; }
+.mu-card-name { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-card-games { font-family: var(--mono); font-size: 11px; color: var(--text3); flex-shrink: 0; }
+.mu-card-wr { font-family: var(--mono); font-size: 13px; color: var(--text2); flex-shrink: 0; min-width: 34px; text-align: right; }
+.mu-delta { font-family: var(--mono); font-size: 13px; font-weight: 600; flex-shrink: 0; min-width: 46px; text-align: right; }
+.mu-delta.good { color: var(--green); }
+.mu-delta.bad  { color: var(--red2); }
+.mu-delta.neu  { color: var(--text3); }
+.mu-card-bar { position: absolute; bottom: 0; left: 0; height: 2px; opacity: 0.5; }
 
 /* ── Matchup matrix ──────────────────────────────────────── */
 .mx-table {
@@ -1314,6 +1386,8 @@ select option { background: var(--surface2); }
 /* ── Card tile grid ─────────────────────────────────────────── */
 .table-wrap {
   padding: 0 24px 32px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Controls bar above tiles */
@@ -1396,6 +1470,7 @@ select option { background: var(--surface2); }
     gap: 8px;
     padding: 0 10px 24px;
   }
+  .leader-card { aspect-ratio: 3 / 2; }
   .lc-name { font-size: 15px; }
   .lc-base { font-size: 13px; }
   .lc-stat-label { font-size: 10px; letter-spacing: 0; }
@@ -2707,7 +2782,8 @@ select option { background: var(--surface2); }
 #player-detail-backdrop.open { display: block; }
 @media (max-width: 700px) {
   #player-detail-panel { width: 100%; }
-  .pt-id, .pt-deck, .pt-date { display: none; }
+  .pt-id { display: none; }
+  .pt-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 /* ── Merge review ────────────────────────────────────────────────────────── */
@@ -2894,6 +2970,17 @@ select option { background: var(--surface2); }
     </div>
     <div class="matchup-grid" id="leader-matchups-grid">
       <div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>
+    </div>
+    <div id="mu-detail" style="display:none">
+      <div class="mu-detail-hdr">
+        <button class="mu-back-btn" onclick="closeMatchupDetail()">← All matchups</button>
+        <div>
+          <div class="mu-detail-title" id="mu-detail-title"></div>
+          <div class="mu-detail-sub" id="mu-detail-sub"></div>
+        </div>
+        <div class="mu-detail-wr" id="mu-detail-wr"></div>
+      </div>
+      <div class="mu-cards-grid" id="mu-cards-grid"></div>
     </div>
   </div>
 
@@ -3790,6 +3877,29 @@ function _saveArtCache() {
   try { localStorage.setItem(_LS_ART_KEY, JSON.stringify(_cardArtCache)); } catch {}
 }
 
+function loadCardArt(cardName, elId, extraClass = null) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.dataset.forCard = cardName;
+  const applyUrl = (el, url) => {
+    el.style.backgroundImage = `url(${url})`;
+    if (extraClass) el.classList.add(extraClass);
+  };
+  if (_cardArtCache[cardName]) { applyUrl(el, _cardArtCache[cardName]); return; }
+  const pipeParts = cardName.split(' | ');
+  const lookupUrl = pipeParts[1]
+    ? '/api/cards/by-name/' + encodeURIComponent(pipeParts[0].trim()) + '?subtitle=' + encodeURIComponent(pipeParts[1].trim())
+    : '/api/cards/by-name/' + encodeURIComponent(pipeParts[0].trim());
+  api(lookupUrl).then(card => {
+    const url = card?.front_image_url;
+    if (!url) return;
+    _cardArtCache[cardName] = url;
+    _saveArtCache();
+    const el2 = document.getElementById(elId);
+    if (el2 && el2.dataset.forCard === cardName) applyUrl(el2, url);
+  }).catch(() => {});
+}
+
 function renderCardTable(rows) {
   // Type order: Unit → Event → Upgrade → everything else
   const TYPE_ORDER = { 'Unit': 0, 'Event': 1, 'Upgrade': 2 };
@@ -3935,31 +4045,6 @@ function renderCardTable(rows) {
     };
   }
 
-  // Lazy-load art helper — stores card name on element to guard against stale async callbacks
-  const loadCardArt = (cardName, elId, extraClass = null) => {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    el.dataset.forCard = cardName;  // stamp so we can verify on resolve
-    const applyUrl = (el, url) => {
-      el.style.backgroundImage = `url(${url})`;
-      if (extraClass) el.classList.add(extraClass);
-    };
-    if (_cardArtCache[cardName]) { applyUrl(el, _cardArtCache[cardName]); return; }
-    const pipeParts = cardName.split(' | ');
-    const lookupUrl = pipeParts[1]
-      ? '/api/cards/by-name/' + encodeURIComponent(pipeParts[0].trim()) + '?subtitle=' + encodeURIComponent(pipeParts[1].trim())
-      : '/api/cards/by-name/' + encodeURIComponent(pipeParts[0].trim());
-    api(lookupUrl).then(card => {
-      const url = card?.front_image_url;
-      if (!url) return;
-      _cardArtCache[cardName] = url;
-      _saveArtCache();
-      // Re-find element and verify it still belongs to this card
-      const el2 = document.getElementById(elId);
-      if (el2 && el2.dataset.forCard === cardName) applyUrl(el2, url);
-    }).catch(() => {});
-  };
-
   mdRows.forEach((r, i) => loadCardArt(r.card_name, 'ct-art-' + i, 'loaded'));
   sbRows.forEach((r, i) => loadCardArt(r.card_name, 'sb-art-' + i, 'loaded'));
 
@@ -4014,25 +4099,29 @@ async function loadLeaderMatchups() {
   }
 }
 
+let matchupRows = [];
+
 function renderMatchups() {
+  document.getElementById('mu-detail').style.display = 'none';
+  document.getElementById('leader-matchups-grid').style.display = '';
+
   const grid = document.getElementById('leader-matchups-grid');
   if (!matchupData.length) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:24px">// no matchup data — run the melee scraper to collect match results</div>';
     return;
   }
 
-  // Sort: most games first (most common matchups), then by win rate as tiebreaker
-  const rows = [...matchupData].sort((a, b) => b.matches - a.matches || (b.win_rate ?? 0) - (a.win_rate ?? 0));
+  matchupRows = [...matchupData].sort((a, b) => b.matches - a.matches || (b.win_rate ?? 0) - (a.win_rate ?? 0));
 
-  grid.innerHTML = rows.map((r, i) => {
+  grid.innerHTML = matchupRows.map((r, i) => {
     const wr  = r.win_rate ?? 0;
     const pct = Math.round(wr * 100);
     const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--gold)' : 'var(--red2)';
-    const safe = r.opponent.replace(/"/g,'&quot;').replace(/&/g,'&amp;');
-    return `<div class="matchup-card" data-leader="${safe}" id="mu-${i}">
+    return `<div class="matchup-card" data-idx="${i}" id="mu-${i}">
   <div class="matchup-art" id="mu-art-${i}"></div>
   <div class="matchup-info">
     <div class="matchup-name">${shortName(r.opponent)}</div>
+    <div class="matchup-base">${r.opponent_base_group || ''}</div>
     <div class="matchup-games">${r.wins}W – ${r.losses}L (${r.matches} games)</div>
   </div>
   <div class="matchup-winrate" style="color:${color}">${pct}%</div>
@@ -4041,22 +4130,111 @@ function renderMatchups() {
   }).join('');
 
   grid.onclick = e => {
-    const card = e.target.closest('.matchup-card[data-leader]');
-    if (card) openLeader(card.dataset.leader);
+    const card = e.target.closest('.matchup-card[data-idx]');
+    if (card) openMatchupDetail(matchupRows[parseInt(card.dataset.idx)]);
   };
 
-  // Load art for each opponent
-  rows.forEach((r, i) => {
+  matchupRows.forEach((r, i) => {
     fetchLeaderCard(r.opponent).then(d => {
       const el = document.getElementById('mu-art-' + i);
       if (!el) return;
       const url = d?.back_art_url || d?.front_art_url;
-      if (url) {
-        el.style.backgroundImage = `url(${url})`;
-        el.style.opacity = '1';
-      }
+      if (url) { el.style.backgroundImage = `url(${url})`; el.style.opacity = '1'; }
     });
   });
+}
+
+function closeMatchupDetail() {
+  document.getElementById('mu-detail').style.display = 'none';
+  document.getElementById('leader-matchups-grid').style.display = '';
+}
+
+async function openMatchupDetail(matchup) {
+  document.getElementById('leader-matchups-grid').style.display = 'none';
+  document.getElementById('mu-detail').style.display = '';
+
+  const wr    = matchup.win_rate ?? 0;
+  const pct   = Math.round(wr * 100);
+  const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--gold)' : 'var(--red2)';
+  document.getElementById('mu-detail-title').textContent = shortName(matchup.opponent) + ' — ' + (matchup.opponent_base_group || '');
+  document.getElementById('mu-detail-sub').textContent = matchup.wins + 'W – ' + matchup.losses + 'L (' + matchup.matches + ' games)';
+  document.getElementById('mu-detail-wr').textContent = pct + '%';
+  document.getElementById('mu-detail-wr').style.color = color;
+  document.getElementById('mu-cards-grid').innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
+
+  const set  = document.getElementById('lp-set').value;
+  const base = document.getElementById('lp-base').value;
+  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
+    + '?opponent=' + encodeURIComponent(matchup.opponent)
+    + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join(','))
+    + '&format=' + currentFormat;
+  if (set)         url += '&meta_id='    + encodeURIComponent(set);
+  if (base)        url += '&base_group=' + encodeURIComponent(base);
+  if (matchupTop8) url += '&top8_only=true';
+
+  try {
+    const data = await api(url);
+    renderMatchupCards(data);
+  } catch(e) {
+    document.getElementById('mu-cards-grid').innerHTML =
+      `<div class="empty-state" style="grid-column:1/-1;padding:24px">// ${e.message}</div>`;
+  }
+}
+
+function renderMatchupCards(data) {
+  const grid = document.getElementById('mu-cards-grid');
+  const THRESHOLD = 0.09;
+  const byGames = (a, b) => b.game_count - a.game_count;
+  const better = data.filter(r => (r.delta ?? 0) >=  THRESHOLD).sort(byGames);
+  const worse  = data.filter(r => (r.delta ?? 0) <= -THRESHOLD).sort(byGames);
+
+  if (!better.length && !worse.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:24px">// no cards with ≥10% win rate impact in this matchup</div>';
+    return;
+  }
+
+  let idx = 0;
+  const artQueue = [];
+  const cardTile = r => {
+    const i      = idx++;
+    const wr     = r.win_rate ?? 0;
+    const delta  = r.delta ?? 0;
+    const pct    = Math.round(wr * 100);
+    const dpct   = Math.round(Math.abs(delta) * 100);
+    const dSign  = delta >= 0 ? '+' : '−';
+    const cc     = delta >= 0 ? 'good' : 'bad';
+    const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    artQueue.push({ name: r.card_name, id: 'muc-art-' + i });
+    return `<div class="card-tile conv-${cc}" data-card="${safe}" id="muc-${i}">
+  <div class="ct-art" id="muc-art-${i}"></div>
+  <div class="ct-scrim"></div>
+  <div class="ct-top">
+    <div class="ct-badge">${r.game_count}<span class="ct-badge-label">g</span></div>
+  </div>
+  <div class="ct-bottom">
+    <div class="ct-name">${r.card_name}</div>
+    <div class="ct-stats">
+      <span class="ct-incl">${pct}%</span>
+      <span class="ct-conv ${cc}">${dSign}${dpct}%</span>
+    </div>
+  </div>
+</div>`;
+  };
+
+  const section = (title, rows) => rows.length
+    ? `<div class="mu-section-hdr">${title}</div>` + rows.map(cardTile).join('')
+    : '';
+
+  grid.innerHTML =
+    section('Better in matchup', better) +
+    section('Worse in matchup', worse);
+
+  grid.onclick = e => {
+    const tile = e.target.closest('.card-tile[data-card]');
+    if (tile) openModal(tile.dataset.card);
+  };
+
+  artQueue.forEach(({ name, id }) => loadCardArt(name, id, 'loaded'));
 }
 
 // ══ SYNERGY ══════════════════════════════════════════════════════════════════
@@ -4834,6 +5012,7 @@ _tt.id = 'swu-tooltip';
 document.body.appendChild(_tt);
 
 document.addEventListener('mouseover', e => {
+  if (!matchMedia('(pointer: fine)').matches) return;
   const el = e.target.closest('[data-tooltip]');
   if (!el) return;
   _tt.textContent = el.dataset.tooltip;

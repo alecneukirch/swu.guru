@@ -1206,17 +1206,17 @@ def leader_matchups(
     format:     str            = Query("standard"),
 ):
     """
-    Win/loss record for a leader against every opponent.
+    Win/loss record for a leader against each opponent leader+base combo.
     base_group filters to only matches where THIS leader used those bases.
     top8_only restricts to matches where at least one player made top 8.
     """
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id)
-    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    own_bases = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
 
-    base_filter_p1 = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
-    base_filter_p2 = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
-    base_params    = [base_names] if base_names else []
+    own_as_p1  = "AND m.p1_base = ANY(%s::text[])" if own_bases else ""
+    own_as_p2  = "AND m.p2_base = ANY(%s::text[])" if own_bases else ""
+    own_param  = [own_bases] if own_bases else []
 
     top8_join  = ""
     top8_where = ""
@@ -1231,69 +1231,199 @@ def leader_matchups(
                 s2t.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
             )"""
 
-    # Always live query when any filter is active, or for eternal (no eternal matchup matview)
-    if date_sql or base_names or format == "eternal" or top8_only:
-        rows = db.fetchall(f"""
-            WITH as_p1 AS (
-                SELECT m.p2_leader AS opponent,
-                       COUNT(*)::INT AS matches,
-                       COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS wins,
-                       COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS losses
-                FROM {t['matches']} m
-                JOIN {t['events']} e ON e.id = m.event_id
-                {top8_join}
-                WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL
-                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
-                  {date_sql} {base_filter_p1} {top8_where}
-                GROUP BY m.p2_leader
-            ),
-            as_p2 AS (
-                SELECT m.p1_leader AS opponent,
-                       COUNT(*)::INT AS matches,
-                       COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS wins,
-                       COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS losses
-                FROM {t['matches']} m
-                JOIN {t['events']} e ON e.id = m.event_id
-                {top8_join}
-                WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL
-                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
-                  {date_sql} {base_filter_p2} {top8_where}
-                GROUP BY m.p1_leader
-            ),
-            combined AS (
-                SELECT opponent,
-                       SUM(matches) AS matches,
-                       SUM(wins)    AS wins,
-                       SUM(losses)  AS losses
-                FROM (SELECT * FROM as_p1 UNION ALL SELECT * FROM as_p2) t
-                GROUP BY opponent
-                HAVING SUM(matches) >= %s
-            )
-            SELECT opponent, matches::INT, wins::INT, losses::INT,
-                   ROUND(wins::numeric / NULLIF(wins + losses, 0), 4) AS win_rate
-            FROM combined
-            ORDER BY matches DESC
-        """, [leader] + date_params + base_params + [leader] + date_params + base_params + [min_games])
+    rows = db.fetchall(f"""
+        WITH as_p1 AS (
+            SELECT m.p2_leader AS opponent,
+                   m.p2_base   AS opponent_base,
+                   COUNT(*)::INT AS matches,
+                   COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS wins,
+                   COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS losses
+            FROM {t['matches']} m
+            JOIN {t['events']} e ON e.id = m.event_id
+            {top8_join}
+            WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
+              AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+              {date_sql} {own_as_p1} {top8_where}
+            GROUP BY m.p2_leader, m.p2_base
+        ),
+        as_p2 AS (
+            SELECT m.p1_leader AS opponent,
+                   m.p1_base   AS opponent_base,
+                   COUNT(*)::INT AS matches,
+                   COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS wins,
+                   COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS losses
+            FROM {t['matches']} m
+            JOIN {t['events']} e ON e.id = m.event_id
+            {top8_join}
+            WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
+              AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+              {date_sql} {own_as_p2} {top8_where}
+            GROUP BY m.p1_leader, m.p1_base
+        )
+        SELECT opponent, opponent_base,
+               SUM(matches)::INT AS matches,
+               SUM(wins)::INT    AS wins,
+               SUM(losses)::INT  AS losses
+        FROM (SELECT * FROM as_p1 UNION ALL SELECT * FROM as_p2) t
+        GROUP BY opponent, opponent_base
+        ORDER BY SUM(matches) DESC
+    """, [leader] + date_params + own_param + [leader] + date_params + own_param)
+
+    if not rows:
+        return []
+
+    # Classify each opponent_base into a base group (same logic as matchup_matrix_by_base)
+    all_base_names = list({r['opponent_base'] for r in rows if r['opponent_base']})
+    if all_base_names:
+        ph = ','.join(['%s'] * len(all_base_names))
+        base_cards = db.fetchall(f"""
+            SELECT DISTINCT ON (name) name,
+                   COALESCE(aspects[1], 'none') AS aspect,
+                   rarity, card_text, deploy_box, epic_action
+            FROM cards
+            WHERE is_base = true AND variant_type = 'Standard'
+              AND name IN ({ph})
+            ORDER BY name, set_code DESC
+        """, all_base_names)
+        base_meta = {r['name']: r for r in base_cards}
     else:
-        rows = db.fetchall("""
-            WITH combined AS (
-                SELECT opponent, matches, wins, losses
-                FROM mv_leader_matchups WHERE leader = %s
-                UNION ALL
-                SELECT leader AS opponent, matches,
-                       losses AS wins, wins AS losses
-                FROM mv_leader_matchups WHERE opponent = %s
-            )
-            SELECT opponent,
-                   SUM(matches)::INT AS matches,
-                   SUM(wins)::INT    AS wins,
-                   SUM(losses)::INT  AS losses,
-                   ROUND(SUM(wins)::numeric / NULLIF(SUM(wins) + SUM(losses), 0), 4) AS win_rate
-            FROM combined
-            GROUP BY opponent
-            HAVING SUM(matches) >= %s
-            ORDER BY SUM(matches) DESC
-        """, [leader, leader, min_games])
+        base_meta = {}
+
+    groups: dict = {}
+    for r in rows:
+        meta    = base_meta.get(r['opponent_base'], {})
+        aspect  = meta.get('aspect', 'none') or 'none'
+        rarity  = meta.get('rarity', 'Common') or 'Common'
+        ability = _base_ability_type(
+            meta.get('card_text') or '',
+            meta.get('deploy_box') or '',
+            meta.get('epic_action') or '',
+            r['opponent_base'] or '',
+        )
+        grp_key = _base_group_key(aspect, ability, rarity, r['opponent_base'] or '')
+        grp_lbl = _base_group_label(aspect, ability, rarity, r['opponent_base'] or '')
+        combo   = f"{r['opponent']}|||{grp_key}"
+        if combo not in groups:
+            groups[combo] = {
+                'opponent':            r['opponent'],
+                'opponent_base_group': grp_lbl,
+                'opponent_base_key':   grp_key,
+                'bases':               [],
+                'matches':             0,
+                'wins':                0,
+                'losses':              0,
+            }
+        if r['opponent_base'] not in groups[combo]['bases']:
+            groups[combo]['bases'].append(r['opponent_base'])
+        groups[combo]['matches'] += r['matches']
+        groups[combo]['wins']    += r['wins']
+        groups[combo]['losses']  += r['losses']
+
+    result = []
+    for g in groups.values():
+        total = g['wins'] + g['losses']
+        if total >= min_games:
+            result.append({
+                **g,
+                'win_rate': round(g['wins'] / total, 4) if total > 0 else None,
+            })
+
+    result.sort(key=lambda x: (-x['matches'], -(x['win_rate'] or 0)))
+    return result
+
+
+@app.get("/api/leader/{leader}/matchup-cards")
+def leader_matchup_cards(
+    leader:         str,
+    opponent:       str,
+    opponent_bases: str            = Query("", description="Comma-separated opponent base names"),
+    base_group:     Optional[str]  = Query(None, description="Comma-separated base names for this leader"),
+    meta_id:        Optional[str]  = Query(None),
+    min_games:      int             = Query(3),
+    top8_only:      bool            = Query(False),
+    format:         str             = Query("standard"),
+):
+    """
+    Cards that over/underperform for {leader} vs {opponent}+bases.
+    win_rate per card vs baseline_win_rate; sorted by delta DESC.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id)
+
+    own_bases = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    opp_bases = [b.strip() for b in opponent_bases.split(',') if b.strip()] if opponent_bases else []
+
+    own_as_p1  = "AND m.p1_base = ANY(%s::text[])" if own_bases else ""
+    own_as_p2  = "AND m.p2_base = ANY(%s::text[])" if own_bases else ""
+    opp_as_p1  = "AND m.p2_base = ANY(%s::text[])" if opp_bases else ""
+    opp_as_p2  = "AND m.p1_base = ANY(%s::text[])" if opp_bases else ""
+    own_param  = [own_bases] if own_bases else []
+    opp_param  = [opp_bases] if opp_bases else []
+
+    top8_join  = ""
+    top8_where = ""
+    if top8_only:
+        top8_join  = f"""
+            LEFT JOIN {t['standings']} s1t ON s1t.id = m.p1_standing_id
+            LEFT JOIN {t['standings']} s2t ON s2t.id = m.p2_standing_id"""
+        top8_where = """
+            AND (
+                s1t.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                OR
+                s2t.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+            )"""
+
+    branch_params = [leader, opponent] + date_params + own_param + opp_param
+
+    rows = db.fetchall(f"""
+        WITH matchup_games AS (
+            SELECT m.p1_standing_id AS standing_id,
+                   (m.winner = 'p1') AS won
+            FROM {t['matches']} m
+            JOIN {t['events']} e ON e.id = m.event_id
+            {top8_join}
+            WHERE m.p1_leader = %s AND m.p2_leader = %s
+              AND m.winner IS NOT NULL
+              {date_sql} {own_as_p1} {opp_as_p1} {top8_where}
+            UNION ALL
+            SELECT m.p2_standing_id AS standing_id,
+                   (m.winner = 'p2') AS won
+            FROM {t['matches']} m
+            JOIN {t['events']} e ON e.id = m.event_id
+            {top8_join}
+            WHERE m.p2_leader = %s AND m.p1_leader = %s
+              AND m.winner IS NOT NULL
+              {date_sql} {own_as_p2} {opp_as_p2} {top8_where}
+        ),
+        totals AS (
+            SELECT COUNT(*)::INT AS total_games,
+                   SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT AS total_wins
+            FROM matchup_games
+        ),
+        card_stats AS (
+            SELECT dc.card_name,
+                   COUNT(*)::INT AS game_count,
+                   SUM(CASE WHEN mg.won THEN 1 ELSE 0 END)::INT AS card_wins
+            FROM matchup_games mg
+            JOIN {t['decklist_cards']} dc ON dc.standing_id = mg.standing_id
+            WHERE dc.is_sideboard = false
+            GROUP BY dc.card_name
+            HAVING COUNT(*) >= %s
+        )
+        SELECT cs.card_name,
+               cs.game_count,
+               cs.card_wins AS wins,
+               ROUND(cs.card_wins::numeric / NULLIF(cs.game_count, 0), 4) AS win_rate,
+               t.total_games,
+               t.total_wins,
+               ROUND(t.total_wins::numeric / NULLIF(t.total_games, 0), 4) AS baseline_win_rate,
+               ROUND(
+                   cs.card_wins::numeric / NULLIF(cs.game_count, 0)
+                   - t.total_wins::numeric / NULLIF(t.total_games, 0),
+               4) AS delta
+        FROM card_stats cs, totals t
+        ORDER BY delta DESC
+    """, branch_params + branch_params + [min_games])
 
     return rows
 
