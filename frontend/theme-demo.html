@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWU // CARDS — Imperial Command Theme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=IM+Fell+English:ital@0;1&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+
+/* ═══════════════════════════════════════════════════════════════
+   IMPERIAL COMMAND THEME
+   Aesthetic: Classified military intelligence dossier
+   Deep navy + blood burgundy + tarnished gold foil
+   Serif display cuts through cold mono data
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds ── */
+  --bg:          #06080f;
+  --bg2:         #080c18;
+  --surface:     #0c1020;
+  --surface2:    #111828;
+  --surface3:    #161f30;
+
+  /* ── Borders ── */
+  --border:      rgba(180,150,80,0.12);
+  --border2:     rgba(180,150,80,0.22);
+  --border3:     rgba(180,150,80,0.40);
+
+  /* ── Text ── */
+  --text:        #d8cdb8;
+  --text2:       #8a8070;
+  --text3:       #4a4438;
+
+  /* ── Accent colors ── */
+  --gold:        #c8971a;
+  --gold2:       #e8b840;
+  --gold3:       #f5d060;
+  --crimson:     #8c1a2e;
+  --crimson2:    #b02040;
+  --green:       #4a8c6a;
+  --green2:      #5cb882;
+  --red:         #8c2a1a;
+  --red2:        #c03820;
+  --blue:        #3a6888;
+  --purple:      #6a4a88;
+
+  /* ── Aspect colors (muted imperial palette) ── */
+  --heroism:     #4a88b8;
+  --villainy:    #8c2a1a;
+  --cunning:     #b88a1a;
+  --aggression:  #8c4818;
+  --force:       #6a4a88;
+  --unknown:     #4a4a58;
+
+  /* ── Typography ── */
+  --display:     'Cinzel', serif;
+  --display2:    'Cinzel Decorative', serif;
+  --body:        'IM Fell English', serif;
+  --mono:        'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── Parchment texture overlay ──────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 60% 40% at 20% 20%, rgba(12,16,32,0.6) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 80% 80%, rgba(140,26,46,0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Decorative top border ───────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), var(--gold3), var(--gold), transparent);
+  z-index: 200;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAV
+   ═══════════════════════════════════════════════════════════════ */
+#nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(6,8,15,0.96);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  height: 56px;
+  gap: 0;
+}
+
+/* Imperial seal flanking the logo */
+.nav-seal {
+  width: 28px; height: 28px;
+  opacity: 0.4;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.nav-logo {
+  font-family: var(--display2);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--gold2);
+  margin-right: 40px;
+  white-space: nowrap;
+  text-shadow: 0 0 20px rgba(200,151,26,0.3);
+}
+.nav-logo em {
+  font-style: normal;
+  color: var(--text3);
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  display: block;
+  margin-top: -2px;
+}
+
+.nav-btn {
+  height: 56px;
+  padding: 0 18px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--text3);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.nav-btn:hover { color: var(--text2); border-bottom-color: var(--border2); }
+.nav-btn.active { color: var(--gold2); border-bottom-color: var(--gold); }
+
+.nav-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.05em;
+}
+.status-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text3);
+}
+.status-dot.ok { background: var(--green2); box-shadow: 0 0 8px var(--green2); }
+
+.nav-stats {
+  display: flex;
+  gap: 24px;
+  margin-left: 24px;
+  padding-left: 24px;
+  border-left: 1px solid var(--border);
+}
+.nav-stat-val { font-family: var(--mono); color: var(--gold2); font-size: 13px; }
+.nav-stat-label { font-size: 9px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGES
+   ═══════════════════════════════════════════════════════════════ */
+.page { display: none; position: relative; z-index: 1; }
+.page.active { display: block; }
+
+/* ── Page header ─────────────────────────────────────────────── */
+.page-header {
+  padding: 32px 28px 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  position: relative;
+}
+
+/* Decorative corner ornament */
+.page-header::before {
+  content: '✦';
+  position: absolute;
+  top: 32px; right: 28px;
+  color: var(--gold);
+  opacity: 0.3;
+  font-size: 20px;
+}
+
+.page-title {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--gold2);
+  text-transform: uppercase;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(200,151,26,0.2);
+}
+.page-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+/* ── Controls ────────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+}
+
+input[type="text"], select {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  letter-spacing: 0.03em;
+}
+input[type="text"]:focus, select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px rgba(200,151,26,0.15), inset 0 0 20px rgba(200,151,26,0.03);
+}
+select option { background: var(--surface2); }
+
+.btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  color: var(--text2);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+}
+.btn:hover { border-color: var(--gold); color: var(--gold2); background: rgba(200,151,26,0.05); }
+.btn.active {
+  background: rgba(200,151,26,0.08);
+  border-color: var(--gold);
+  color: var(--gold2);
+  box-shadow: inset 0 0 20px rgba(200,151,26,0.06);
+}
+
+.sep { width: 1px; height: 18px; background: var(--border); }
+.ctrl-label { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.12em; }
+
+/* ═══════════════════════════════════════════════════════════════
+   LEADER CARDS
+   ═══════════════════════════════════════════════════════════════ */
+#leader-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  padding: 20px 28px 40px;
+}
+
+.leader-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+.leader-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(180,150,80,0.1);
+}
+
+/* Aspect-colored top stripe */
+.leader-card.asp-Heroism   { border-top: 1px solid var(--heroism); }
+.leader-card.asp-Villainy  { border-top: 1px solid var(--villainy); }
+.leader-card.asp-Cunning   { border-top: 1px solid var(--cunning); }
+.leader-card.asp-Aggression{ border-top: 1px solid var(--aggression); }
+.leader-card.asp-Force     { border-top: 1px solid var(--force); }
+.leader-card.asp-Unknown   { border-top: 1px solid var(--border); }
+
+/* Art fills entire card */
+.lc-img-wrap {
+  position: absolute;
+  inset: 0;
+  background-size: 160% auto;
+  background-position: 60% 20%;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.4s;
+  z-index: 0;
+}
+.lc-img-wrap.loaded { opacity: 1; }
+
+/* Dark vignette overlay unique to this theme — high-contrast on edges */
+.leader-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(6,8,15,0.7) 0%, transparent 40%),
+    linear-gradient(315deg, rgba(6,8,15,0.5) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.lc-body {
+  position: relative;
+  z-index: 2;
+  padding: 10px 12px 12px;
+  background: linear-gradient(
+    to bottom,
+    rgba(6,8,15,0.05) 0%,
+    rgba(6,8,15,0.65) 22%,
+    rgba(6,8,15,0.90) 100%
+  );
+}
+
+.lc-rank {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(200,160,80,0.6);
+  margin-bottom: 4px;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 22px;
+}
+
+.lc-name {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 2px;
+  color: var(--gold3);
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.9);
+}
+
+.lc-base {
+  font-family: var(--body);
+  font-style: italic;
+  font-size: 11px;
+  color: rgba(216,205,184,0.5);
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+/* ── Conversion badge ─────────────────────────────────────────── */
+.lc-conversion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 1px;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+.lc-conversion.good { background: rgba(74,140,106,0.15); color: var(--green2); border: 1px solid rgba(74,140,106,0.2); }
+.lc-conversion.mid  { background: rgba(200,151,26,0.12); color: var(--gold2); border: 1px solid rgba(200,151,26,0.2); }
+.lc-conversion.bad  { background: rgba(140,42,26,0.15); color: var(--red2); border: 1px solid rgba(140,42,26,0.2); }
+
+.lc-bar { height: 1px; background: rgba(180,150,80,0.15); margin-bottom: 8px; }
+.lc-bar-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold3)); }
+
+.lc-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 4px;
+}
+.lc-stat-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+.lc-stat-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LEADER HERO HEADER
+   ═══════════════════════════════════════════════════════════════ */
+#leader-hero {
+  display: flex;
+  align-items: stretch;
+  min-height: 160px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+#leader-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    rgba(6,8,15,0.98) 0%,
+    rgba(6,8,15,0.88) 40%,
+    rgba(6,8,15,0.4) 70%,
+    transparent 100%
+  );
+  z-index: 1;
+}
+
+.lh-art {
+  position: absolute;
+  inset: 0;
+  background-size: 180% auto;
+  background-position: 80% 20%;
+  background-repeat: no-repeat;
+}
+
+.lh-info {
+  position: relative;
+  z-index: 2;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.lh-aspect {
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.8;
+}
+.lh-name {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--gold2);
+  letter-spacing: 0.1em;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.8);
+  line-height: 1;
+}
+.lh-sub {
+  font-family: var(--body);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+.lh-stats {
+  display: flex;
+  gap: 32px;
+  margin-top: 8px;
+}
+.lh-stat-val {
+  font-family: var(--mono);
+  font-size: 20px;
+  color: var(--text);
+  font-weight: 300;
+}
+.lh-stat-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+.conversion-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 400;
+  padding: 3px 10px;
+  border-radius: 1px;
+  letter-spacing: 0.05em;
+}
+.conversion-badge.good { background: rgba(74,140,106,0.12); color: var(--green2); border: 1px solid rgba(74,140,106,0.2); }
+.conversion-badge.mid  { background: rgba(200,151,26,0.10); color: var(--gold2); border: 1px solid rgba(200,151,26,0.2); }
+.conversion-badge.bad  { background: rgba(140,42,26,0.12); color: var(--red2); border: 1px solid rgba(140,42,26,0.2); }
+
+/* ═══════════════════════════════════════════════════════════════
+   CARD GRID (leader detail)
+   ═══════════════════════════════════════════════════════════════ */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 16px 28px;
+}
+
+.card-tile {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  aspect-ratio: 0.72;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.card-tile:hover { transform: translateY(-2px); border-color: var(--border3); }
+
+.ct-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 15%;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.ct-art.loaded { opacity: 1; }
+
+.ct-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top,
+    rgba(6,8,15,0.95) 0%,
+    rgba(6,8,15,0.6) 35%,
+    rgba(6,8,15,0.1) 65%
+  );
+}
+
+.ct-bottom {
+  position: relative;
+  z-index: 1;
+  padding: 8px 8px 8px;
+}
+
+.ct-name {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--gold3);
+  line-height: 1.2;
+  margin-bottom: 3px;
+}
+
+.ct-stats {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.ct-incl { color: var(--text2); }
+.ct-conv { }
+.ct-conv.good { color: var(--green2); }
+.ct-conv.mid  { color: var(--gold2); }
+.ct-conv.bad  { color: var(--red2); }
+
+.ct-top {
+  position: absolute;
+  top: 6px; right: 6px;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+}
+.ct-badge {
+  background: rgba(6,8,15,0.82);
+  border: 1px solid var(--border2);
+  border-radius: 1px;
+  padding: 2px 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.ct-badge-label { font-size: 8px; color: var(--text3); }
+.ct-sb-flag {
+  position: absolute;
+  top: 6px; left: 6px;
+  z-index: 1;
+  font-family: var(--display);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  background: rgba(200,151,26,0.12);
+  border: 1px solid rgba(200,151,26,0.2);
+  padding: 1px 5px;
+  border-radius: 1px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EVENTS TABLE
+   ═══════════════════════════════════════════════════════════════ */
+table { width: 100%; border-collapse: collapse; }
+th {
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+td {
+  padding: 9px 28px;
+  border-bottom: 1px solid rgba(180,150,80,0.05);
+  font-size: 13px;
+  color: var(--text2);
+}
+tr:hover td { background: rgba(180,150,80,0.02); color: var(--text); }
+.mono { font-family: var(--mono); }
+.dim { color: var(--text3); }
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL
+   ═══════════════════════════════════════════════════════════════ */
+#modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(6,8,15,0.88);
+  backdrop-filter: blur(8px);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+}
+#modal-backdrop.open { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  width: 680px;
+  max-width: 95vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(180,150,80,0.08);
+}
+
+/* Gold corner decorations */
+.modal::before, .modal::after {
+  content: '';
+  position: absolute;
+  width: 20px; height: 20px;
+  border-color: var(--gold);
+  border-style: solid;
+  opacity: 0.4;
+  pointer-events: none;
+}
+.modal::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+.modal::after  { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+
+.modal { position: relative; }
+
+.modal-header {
+  position: relative;
+  height: 130px;
+  background: var(--surface2);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+#modal-header-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 20%;
+  opacity: 0.6;
+}
+#modal-header-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 30%, var(--surface) 100%);
+}
+
+.modal-title-area {
+  position: absolute;
+  bottom: 12px; left: 20px; right: 20px;
+  z-index: 1;
+}
+#modal-card-name {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold2);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.9);
+}
+#modal-card-subtitle {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.08em;
+}
+
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  padding: 0 16px;
+}
+.modal-tab {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text3);
+  transition: color 0.15s;
+}
+.modal-tab:hover { color: var(--text2); }
+.modal-tab.active { color: var(--gold2); border-bottom-color: var(--gold); }
+
+.modal-close {
+  position: absolute;
+  top: 12px; right: 14px;
+  background: rgba(6,8,15,0.7);
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  font-size: 16px;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 1px;
+  z-index: 2;
+  transition: color 0.15s, border-color 0.15s;
+}
+.modal-close:hover { color: var(--gold2); border-color: var(--border3); }
+
+#modal-body {
+  overflow-y: auto;
+  padding: 20px;
+  flex: 1;
+}
+
+.section-title {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  opacity: 0.8;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BREADCRUMB
+   ═══════════════════════════════════════════════════════════════ */
+#breadcrumb {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+}
+#breadcrumb.visible { display: flex; }
+#breadcrumb .bc-link { cursor: pointer; color: var(--text3); }
+#breadcrumb .bc-link:hover { color: var(--gold2); }
+#breadcrumb .bc-sep { color: var(--border2); }
+#breadcrumb .bc-cur { color: var(--text2); }
+
+/* ═══════════════════════════════════════════════════════════════
+   MISC UTILITIES
+   ═══════════════════════════════════════════════════════════════ */
+.loading { font-family: var(--mono); color: var(--text3); padding: 24px; font-size: 11px; letter-spacing: 0.1em; }
+.empty-state { font-family: var(--mono); color: var(--text3); padding: 24px; font-size: 11px; letter-spacing: 0.08em; }
+
+.gh-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+  gap: 0;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border);
+}
+.gh-col {
+  font-family: var(--display);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 8px 0;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.gh-col:hover { color: var(--gold2); }
+.gh-col.active { color: var(--gold); }
+
+/* THEME COMPARISON BANNER */
+.theme-banner {
+  background: linear-gradient(135deg, rgba(200,151,26,0.08), rgba(140,26,46,0.06));
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  padding: 20px 24px;
+  margin: 20px 28px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.theme-banner-icon {
+  font-size: 32px;
+  opacity: 0.6;
+}
+.theme-banner h2 {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold2);
+  margin-bottom: 4px;
+}
+.theme-banner p {
+  font-family: var(--body);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.theme-banner code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(200,151,26,0.08);
+  border: 1px solid var(--border2);
+  padding: 1px 5px;
+  border-radius: 1px;
+  color: var(--gold2);
+}
+
+/* ── Sample leader cards ─────────────────────────────────────── */
+.sample-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 0 28px 32px;
+}
+
+/* Pulsing skeleton loader */
+@keyframes shimmer {
+  0% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0.4; }
+}
+.skeleton {
+  background: var(--surface2);
+  border-radius: 1px;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* Fade in on load */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.leader-card { animation: fadeUp 0.4s ease both; }
+.leader-card:nth-child(2) { animation-delay: 0.06s; }
+.leader-card:nth-child(3) { animation-delay: 0.12s; }
+.leader-card:nth-child(4) { animation-delay: 0.18s; }
+.leader-card:nth-child(5) { animation-delay: 0.24s; }
+.leader-card:nth-child(6) { animation-delay: 0.30s; }
+.leader-card:nth-child(7) { animation-delay: 0.36s; }
+.leader-card:nth-child(8) { animation-delay: 0.42s; }
+
+</style>
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────────────── -->
+<nav id="nav">
+  <span class="nav-logo">
+    SWU // CARDS
+    <em>IMPERIAL COMMAND</em>
+  </span>
+  <button class="nav-btn active">Leaders</button>
+  <button class="nav-btn">Events</button>
+
+  <div class="nav-status" style="margin-left:auto">
+    <div class="status-dot ok"></div>
+    <span>CONNECTED</span>
+    <div class="nav-stats" id="nav-stats">
+      <div class="nav-stat">
+        <div class="nav-stat-val">44</div>
+        <div class="nav-stat-label">Events</div>
+      </div>
+      <div class="nav-stat">
+        <div class="nav-stat-val">2,116</div>
+        <div class="nav-stat-label">Decklists</div>
+      </div>
+      <div class="nav-stat">
+        <div class="nav-stat-val">64</div>
+        <div class="nav-stat-label">Leaders</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Home Page ───────────────────────────────────────────────────── -->
+<div class="page active" id="page-home">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Leader Overview</div>
+      <div class="page-sub">48 leaders · 2,096 decklists · LAW format</div>
+    </div>
+  </div>
+
+  <div class="theme-banner">
+    <div class="theme-banner-icon">⚔</div>
+    <div>
+      <h2>Imperial Command Theme</h2>
+      <p>
+        A dark-navy military dossier aesthetic with tarnished gold-foil accents and serif typography.
+        To apply: replace the <code>:root</code> variables and font imports in <code>index.html</code>
+        with the ones from this file. The component structure is identical — only the visual layer changes.
+      </p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <select style="width:200px">
+      <option>A Lawless Time</option>
+      <option>Legends of the Force</option>
+      <option>Jump to Lightspeed</option>
+    </select>
+    <div class="sep"></div>
+    <button class="btn active">Decks</button>
+    <button class="btn">T8 Rate</button>
+    <button class="btn">Wins</button>
+    <div class="sep"></div>
+    <button class="btn active">By Leader</button>
+    <button class="btn">Leader + Base</button>
+    <input type="text" placeholder="Search leaders…" style="margin-left:auto;width:180px">
+  </div>
+
+  <!-- Sample leader cards (static demo) -->
+  <div id="leader-grid" class="sample-grid">
+
+    <!-- Card 1: Boba Fett -->
+    <div class="leader-card asp-Villainy" style="min-height:200px">
+      <div class="lc-img-wrap loaded" style="background-image:url('https://cdn.starwarsunlimited.com//card_04010009_EN_Boba_Fett_Leader_Unit_f6eb711cf3.png')"></div>
+      <div class="lc-body">
+        <div class="lc-rank">#1
+          <span style="margin-left:5px;display:inline-flex;gap:3px;align-items:center">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Villainy_3e06e5ffdb.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Aggression_ceca8f7d7c.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+          </span>
+        </div>
+        <div class="lc-name">Boba Fett</div>
+        <div class="lc-base" style="font-style:italic">Lake Country</div>
+        <div class="lc-conversion good">▲ 1.48x</div>
+        <div class="lc-bar"><div class="lc-bar-fill" style="width:100%"></div></div>
+        <div class="lc-stats">
+          <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">322</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold2)">15%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val">14%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">9</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Lando -->
+    <div class="leader-card asp-Cunning" style="min-height:200px">
+      <div class="lc-img-wrap loaded" style="background-image:url('https://cdn.starwarsunlimited.com//card_07010002_EN_Lando_Calrissian_Leader_Unit_16f4d764f5.png')"></div>
+      <div class="lc-body">
+        <div class="lc-rank">#2
+          <span style="margin-left:5px;display:inline-flex;gap:3px;align-items:center">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Cunning_91fedef0ce.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Command_79e2808348.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+          </span>
+        </div>
+        <div class="lc-name">Lando Calrissian</div>
+        <div class="lc-base" style="font-style:italic">Vigilance</div>
+        <div class="lc-conversion bad">▼ 0.74x</div>
+        <div class="lc-bar"><div class="lc-bar-fill" style="width:63%"></div></div>
+        <div class="lc-stats">
+          <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">204</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold2)">10%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val">7%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">3</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Obi-Wan -->
+    <div class="leader-card asp-Heroism" style="min-height:200px">
+      <div class="lc-img-wrap loaded" style="background-image:url('https://cdn.starwarsunlimited.com//card_07010005_EN_Obi_Wan_Kenobi_Leader_Unit_b41ea0da62.png')"></div>
+      <div class="lc-body">
+        <div class="lc-rank">#4
+          <span style="margin-left:5px;display:inline-flex;gap:3px;align-items:center">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Heroism_fd98140fb6.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Vigilance_0519102eb9.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+          </span>
+        </div>
+        <div class="lc-name">Obi-Wan Kenobi</div>
+        <div class="lc-base" style="font-style:italic">Vergence Temple</div>
+        <div class="lc-conversion mid">— 1.01x</div>
+        <div class="lc-bar"><div class="lc-bar-fill" style="width:56%"></div></div>
+        <div class="lc-stats">
+          <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">181</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold2)">9%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val">9%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">4</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Chewbacca -->
+    <div class="leader-card asp-Heroism" style="min-height:200px">
+      <div class="lc-img-wrap loaded" style="background-image:url('https://cdn.starwarsunlimited.com//card_07010006_EN_Chewbacca_Leader_Unit_c6e48a7085.png')"></div>
+      <div class="lc-body">
+        <div class="lc-rank">#6
+          <span style="margin-left:5px;display:inline-flex;gap:3px;align-items:center">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Heroism_fd98140fb6.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+            <img src="https://cdn.starwarsunlimited.com//SWH_Aspects_Aggression_ceca8f7d7c.png" width="20" height="20" style="vertical-align:middle;opacity:0.95">
+          </span>
+        </div>
+        <div class="lc-name">Chewbacca</div>
+        <div class="lc-base" style="font-style:italic">Cunning</div>
+        <div class="lc-conversion good">▲ 2.00x</div>
+        <div class="lc-bar"><div class="lc-bar-fill" style="width:29%"></div></div>
+        <div class="lc-stats">
+          <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">92</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold2)">4%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:var(--green2)">18%</div></div>
+          <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">2</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skeleton placeholders -->
+    <div class="leader-card" style="min-height:200px">
+      <div class="lc-body" style="padding-top:24px">
+        <div class="skeleton" style="height:12px;width:40%;margin-bottom:10px"></div>
+        <div class="skeleton" style="height:18px;width:70%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:11px;width:50%;margin-bottom:12px"></div>
+        <div class="skeleton" style="height:24px;width:60%;margin-bottom:10px"></div>
+        <div class="skeleton" style="height:2px;margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+          <div class="skeleton" style="height:28px"></div>
+          <div class="skeleton" style="height:28px"></div>
+          <div class="skeleton" style="height:28px"></div>
+          <div class="skeleton" style="height:28px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="leader-card" style="min-height:200px">
+      <div class="lc-body" style="padding-top:24px">
+        <div class="skeleton" style="height:12px;width:35%;margin-bottom:10px"></div>
+        <div class="skeleton" style="height:18px;width:80%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:11px;width:45%;margin-bottom:12px"></div>
+        <div class="skeleton" style="height:24px;width:55%;margin-bottom:10px"></div>
+        <div class="skeleton" style="height:2px;margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+          <div class="skeleton" style="height:28px"></div>
+          <div class="skeleton" style="height:28px"></div>
+          <div class="skeleton" style="height:28px"></div>
+          <div class="skeleton" style="height:28px"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sample-grid -->
+</div>
+
+</body>
+</html>

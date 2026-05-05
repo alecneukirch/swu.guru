@@ -1,0 +1,317 @@
+# =============================================================================
+# swu.guru — Container Stack
+# =============================================================================
+# Networks:
+#   dmz      — public-facing tier (traefik, app)
+#   internal — backend tier (metrics only)
+#   metrics  — isolated metrics traffic
+#
+# Note: Postgres runs externally (set DB_HOST in .env). The app sits on dmz
+# only so it can reach the external DB. internal network has no gateway.
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in secrets
+#   2. docker compose up -d
+# =============================================================================
+
+name: swuguru
+
+# ---------------------------------------------------------------------------
+# Networks — 3-tier DMZ model
+# ---------------------------------------------------------------------------
+networks:
+  dmz:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+  internal:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.1.0/24
+
+  metrics:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.2.0/24
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  traefik_certs:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+# =============================================================================
+# Services
+# =============================================================================
+services:
+
+  # ---------------------------------------------------------------------------
+  # TRAEFIK — Reverse proxy, TLS termination, rate limiting
+  # ---------------------------------------------------------------------------
+  traefik:
+    image: traefik:v3
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - traefik_certs:/certs
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dmz
+      - metrics
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
+      - DOCKER_API_VERSION=1.44
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.middlewares=auth@file"
+      - "traefik.http.routers.traefik-metrics.rule=Host(`traefik.${DOMAIN}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.services.traefik-metrics.loadbalancer.server.port=8082"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # DOCKER SOCKET PROXY
+  # ---------------------------------------------------------------------------
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dmz
+    environment:
+      CONTAINERS: 1
+      SERVICES: 1
+      TASKS: 1
+      NETWORKS: 1
+      EVENTS: 1
+      PING: 1
+      POST: 0
+      DELETE: 0
+      EXEC: 0
+
+  # ---------------------------------------------------------------------------
+  # APP — swu.guru FastAPI application
+  # ---------------------------------------------------------------------------
+  app:
+    build: .
+    container_name: swuguru
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: "1.0"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    networks:
+      - dmz          # outbound access needed to reach external Postgres
+    env_file:
+      - .env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=swuguru_dmz"
+      - "traefik.http.routers.app.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.app.middlewares=secure-headers@file,rate-limit@file"
+      - "traefik.http.services.app.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/summary')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ===========================================================================
+  # METRICS STACK
+  # ===========================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    user: "65534:65534"
+    mem_limit: 512m
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
+    networks:
+      - metrics
+      - internal
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.listen-address=0.0.0.0:9090'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=swuguru_metrics"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.prometheus.middlewares=auth@file,ip-allowlist@file"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    user: "472:472"
+    mem_limit: 256m
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - metrics
+      - dmz
+    environment:
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=swuguru_metrics"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    depends_on:
+      - prometheus
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    mem_limit: 128m
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - metrics
+    command:
+      - '--housekeeping_interval=30s'
+      - '--docker_only=true'
+      - '--disable_metrics=advtcp,cpuset,hugetlb,memory_numa,process,referenced_memory,resctrl,sched,tcp,udp'
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pid: host
+    network_mode: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.netstat'
+      - '--collector.netdev'
+
+  # ===========================================================================
+  # SECURITY
+  # ===========================================================================
+
+  falco:
+    image: falcosecurity/falco:latest
+    container_name: falco
+    restart: unless-stopped
+    privileged: true
+    mem_limit: 256m
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock:ro
+      - /dev:/host/dev:ro
+      - /proc:/host/proc:ro
+      - ./falco/falco.yaml:/etc/falco/falco.yaml:ro
+      - ./falco/rules:/etc/falco/rules.d:ro
+    networks:
+      - metrics
+    command:
+      - /usr/bin/falco
+      - -o
+      - "engine.kind=modern_ebpf"
+      - -o
+      - "plugins[0].name=container"
+      - -o
+      - "plugins[0].library_path=libcontainer.so"
+      - -o
+      - "load_plugins[0]=container"
+
+# =============================================================================
+# SETUP NOTES
+# =============================================================================
+# 1. Create your .env file (copy from .env.example and fill in):
+#
+#    DOMAIN=swu.guru
+#    CF_DNS_API_TOKEN=your_cloudflare_api_token
+#
+#    # App — Postgres connection (external host)
+#    DB_HOST=192.168.1.200
+#    DB_PORT=5432
+#    DB_NAME=swu_cards
+#    DB_USER=swu_user
+#    DB_PASS=changeme
+#    SWUDB_BASE=https://api.swu-db.com
+#
+#    # Metrics
+#    GRAFANA_USER=admin
+#    GRAFANA_PASSWORD=changeme_strong_password
+#
+# 2. Create supporting config dirs:
+#    mkdir -p traefik/dynamic prometheus/alerts grafana/provisioning grafana/dashboards falco/rules
+#
+# 3. Deploy:
+#    docker compose up -d
+#    docker compose logs -f app

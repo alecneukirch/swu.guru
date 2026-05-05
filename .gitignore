@@ -1,0 +1,26 @@
+# Secrets — never commit
+.env
+*.htpasswd
+
+# Traefik cert storage
+traefik/certs/
+traefik/dynamic/.htpasswd
+
+# Logs
+logs/
+
+# Claude Code local settings
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db

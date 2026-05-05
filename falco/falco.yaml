@@ -1,0 +1,27 @@
+# falco/falco.yaml — Runtime security configuration
+
+# Driver is configured via CLI: --driver modern_ebpf (set in docker-compose.yml command)
+# No engine block needed here.
+
+# Output formats
+json_output: true
+json_include_output_property: true
+log_stderr: true
+log_syslog: false
+log_level: info
+
+# Outputs — send to stdout for Docker log aggregation
+stdout_output:
+  enabled: true
+
+# Optionally forward to a webhook / SIEM
+# http_output:
+#   enabled: true
+#   url: https://your-siem.example.com/falco
+#   user_agent: "falcosecurity/falco"
+
+# Rules (plural form required since Falco 0.38)
+rules_files:
+  - /etc/falco/falco_rules.yaml        # built-in rules
+  - /etc/falco/falco_rules.local.yaml  # override file
+  - /etc/falco/rules.d                 # your custom rules

@@ -1,0 +1,63 @@
+# prometheus/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    environment: production
+
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []  # add alertmanager:9093 if you deploy it
+
+scrape_configs:
+
+  # Prometheus itself
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
+
+  # Traefik — HTTP request rates, latency, errors
+  - job_name: traefik
+    static_configs:
+      - targets: [traefik:8082]
+
+  # cAdvisor — per-container CPU, memory, network I/O
+  - job_name: cadvisor
+    static_configs:
+      - targets: [cadvisor:8080]
+    metric_relabel_configs:
+      # Drop high-cardinality metrics you don't need
+      - source_labels: [__name__]
+        regex: 'container_(tasks_state|memory_failures_total)'
+        action: drop
+
+  # Node exporter — host NIC stats, disk, CPU
+  - job_name: node
+    static_configs:
+      - targets: [localhost:9100]   # node-exporter runs on host network
+
+  # Postgres exporter (optional — add postgres-exporter service to compose)
+  # - job_name: postgres
+  #   static_configs:
+  #     - targets: [postgres-exporter:9187]
+
+  # Redis exporter (optional — add redis-exporter service to compose)
+  # - job_name: redis
+  #   static_configs:
+  #     - targets: [redis-exporter:9121]
+
+  # App — if your app exposes /metrics (Prometheus format)
+  - job_name: app
+    static_configs:
+      - targets: [app:3000]
+    metrics_path: /metrics
+    # Remove if your /metrics endpoint is open
+    # basic_auth:
+    #   username: metrics
+    #   password_file: /etc/prometheus/metrics_password

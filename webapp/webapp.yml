@@ -1,0 +1,69 @@
+# falco/rules/webapp.yml — Custom Falco rules for web app container
+
+# -----------------------------------------------------------------------
+# Detect unexpected outbound connections from the app container
+# -----------------------------------------------------------------------
+- rule: Unexpected Outbound Connection from App
+  desc: App container made an outbound connection to an unexpected destination
+  condition: >
+    outbound and
+    container.name = "app" and
+    not fd.sip in (allowed_app_destinations)
+  output: >
+    Unexpected outbound connection from app container
+    (user=%user.name command=%proc.cmdline connection=%fd.name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [network, webapp]
+
+- list: allowed_app_destinations
+  items:
+    - "172.20.1.0/24"   # internal network only — adjust to your subnets
+
+# -----------------------------------------------------------------------
+# Detect shell spawned inside any container
+# -----------------------------------------------------------------------
+- rule: Shell in Container
+  desc: A shell was spawned in a container — possible RCE or escape attempt
+  condition: >
+    spawned_process and
+    container and
+    proc.name in (shell_binaries)
+  output: >
+    Shell spawned in container
+    (user=%user.name shell=%proc.name parent=%proc.pname cmdline=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [process, webapp]
+
+- list: shell_binaries
+  items: [bash, sh, zsh, fish, dash, ksh]
+
+# -----------------------------------------------------------------------
+# Detect writes to sensitive directories inside containers
+# -----------------------------------------------------------------------
+- rule: Write to Sensitive Path in Container
+  desc: A process wrote to a sensitive path (read_only containers should prevent this)
+  condition: >
+    open_write and
+    container and
+    fd.name startswith /etc
+  output: >
+    Write to sensitive path in container
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name)
+  priority: ERROR
+  tags: [filesystem, webapp]
+
+# -----------------------------------------------------------------------
+# Detect privilege escalation attempts
+# -----------------------------------------------------------------------
+- rule: Setuid or Setgid Bit Set
+  desc: A file had setuid/setgid set — possible privilege escalation
+  condition: >
+    consider_all_chmods and
+    chmod and
+    (evt.arg.mode contains "S_ISUID" or evt.arg.mode contains "S_ISGID") and
+    container
+  output: >
+    Setuid/setgid set on file in container
+    (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name)
+  priority: WARNING
+  tags: [process, privilege-escalation]
