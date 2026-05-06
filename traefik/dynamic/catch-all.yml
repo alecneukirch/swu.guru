@@ -1,0 +1,20 @@
+# Catch-all TCP passthrough — forwards any non-swu.guru TLS traffic to 192.168.1.50:443
+# HTTP routers (swu.guru routes) have higher default priority and are matched first;
+# this only catches connections with no matching HTTP router.
+
+tcp:
+  routers:
+    catch-all:
+      rule: "HostSNI(`*`)"
+      priority: 1
+      entryPoints:
+        - websecure
+      service: catch-all-svc
+      tls:
+        passthrough: true
+
+  services:
+    catch-all-svc:
+      loadBalancer:
+        servers:
+          - address: "192.168.1.50:443"

@@ -91,6 +91,14 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 def index():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon_svg():
+    return FileResponse(str(FRONTEND_DIR / "favicon.svg"), media_type="image/svg+xml")
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_ico():
+    return FileResponse(str(FRONTEND_DIR / "favicon.svg"), media_type="image/svg+xml")
+
 
 # =============================================================================
 #  SUMMARY
@@ -109,11 +117,14 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
                 COUNT(DISTINCT s.leader) FILTER (WHERE s.leader IS NOT NULL)
                                                                         AS unique_leaders,
                 COUNT(DISTINCT s.id) FILTER (WHERE s.has_decklist)     AS decklists_with_cards,
-                MAX(e.date)                                             AS last_event_date
+                MAX(e.date)                                             AS last_event_date,
+                (SELECT COUNT(*) FROM {t['matches']} m
+                 JOIN {t['events']} e ON e.id = m.event_id
+                 WHERE 1=1 {date_sql})                                  AS total_matches
             FROM {t['events']} e
             LEFT JOIN {t['standings']} s ON s.event_id = e.id
             WHERE 1=1 {date_sql}
-        """, date_params)
+        """, date_params + date_params)
     else:
         row = db.fetchone(f"""
             SELECT
@@ -123,7 +134,8 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
                                                                        AS unique_leaders,
                 (SELECT COUNT(*) FROM {t['standings']} WHERE has_decklist)
                                                                        AS decklists_with_cards,
-                (SELECT MAX(date) FROM {t['events']})                  AS last_event_date
+                (SELECT MAX(date) FROM {t['events']})                  AS last_event_date,
+                (SELECT COUNT(*) FROM {t['matches']})                  AS total_matches
         """)
     return row or {}
 

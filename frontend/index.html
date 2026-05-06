@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SWU // GURU</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%0A%20%20%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%226%22%20fill%3D%22%2309090f%22/%3E%0A%20%20%3C%21--%20Outer%20diamond%20--%3E%0A%20%20%3Cpolygon%20points%3D%2216%2C3%2029%2C16%2016%2C29%203%2C16%22%20fill%3D%22none%22%20stroke%3D%22%23f0b429%22%20stroke-width%3D%221.5%22/%3E%0A%20%20%3C%21--%20Inner%20diamond%20--%3E%0A%20%20%3Cpolygon%20points%3D%2216%2C9%2023%2C16%2016%2C23%209%2C16%22%20fill%3D%22none%22%20stroke%3D%22%23f0b429%22%20stroke-width%3D%221%22/%3E%0A%20%20%3C%21--%20Center%20dot%20--%3E%0A%20%20%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%222%22%20fill%3D%22%23f0b429%22/%3E%0A%20%20%3C%21--%20Corner%20ticks%20--%3E%0A%20%20%3Cline%20x1%3D%2216%22%20y1%3D%223%22%20x2%3D%2216%22%20y2%3D%226%22%20stroke%3D%22%23f0b429%22%20stroke-width%3D%221.5%22/%3E%0A%20%20%3Cline%20x1%3D%2229%22%20y1%3D%2216%22%20x2%3D%2226%22%20y2%3D%2216%22%20stroke%3D%22%23f0b429%22%20stroke-width%3D%221.5%22/%3E%0A%20%20%3Cline%20x1%3D%2216%22%20y1%3D%2229%22%20x2%3D%2216%22%20y2%3D%2226%22%20stroke%3D%22%23f0b429%22%20stroke-width%3D%221.5%22/%3E%0A%20%20%3Cline%20x1%3D%223%22%20y1%3D%2216%22%20x2%3D%226%22%20y2%3D%2216%22%20stroke%3D%22%23f0b429%22%20stroke-width%3D%221.5%22/%3E%0A%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta property="og:title" content="SWU // GURU">
 <meta property="og:description" content="Star Wars Unlimited competitive analytics — leader stats, card inclusion rates, head-to-head matchups and synergy pairs from premier tournament data.">
 <meta property="og:type" content="website">
@@ -291,26 +291,34 @@ select option { background: var(--surface2); }
 .lp-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
-  padding: 0 24px;
-  gap: 0;
+  padding: 14px 24px;
+  gap: 6px;
 }
 .lp-tab {
-  padding: 10px 18px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  padding: 9px 22px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   font-family: var(--display);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text3);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
-.lp-tab:hover { color: var(--text2); }
-.lp-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.lp-tab:hover {
+  color: var(--text2);
+  border-color: var(--border2);
+  background: var(--surface);
+}
+.lp-tab.active {
+  color: var(--gold);
+  border-color: rgba(240,180,41,0.45);
+  background: rgba(240,180,41,0.08);
+  box-shadow: 0 0 12px rgba(240,180,41,0.1), inset 0 1px 0 rgba(240,180,41,0.1);
+}
 
 /* ── Matchup table ────────────────────────────────────────────── */
 .matchup-grid {
@@ -352,7 +360,7 @@ select option { background: var(--surface2); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.matchup-games { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+.matchup-games { font-size: 12px; color: var(--text2); font-family: var(--mono); }
 .matchup-winrate {
   font-family: var(--mono);
   font-size: 18px;
@@ -367,7 +375,7 @@ select option { background: var(--surface2); }
   background: var(--green);
   transition: width 0.4s ease;
 }
-.matchup-base { font-size: 11px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.matchup-base { font-size: 11px; color: var(--text2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Matchup detail panel ──────────────────────────────────── */
 #mu-detail { padding: 0 24px 32px; }
@@ -823,76 +831,6 @@ select option { background: var(--surface2); }
   font-size: 12px;
   white-space: nowrap;
 }
-.week-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.week-table th {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text3);
-  padding: 8px 12px;
-  text-align: right;
-  border-bottom: 2px solid var(--border2);
-  white-space: nowrap;
-}
-.week-table th.wt-leader-col { text-align: left; width: 200px; }
-.week-table th.wt-week-hdr {
-  border-left: 1px solid var(--border);
-  padding-top: 4px;
-  text-align: center;
-}
-.week-table th.wt-week-hdr .wt-week-label {
-  font-size: 15px;
-  color: var(--text2);
-  display: block;
-}
-.week-table th.wt-week-hdr .wt-week-sub {
-  font-size: 13px;
-  color: var(--text3);
-  display: block;
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.week-table th.wt-stat-hdr {
-  font-size: 13px;
-  color: var(--text3);
-  border-bottom: 2px solid var(--border2);
-  padding: 4px 8px 8px;
-}
-.week-table td {
-  padding: 9px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  font-family: var(--mono);
-  font-size: 16px;
-  text-align: right;
-  color: var(--text2);
-  white-space: nowrap;
-}
-.week-table td.wt-leader-cell {
-  text-align: left;
-  font-family: var(--display);
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.week-table td.wt-week-cell { border-left: 1px solid rgba(255,255,255,0.04); }
-.week-table tr:hover td { background: rgba(255,255,255,0.02); }
-.wt-wins { font-weight: 700; color: var(--gold); }
-.wt-wins-0 { color: var(--text3); }
-.delta-pos { color: var(--green); font-size: 13px; margin-left: 3px; vertical-align: middle; }
-.delta-neg { color: var(--red2);  font-size: 13px; margin-left: 3px; vertical-align: middle; }
-.delta-neu { color: var(--text3); font-size: 13px; margin-left: 3px; vertical-align: middle; }
-.wt-aspect { display: inline-flex; gap: 2px; vertical-align: middle; margin-right: 5px; }
-.wt-base-col  { min-width: 160px; }
-.wt-base-cell { color: var(--text2); }
 
 /* ── Synergy pairs ─────────────────────────────────────────────── */
 .synergy-grid {
@@ -1272,6 +1210,8 @@ select option { background: var(--surface2); }
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+.sort-btn-wrap { display: contents; }
+#home-sort-select { display: none; }
 
 
 
@@ -1413,6 +1353,8 @@ select option { background: var(--surface2); }
 }
 .card-grid-header .gh-col:hover { color: var(--text2); border-color: var(--border2); }
 .card-grid-header .gh-col.active { color: var(--gold); border-color: rgba(240,180,41,0.4); background: rgba(240,180,41,0.06); }
+/* Desktop: row wrappers are invisible to flex layout */
+.cgh-row { display: contents; }
 
 .card-deck-layout {
   display: grid;
@@ -1464,6 +1406,34 @@ select option { background: var(--surface2); }
   .nav-status { display: none; }
   .nav-format-toggle { margin-left: 0; }
 
+  /* Sort controls — swap buttons for dropdowns */
+  .sort-btn-wrap { display: none; }
+  #home-sort-select { display: block !important; }
+  #card-sort-select { display: block !important; }
+
+  /* Leader shared filters — 2-column grid */
+  .lp-shared-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-bottom: 6px; }
+  .lp-shared-controls .ctrl-label { display: none; }
+  .lp-shared-controls select { width: 100%; }
+
+  /* Card grid header — stacked rows */
+  .card-grid-header { flex-direction: column; align-items: stretch; gap: 6px; }
+  .cgh-row { display: flex; align-items: center; gap: 6px; }
+  .cgh-sep { display: none; }
+  /* Row 1: sort select grows, min input fixed */
+  .cgh-row:nth-child(1) #card-sort-select { flex: 1; }
+  /* Row 2: filter grows, sideboard btn fixed */
+  .cgh-row:nth-child(2) #lp-filter { flex: 1; width: auto; }
+  /* Row 3: both buttons share the row equally */
+  .cgh-row:nth-child(3) .btn { flex: 1; justify-content: center; }
+  /* Row 4: cost filters centered, full width */
+  .cgh-row-costs { justify-content: center; flex-wrap: wrap; }
+
+  /* Meta banner — compact for 4 stats */
+  .mb-stat { padding: 10px 6px; }
+  .mb-val   { font-size: 22px; }
+  .mb-label { font-size: 10px; letter-spacing: 0.06em; }
+
   /* Home leader grid */
   #leader-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1471,12 +1441,24 @@ select option { background: var(--surface2); }
     padding: 0 10px 24px;
   }
   .leader-card { aspect-ratio: 3 / 2; }
-  .lc-name { font-size: 15px; }
-  .lc-base { font-size: 13px; }
-  .lc-stat-label { font-size: 10px; letter-spacing: 0; }
-  .lc-stat-val   { font-size: 14px; }
-  .lc-conversion { font-size: 13px; padding: 2px 7px; }
-  .lc-stats { gap: 2px; }
+  .lc-rank { display: none; }
+  .lc-bar  { display: none; }
+  .lc-body {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0 10px 8px;
+    background: none;
+  }
+  .lc-name { font-size: 16px; line-height: 1.05; margin-bottom: 1px; }
+  .lc-base { font-size: 11px; margin-bottom: 4px; }
+  .lc-conversion { align-self: flex-start; font-size: 14px; padding: 2px 8px; margin-bottom: 6px; }
+  .lc-stats { grid-template-columns: repeat(5, 1fr); gap: 0 3px; }
+  .lc-stats .lc-stat:last-child { grid-column: auto; }
+  .lc-stat-label { font-size: 9px; letter-spacing: 0; }
+  .lc-stat-val   { font-size: 16px; font-weight: 700; }
 
   /* Page layout */
   .page-header { padding: 12px 12px 8px; }
@@ -1514,18 +1496,11 @@ select option { background: var(--surface2); }
     gap: 6px;
   }
 
-  /* Week/meta table — scroll horizontally, compact fonts */
-  .week-table th { font-size: 10px; padding: 4px 6px; }
-  .week-table th.wt-week-hdr .wt-week-label { font-size: 11px; }
-  .week-table th.wt-week-hdr .wt-week-sub   { font-size: 9px; }
-  .week-table th.wt-stat-hdr { font-size: 9px; padding: 3px 5px 5px; }
-  .week-table td { font-size: 12px; padding: 5px 6px; }
-  .week-table td.wt-leader-cell { font-size: 12px; }
-  .week-table th.wt-leader-col  { width: 110px; }
-  #counter-grid { padding: 0 10px 24px; overflow-x: auto; }
+  /* Push page content above the fixed bottom nav */
+  .page { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
   /* Controls wrap on mobile */
   .controls { flex-wrap: wrap; }
-  .wt-aspect img { width: 12px !important; height: 12px !important; }
 
   /* Matrix — narrower sticky row header */
   .mx-row-hdr {
@@ -1547,17 +1522,36 @@ select option { background: var(--surface2); }
 
   /* Touch targets */
   .btn { padding: 9px 14px; }
-  .lp-tab { padding: 12px 16px; }
-  .lp-tabs { padding: 0 10px; }
+  .lp-tab { padding: 8px 14px; font-size: 12px; }
+  .lp-tabs { padding: 10px; gap: 4px; }
 
   /* Prevent iOS auto-zoom on input focus */
   input[type="text"], input[type="number"], select { font-size: 16px; }
 
-  /* Leader hero — compact on narrow screens */
-  #leader-hero { padding: 12px 12px 0; gap: 12px; }
-  .lh-art { width: 100px; height: 72px; }
-  .lh-name { font-size: 24px; }
-  .lh-stat-val { font-size: 18px; }
+  /* Leader hero — no art on mobile, just info */
+  #leader-hero { flex-direction: column; padding: 12px 12px 0; gap: 0; }
+  .lh-art { display: none; }
+  .lh-info { padding: 0; }
+  .lh-aspect { margin-bottom: 2px; }
+  .lh-name { font-size: 20px; margin-bottom: 2px; }
+  .lh-sub { font-size: 12px; margin-bottom: 8px; gap: 6px; }
+  /* 4-column stat grid — all stats in one row */
+  .lh-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 0; }
+  .lh-stat-val { font-size: 15px; }
+  .lh-stat-label { font-size: 10px; }
+  /* Strip the large badge styling inside the stat grid */
+  .lh-stat .conversion-badge {
+    font-size: 15px; font-weight: 700;
+    padding: 0; background: none !important; border: none !important;
+    backdrop-filter: none; display: inline;
+  }
+  /* 4-column percentile strip — no wrapping */
+  .lh-pct-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 0; margin-top: 8px;
+  }
+  .lh-pct-val { font-size: 13px; }
+  .lh-pct-label { font-size: 9px; }
 
   /* Synergy cards — minmax(420px) overflows mobile */
   .synergy-grid { grid-template-columns: 1fr; padding: 12px 10px 24px; }
@@ -1594,8 +1588,8 @@ select option { background: var(--surface2); }
     border-top: 2px solid transparent;
     color: var(--text3);
     font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.05em;
+    font-size: 11px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     cursor: pointer;
     transition: color 0.15s, border-top-color 0.15s;
@@ -2843,7 +2837,6 @@ select option { background: var(--surface2); }
 <nav id="nav">
   <div class="nav-logo">SWU<span>//</span>GURU</div>
   <button class="nav-btn active" id="nav-home"    onclick="showPage('home')">Leaders</button>
-  <button class="nav-btn"        id="nav-meta" onclick="showPage('meta')">Meta</button>
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
 
   <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
@@ -2878,6 +2871,7 @@ select option { background: var(--surface2); }
   <div class="meta-banner">
     <div class="mb-stat"><div class="mb-val" id="mb-events">—</div><div class="mb-label">Events</div></div>
     <div class="mb-stat"><div class="mb-val" id="mb-decks">—</div><div class="mb-label">Decklists</div></div>
+    <div class="mb-stat"><div class="mb-val" id="mb-matches">—</div><div class="mb-label">Matches</div></div>
     <div class="mb-stat"><div class="mb-val" id="mb-leaders">—</div><div class="mb-label">Leaders</div></div>
   </div>
   <div class="controls">
@@ -2889,17 +2883,26 @@ select option { background: var(--surface2); }
     <select id="eternal-era" onchange="loadHome()" style="display:none">
       <option value="">All eras</option>
     </select>
-    <div class="sep"></div>
-    <span class="ctrl-label">Sort</span>
-    <button class="btn active" id="sort-decks"      onclick="setHomeSort('total_decks')">Decks</button>
-    <button class="btn"        id="sort-t8rate"     onclick="setHomeSort('t8_rate')">T8 Rate</button>
-    <button class="btn"        id="sort-wins"       onclick="setHomeSort('wins')">Wins</button>
-    <button class="btn"        id="sort-mwr"        onclick="setHomeSort('match_win_rate')">MWR</button>
-    <button class="btn"        id="sort-conversion" onclick="setHomeSort('conversion')">Conversion</button>
+    <div class="sort-btn-wrap">
+      <div class="sep"></div>
+      <span class="ctrl-label">Sort</span>
+      <button class="btn active" id="sort-decks"      onclick="setHomeSort('total_decks')">Decks</button>
+      <button class="btn"        id="sort-t8rate"     onclick="setHomeSort('t8_rate')">T8 Rate</button>
+      <button class="btn"        id="sort-wins"       onclick="setHomeSort('wins')">Wins</button>
+      <button class="btn"        id="sort-mwr"        onclick="setHomeSort('match_win_rate')">MWR</button>
+      <button class="btn"        id="sort-conversion" onclick="setHomeSort('conversion')">Conversion</button>
+    </div>
+    <select id="home-sort-select" style="display:none" onchange="setHomeSort(this.value)">
+      <option value="total_decks">Sort: Decks</option>
+      <option value="t8_rate">Sort: T8 Rate</option>
+      <option value="wins">Sort: Wins</option>
+      <option value="match_win_rate">Sort: MWR</option>
+      <option value="conversion">Sort: Conversion</option>
+    </select>
     <div class="sep"></div>
     <input type="text" id="home-search" placeholder="Search leader…" oninput="renderLeaderGrid()" style="width:160px">
     <div class="sep"></div>
-    <button class="btn" id="btn-rogue-scroll" style="display:none" data-tooltip="&lt; 1% meta share · excluded from tier grades" onclick="document.getElementById('rogue-anchor')?.scrollIntoView({behavior:'smooth'})"><svg width="22" height="14" viewBox="0 0 100 65" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" fill-rule="evenodd" d="M2 20 C2 5 18 2 28 8 C34 12 40 15 50 15 C60 15 66 12 72 8 C82 2 98 5 98 20 C98 38 86 48 72 48 C63 48 56 43 52 36 L50 32 L48 36 C44 43 37 48 28 48 C14 48 2 38 2 20 Z M15 26 A13 10 0 1 0 41 26 A13 10 0 1 0 15 26 Z M59 26 A13 10 0 1 0 85 26 A13 10 0 1 0 59 26 Z"/></svg>Rogue ↓</button>
+    <button class="btn" id="btn-rogue-scroll" style="display:none" data-tooltip="&lt; 0.6% meta share · excluded from tier grades" onclick="document.getElementById('rogue-anchor')?.scrollIntoView({behavior:'smooth'})"><svg width="22" height="14" viewBox="0 0 100 65" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" fill-rule="evenodd" d="M2 20 C2 5 18 2 28 8 C34 12 40 15 50 15 C60 15 66 12 72 8 C82 2 98 5 98 20 C98 38 86 48 72 48 C63 48 56 43 52 36 L50 32 L48 36 C44 43 37 48 28 48 C14 48 2 38 2 20 Z M15 26 A13 10 0 1 0 41 26 A13 10 0 1 0 15 26 Z M59 26 A13 10 0 1 0 85 26 A13 10 0 1 0 59 26 Z"/></svg>Rogue ↓</button>
   </div>
   <div id="leader-grid"></div>
 </div>
@@ -2909,7 +2912,7 @@ select option { background: var(--surface2); }
   <div id="leader-hero"></div>
 
   <!-- Shared filters (apply to all tabs) -->
-  <div class="controls" style="padding-top:16px;padding-bottom:0">
+  <div class="controls lp-shared-controls" style="padding-top:16px;padding-bottom:0">
     <span class="ctrl-label">Set</span>
     <select id="lp-set" onchange="onLeaderFilterChange()">
       <option value="">All metas</option>
@@ -2931,26 +2934,48 @@ select option { background: var(--surface2); }
   <div id="lp-panel-cards">
     <div class="table-wrap">
       <div class="card-grid-header">
-        <span style="color:var(--text3);margin-right:4px">Sort:</span>
-        <div class="gh-col active" id="gh-incl"   onclick="setCardSort('inclusion_rate')">Inclusion</div>
-        <div class="gh-col"        id="gh-conv"    onclick="setCardSort('conversion')">Conversion</div>
-        <div class="gh-col"        id="gh-copies"  onclick="setCardSort('avg_copies')">Avg Copies</div>
-        <div class="gh-col"        id="gh-decks"   onclick="setCardSort('deck_count')">Decks</div>
-        <div class="gh-col"        id="gh-t8s"     onclick="setCardSort('t8_count')">T8s</div>
-        <div class="sep" style="margin:0 4px"></div>
-        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
-        <input type="number" id="lp-min-decks" value="2" min="1" max="999"
-          style="width:52px;padding:3px 6px;font-size:12px"
-          oninput="loadLeaderCards()">
-        <div class="sep" style="margin:0 4px"></div>
-        <div id="lp-cost-filters" style="display:flex;gap:3px;flex-wrap:wrap">
-          <!-- populated by initCostFilters() -->
+        <!-- Row 1: sort + min -->
+        <div class="cgh-row">
+          <div class="sort-btn-wrap">
+            <span style="color:var(--text3);margin-right:4px">Sort:</span>
+            <div class="gh-col active" id="gh-incl"   onclick="setCardSort('inclusion_rate')">Inclusion</div>
+            <div class="gh-col"        id="gh-conv"    onclick="setCardSort('conversion')">Conversion</div>
+            <div class="gh-col"        id="gh-copies"  onclick="setCardSort('avg_copies')">Avg Copies</div>
+            <div class="gh-col"        id="gh-decks"   onclick="setCardSort('deck_count')">Decks</div>
+            <div class="gh-col"        id="gh-t8s"     onclick="setCardSort('t8_count')">T8s</div>
+          </div>
+          <select id="card-sort-select" style="display:none" onchange="setCardSort(this.value)">
+            <option value="inclusion_rate">Sort: Inclusion</option>
+            <option value="conversion">Sort: Conversion</option>
+            <option value="avg_copies">Sort: Avg Copies</option>
+            <option value="deck_count">Sort: Decks</option>
+            <option value="t8_count">Sort: T8s</option>
+          </select>
+          <div class="sep cgh-sep" style="margin:0 4px"></div>
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
+          <input type="number" id="lp-min-decks" value="2" min="1" max="999"
+            style="width:52px;padding:3px 6px;font-size:12px"
+            oninput="loadLeaderCards()">
         </div>
-        <div class="sep" style="margin:0 4px"></div>
-        <input type="text" id="lp-filter" placeholder="Filter…" oninput="filterCards()" style="width:110px;padding:3px 8px;font-size:12px">
-        <button class="btn" id="btn-cards-top8" onclick="toggleCardsTop8()" title="Only show cards from decks that made top 8">Top 8 only</button>
-        <button class="btn" id="btn-spice" onclick="toggleSpice()">🌶 Spice</button>
-        <button class="btn sb-jump-btn" onclick="document.getElementById('leader-sb-panel').scrollIntoView({behavior:'smooth',block:'start'})">↓ Sideboard</button>
+        <!-- Row 2: filter + sideboard -->
+        <div class="cgh-row">
+          <div class="sep cgh-sep" style="margin:0 4px"></div>
+          <input type="text" id="lp-filter" placeholder="Filter…" oninput="filterCards()" style="width:110px;padding:3px 8px;font-size:12px">
+          <button class="btn sb-jump-btn" onclick="document.getElementById('leader-sb-panel').scrollIntoView({behavior:'smooth',block:'start'})">↓ Sideboard</button>
+        </div>
+        <!-- Row 3: top8 + spice -->
+        <div class="cgh-row">
+          <div class="sep cgh-sep" style="margin:0 4px"></div>
+          <button class="btn" id="btn-cards-top8" onclick="toggleCardsTop8()" title="Only show cards from decks that made top 8">Top 8 only</button>
+          <button class="btn" id="btn-spice" onclick="toggleSpice()">🌶 Spice</button>
+        </div>
+        <!-- Row 4: cost filters -->
+        <div class="cgh-row cgh-row-costs">
+          <div class="sep cgh-sep" style="margin:0 4px"></div>
+          <div id="lp-cost-filters" style="display:flex;gap:3px;flex-wrap:wrap">
+            <!-- populated by initCostFilters() -->
+          </div>
+        </div>
       </div>
       <div class="card-deck-layout">
         <div class="card-grid" id="leader-cards-tbody">
@@ -2967,6 +2992,8 @@ select option { background: var(--surface2); }
   <div id="lp-panel-matchups" style="display:none">
     <div class="controls" style="padding-top:14px">
       <button class="btn" id="mu-top8-btn" onclick="toggleMatchupTop8()" title="Only count matches where at least one player made top 8">Top 8 only</button>
+      <div class="sep"></div>
+      <input type="text" id="mu-search" placeholder="Search opponent…" oninput="filterMatchups()" style="width:160px;padding:3px 8px;font-size:12px">
     </div>
     <div class="matchup-grid" id="leader-matchups-grid">
       <div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>
@@ -3059,29 +3086,6 @@ select option { background: var(--surface2); }
 
 <!-- ══ COUNTER PAGE ══ -->
 <!-- ══ COUNTER PAGE ══ -->
-<div class="page" id="page-meta">
-  <div class="page-header">
-    <div>
-      <div class="page-title">META OVERVIEW</div>
-      <div class="page-sub" id="counter-sub">Weekly wins and meta share</div>
-    </div>
-  </div>
-  <div class="controls">
-    <span class="ctrl-label">Weeks</span>
-    <button class="btn active" id="ctr-w1" onclick="setCounterWeeks(1)">This week</button>
-    <button class="btn"        id="ctr-w2" onclick="setCounterWeeks(2)">2 weeks</button>
-    <button class="btn"        id="ctr-w4" onclick="setCounterWeeks(4)">4 weeks</button>
-    <div class="sep"></div>
-    <span class="ctrl-label">Sort</span>
-    <button class="btn active" id="ctr-s-wins"  onclick="setCounterSort('wins')">Wins</button>
-    <button class="btn"        id="ctr-s-top8s" onclick="setCounterSort('top8s')">T8s</button>
-    <button class="btn"        id="ctr-s-decks" onclick="setCounterSort('total_decks')">Decks</button>
-    <button class="btn"        id="ctr-s-meta"  onclick="setCounterSort('meta_share')">Meta%</button>
-  </div>
-  <div id="counter-grid" style="padding:0 24px 32px;overflow-x:auto">
-    <div class="loading" style="padding:24px">loading…</div>
-  </div>
-</div>
 
 <!-- ══ PLAYERS PAGE ══ -->
 <div class="page" id="page-players">
@@ -3384,7 +3388,6 @@ function showPage(name) {
   document.getElementById('breadcrumb').classList.remove('visible');
   location.hash = name === 'home' ? '' : name;
   if (name === 'events')   loadEvents();
-  if (name === 'meta')     loadCounter();
   if (name === 'matrix')   loadMatrix();
   if (name === 'decklists') loadDecklists();
   if (name === 'players')   loadPlayers();
@@ -3445,9 +3448,7 @@ function setFormat(fmt) {
   document.getElementById('lbl-eternal-era').style.display = fmt === 'eternal' ? '' : 'none';
   document.getElementById('eternal-era').style.display     = fmt === 'eternal' ? '' : 'none';
   const activePage = document.querySelector('.page.active')?.id;
-  if (activePage === 'page-meta') {
-    loadCounter();
-  } else if (activePage === 'page-matrix') {
+  if (activePage === 'page-matrix') {
     loadMatrix();
   } else {
     goHome();
@@ -3476,6 +3477,7 @@ async function loadHome() {
     document.getElementById('mb-events').textContent  = (summary.total_events ?? '—').toLocaleString?.() ?? summary.total_events;
     document.getElementById('mb-decks').textContent   = total.toLocaleString();
     document.getElementById('mb-leaders').textContent = data.length;
+    document.getElementById('mb-matches').textContent = summary.total_matches != null ? summary.total_matches.toLocaleString() : '—';
     renderLeaderGrid();
   } catch(e) {
     document.getElementById('leader-grid').innerHTML = `<div class="empty-state">// ${e.message}</div>`;
@@ -3490,6 +3492,8 @@ function setHomeSort(col) {
     const map = { decks:'total_decks', conversion:'conversion', t8rate:'t8_rate', wins:'wins', mwr:'match_win_rate' };
     document.getElementById('sort-' + c)?.classList.toggle('active', map[c] === col);
   });
+  const sel = document.getElementById('home-sort-select');
+  if (sel) sel.value = col;
   renderLeaderGrid();
 }
 
@@ -3560,8 +3564,8 @@ function renderLeaderGrid() {
 
   // Split rogue decks (standard only, not when searching)
   const splitRogue = currentFormat === 'standard' && !search;
-  const mainRows   = splitRogue ? rows.filter(r => (r.meta_share ?? 0) >= 0.01 || (r.wins ?? 0) > 1) : rows;
-  const rogueRows  = splitRogue ? rows.filter(r => (r.meta_share ?? 0) <  0.01 && (r.wins ?? 0) <= 1) : [];
+  const mainRows   = splitRogue ? rows.filter(r => (r.meta_share ?? 0) >= 0.006 || (r.wins ?? 0) > 1) : rows;
+  const rogueRows  = splitRogue ? rows.filter(r => (r.meta_share ?? 0) <  0.006 && (r.wins ?? 0) <= 1) : [];
 
   // If everything is rogue (small/filtered era), don't split — show all in normal tiers
   if (splitRogue && mainRows.length === 0) {
@@ -3645,7 +3649,7 @@ function renderLeaderGrid() {
 
   // Rogue section
   if (rogueRows.length) {
-    html += `<div id="rogue-anchor" class="rogue-section-header"><span class="rogue-label">Rogue Decks</span><span class="rogue-sub">&lt; 1% meta share · excluded from tier grades</span><span class="tsh-count">${rogueRows.length}</span></div>`;
+    html += `<div id="rogue-anchor" class="rogue-section-header"><span class="rogue-label">Rogue Decks</span><span class="rogue-sub">&lt; 0.6% meta share · excluded from tier grades</span><span class="tsh-count">${rogueRows.length}</span></div>`;
     html += `<div class="tier-section-grid rogue-grid">`;
     rogueRows.forEach(r => {
       const i = imgIdx++;
@@ -3865,6 +3869,8 @@ function setCardSort(col) {
   document.querySelectorAll('.gh-col').forEach(el => el.classList.remove('active'));
   const mapped = colMap[col];
   if (mapped) document.getElementById('gh-' + mapped)?.classList.add('active');
+  const sel = document.getElementById('card-sort-select');
+  if (sel) sel.value = col;
   filterCards();
 }
 
@@ -4104,6 +4110,8 @@ let matchupRows = [];
 function renderMatchups() {
   document.getElementById('mu-detail').style.display = 'none';
   document.getElementById('leader-matchups-grid').style.display = '';
+  const searchEl = document.getElementById('mu-search');
+  if (searchEl) searchEl.value = '';
 
   const grid = document.getElementById('leader-matchups-grid');
   if (!matchupData.length) {
@@ -4112,10 +4120,29 @@ function renderMatchups() {
   }
 
   matchupRows = [...matchupData].sort((a, b) => b.matches - a.matches || (b.win_rate ?? 0) - (a.win_rate ?? 0));
+  filterMatchups();
+}
 
-  grid.innerHTML = matchupRows.map((r, i) => {
-    const wr  = r.win_rate ?? 0;
-    const pct = Math.round(wr * 100);
+function filterMatchups() {
+  const grid = document.getElementById('leader-matchups-grid');
+  if (!matchupRows.length) return;
+
+  const q = (document.getElementById('mu-search')?.value || '').toLowerCase();
+  const visible = matchupRows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => !q
+      || r.opponent.toLowerCase().includes(q)
+      || (r.opponent_base_group || '').toLowerCase().includes(q)
+    );
+
+  if (!visible.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:24px">// no matchups match your search</div>';
+    return;
+  }
+
+  grid.innerHTML = visible.map(({ r, i }) => {
+    const wr    = r.win_rate ?? 0;
+    const pct   = Math.round(wr * 100);
     const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--gold)' : 'var(--red2)';
     return `<div class="matchup-card" data-idx="${i}" id="mu-${i}">
   <div class="matchup-art" id="mu-art-${i}"></div>
@@ -4134,7 +4161,7 @@ function renderMatchups() {
     if (card) openMatchupDetail(matchupRows[parseInt(card.dataset.idx)]);
   };
 
-  matchupRows.forEach((r, i) => {
+  visible.forEach(({ r, i }) => {
     fetchLeaderCard(r.opponent).then(d => {
       const el = document.getElementById('mu-art-' + i);
       if (!el) return;
@@ -4875,137 +4902,6 @@ async function loadMatrix() {
   }
 }
 
-// ── Meta Overview ────────────────────────────────────────────────────────────
-let counterWeeks = 2;
-let counterSort  = 'wins';
-
-function setCounterWeeks(w) {
-  counterWeeks = w;
-  [1,2,4].forEach(n => document.getElementById('ctr-w'+n)?.classList.toggle('active', n === w));
-  loadCounter();
-}
-
-function setCounterSort(col) {
-  counterSort = col;
-  ['wins','top8s','decks','meta'].forEach(k => {
-    const key = k === 'decks' ? 'total_decks' : k === 'meta' ? 'meta_share' : k;
-    document.getElementById('ctr-s-' + k)?.classList.toggle('active', key === col);
-  });
-  renderCounterWeeks();
-}
-
-let _counterData = null;
-
-async function loadCounter() {
-  const grid = document.getElementById('counter-grid');
-  if (!grid) return;
-  grid.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  try {
-    const d = await api(`/api/meta-counter?weeks=${counterWeeks}&format=${currentFormat}`);
-    _counterData = d.weeks || [];
-    renderCounterWeeks();
-  } catch(e) {
-    grid.innerHTML = `<div class="empty-state" style="padding:24px">// ${e.message}</div>`;
-  }
-}
-
-function renderCounterWeeks() {
-  const grid = document.getElementById('counter-grid');
-  if (!grid || !_counterData) return;
-  const weeks = _counterData;
-  if (!weeks.length) { grid.innerHTML = '<div class="empty-state" style="padding:24px">// no data</div>'; return; }
-
-  // Update sub-header
-  document.getElementById('counter-sub').textContent =
-    weeks.map((w, i) => {
-      const lbl = i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i+1} weeks ago`;
-      return `${lbl}: ${w.event_count} event${w.event_count !== 1 ? 's' : ''}`;
-    }).join(' · ');
-
-  // Build unified leader+base combo list sorted by chosen column in most-recent week
-  const comboKey = r => r.leader + '|||' + (r.base || '');
-  const allCombos = [...new Map(weeks.flatMap(w => w.leaders.map(r => [comboKey(r), r]))).values()];
-
-  // Apply rogue filter (standard only): exclude combos sub-1% meta share AND ≤1 win in most-recent week
-  const week0 = weeks[0]?.leaders || [];
-  const rogueComboSet = currentFormat === 'standard'
-    ? new Set(week0.filter(r => (r.meta_share ?? 0) < 0.01 && (r.wins ?? 0) <= 1).map(comboKey))
-    : new Set();
-
-  const sorted = allCombos
-    .filter(r => !rogueComboSet.has(comboKey(r)))
-    .sort((a, b) => {
-      const av = weeks[0]?.leaders.find(r => comboKey(r) === comboKey(a))?.[counterSort] ?? -1;
-      const bv = weeks[0]?.leaders.find(r => comboKey(r) === comboKey(b))?.[counterSort] ?? -1;
-      return bv - av;
-    });
-
-  const pctDelta = (val, prev) => {
-    if (prev == null || prev === 0) return val > 0 ? '<span class="delta-pos">new</span>' : '';
-    const pct = Math.round(((val - prev) / prev) * 100);
-    if (Math.abs(pct) < 5) return '';
-    return pct > 0
-      ? `<span class="delta-pos">▲${pct}%</span>`
-      : `<span class="delta-neg">▼${Math.abs(pct)}%</span>`;
-  };
-
-  // Build column headers — week group headers + stat sub-headers
-  const wkLabels  = weeks.map((w, i) => i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i+1} wks ago`);
-  const wkDates   = weeks.map(w => w.week_start.slice(5));  // MM-DD
-
-  // Two-row header: Leader col + Base col + week spans, row2 = stat cols
-  const nw = weeks.length;
-  const hdr1 = `<tr>
-    <th class="wt-leader-col" rowspan="2">Leader</th>
-    <th class="wt-base-col"   rowspan="2">Base</th>
-    ${weeks.map((w,i) => `<th class="wt-week-hdr" colspan="3">
-      <span class="wt-week-label">${wkLabels[i]}</span>
-      <span class="wt-week-sub">${w.week_start} · ${w.event_count}ev</span>
-    </th>`).join('')}
-  </tr>`;
-  const hdr2 = `<tr>${weeks.map(() =>
-    `<th class="wt-stat-hdr">Wins</th><th class="wt-stat-hdr">T8s</th><th class="wt-stat-hdr">Meta%</th>`
-  ).join('')}</tr>`;
-
-  const tbody = sorted.map((combo, li) => {
-    const ck = comboKey(combo);
-    const cells = weeks.map((wk, wi) => {
-      const r    = wk.leaders.find(x => comboKey(x) === ck);
-      const prev = wi < weeks.length - 1 ? weeks[wi + 1]?.leaders.find(x => comboKey(x) === ck) : null;
-      if (!r) return '<td class="wt-week-cell" style="color:var(--text3)">—</td><td class="wt-week-cell" style="color:var(--text3)">—</td><td class="wt-week-cell" style="color:var(--text3)">—</td>';
-      const winsClass = r.wins > 0 ? 'wt-wins' : 'wt-wins-0';
-      const wd = wi === 0 ? pctDelta(r.wins,       prev?.wins)       : '';
-      const td = wi === 0 ? pctDelta(r.top8s,      prev?.top8s)      : '';
-      const md = wi === 0 ? pctDelta(r.meta_share, prev?.meta_share) : '';
-      return `<td class="wt-week-cell ${winsClass}">${r.wins}${wd}</td>
-<td class="wt-week-cell">${r.top8s}${td}</td>
-<td class="wt-week-cell">${(r.meta_share*100).toFixed(1)}%${md}</td>`;
-    }).join('');
-    const baseAspClass = combo.base_aspect && combo.base_aspect !== 'none'
-      ? `aspect-icon-${combo.base_aspect.toLowerCase()}` : '';
-    return `<tr>
-  <td class="wt-leader-cell"><span class="wt-aspect" id="ctr-asp-${li}"></span>${shortName(combo.leader)}</td>
-  <td class="wt-leader-cell wt-base-cell"><span class="wt-aspect" id="ctr-basp-${li}"></span>${combo.base || '—'}</td>
-  ${cells}
-</tr>`;
-  }).join('');
-
-  grid.innerHTML = `<div style="overflow-x:auto"><table class="week-table">
-    <thead>${hdr1}${hdr2}</thead>
-    <tbody>${tbody}</tbody>
-  </table></div>`;
-
-  // Aspect icons — one pass per combo
-  sorted.forEach((combo, li) => {
-    fetchLeaderCard(combo.leader).then(img => {
-      const el = document.getElementById('ctr-asp-' + li);
-      if (el && img?.all_aspects?.length) el.innerHTML = aspectIcons(img.all_aspects, 14);
-    });
-    const bel = document.getElementById('ctr-basp-' + li);
-    if (bel && combo.base_aspect && combo.base_aspect !== 'none')
-      bel.innerHTML = aspectIcons([combo.base_aspect], 14);
-  });
-}
 
 const _tt = document.createElement('div');
 _tt.id = 'swu-tooltip';
@@ -5448,7 +5344,6 @@ async function populateMetaDropdowns() {
 <!-- Mobile bottom nav (hidden on desktop via CSS) -->
 <nav id="mobile-nav">
   <button class="mob-nav-btn active" id="mob-home"      onclick="showPage('home')">Leaders</button>
-  <button class="mob-nav-btn"        id="mob-meta"      onclick="showPage('meta')">Meta</button>
   <button class="mob-nav-btn"        id="mob-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="mob-nav-btn"        id="mob-players"   onclick="showPage('players')">Players</button>
   <button class="mob-nav-btn"        id="mob-decklists" onclick="showPage('decklists')">Decks</button>
