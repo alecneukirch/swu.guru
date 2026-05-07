@@ -959,8 +959,12 @@ select option { background: var(--surface2); }
   display: block;
 }
 #leader-grid.tier-grouped .tier-section-grid {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 200px));
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+}
+#leader-grid.tier-grouped .tier-section-grid .leader-card {
+  flex: 0 0 200px;
 }
 
 .leader-card {
@@ -1443,6 +1447,7 @@ select option { background: var(--surface2); }
     padding: 0 10px 24px;
   }
   #leader-grid.tier-grouped .tier-section-grid {
+    display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
