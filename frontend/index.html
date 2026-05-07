@@ -4319,10 +4319,9 @@ function renderWeaknesses() {
     const delta  = r.delta ?? 0;
     const pct    = Math.round(wr * 100);
     const losses = r.game_count - r.wins;
-    const cc     = delta >= 0.05 ? 'bad' : delta <= -0.05 ? 'good' : '';
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     artQueue.push({ name: r.card_name, id: 'wk-art-' + i });
-    return `<div class="card-tile conv-${cc}" data-card="${safe}" id="wk-${i}">
+    return `<div class="card-tile" data-card="${safe}" id="wk-${i}">
   <div class="ct-art" id="wk-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
@@ -4332,7 +4331,7 @@ function renderWeaknesses() {
     <div class="ct-name">${r.card_name}</div>
     <div class="ct-stats">
       <span class="ct-incl">${r.wins}W – ${losses}L</span>
-      <span class="ct-conv ${cc}">${pct}%</span>
+      <span class="ct-conv">${pct}%</span>
     </div>
   </div>
 </div>`;
