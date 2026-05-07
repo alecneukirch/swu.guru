@@ -4133,8 +4133,10 @@ function setLeaderTab(tab) {
 let matchupData = [];
 let matchupArtCache = {};
 let pendingMatchupOpponent = null;
+let _matchupGen = 0;
 
 async function loadLeaderMatchups() {
+  const gen = ++_matchupGen;
   const grid = document.getElementById('leader-matchups-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
@@ -4146,7 +4148,9 @@ async function loadLeaderMatchups() {
   if (base)         muParams.push('base_group=' + encodeURIComponent(base));
   url += '?' + muParams.join('&');
   try {
-    matchupData = await api(url);
+    const data = await api(url);
+    if (gen !== _matchupGen) return;
+    matchupData = data;
     renderMatchups();
     if (pendingMatchupOpponent) {
       const target = matchupData.find(m => m.opponent === pendingMatchupOpponent);
@@ -4154,6 +4158,7 @@ async function loadLeaderMatchups() {
       if (target) openMatchupDetail(target);
     }
   } catch(e) {
+    if (gen !== _matchupGen) return;
     pendingMatchupOpponent = null;
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:24px">// ${e.message}</div>`;
   }
@@ -4935,7 +4940,7 @@ async function loadMatrix() {
     table.addEventListener('click', e => {
       const cell = e.target.closest('.mx-cell[data-row-leader]');
       if (!cell) return;
-      openLeader(cell.dataset.rowLeader, cell.dataset.rowBase);
+      openLeader(cell.dataset.rowLeader);
       pendingMatchupOpponent = cell.dataset.colLeader;
       setLeaderTab('matchups');
     });
