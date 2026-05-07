@@ -1659,7 +1659,7 @@ def leader_weaknesses(
                    - t.total_wins::numeric / NULLIF(t.total_games, 0),
                4) AS delta
         FROM card_stats cs, totals t
-        ORDER BY {('game_count' if sort == 'count' else 'delta')} DESC, game_count DESC
+        ORDER BY {'game_count DESC' if sort == 'count' else 'win_rate ASC'}, game_count DESC
         LIMIT %s
     """, [leader] + date_params + base_param +
          [leader] + date_params + base_param +
