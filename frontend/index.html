@@ -3397,14 +3397,14 @@ function showPage(name) {
   document.getElementById('nav-' + name)?.classList.add('active');
   document.getElementById('mob-' + name)?.classList.add('active');
   document.getElementById('breadcrumb').classList.remove('visible');
-  location.hash = name === 'home' ? '' : name;
+  if (name === 'home') history.replaceState(null, '', location.pathname);
+  else location.hash = name;
   if (name === 'events')   loadEvents();
   if (name === 'matrix')   loadMatrix();
   if (name === 'decklists') loadDecklists();
   if (name === 'players')   loadPlayers();
 }
 function goHome() {
-  location.hash = '';
   showPage('home');
 }
 function openLeader(name, autoBase = null) {
