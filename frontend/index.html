@@ -283,7 +283,7 @@ select option { background: var(--surface2); }
   white-space: nowrap;
 }
 .btn:hover { border-color: var(--gold); color: var(--gold); }
-.btn.active { background: rgba(240,180,41,0.12); border-color: var(--gold); color: var(--gold); }
+.btn.active { background: color-mix(in srgb, var(--gold) 12%, transparent); border-color: var(--gold); color: var(--gold); }
 
 .sep { width: 1px; height: 20px; background: var(--border); }
 
@@ -2113,7 +2113,7 @@ select option { background: var(--surface2); }
   white-space: nowrap;
 }
 .pct-btn:hover { border-color: var(--gold); color: var(--text2); }
-.pct-btn.active { background: rgba(240,180,41,0.12); border-color: var(--gold); color: var(--gold); }
+.pct-btn.active { background: color-mix(in srgb, var(--gold) 12%, transparent); border-color: var(--gold); color: var(--gold); }
 
 /* ── Modal — summary stats ────────────────────────────────── */
 .modal-stat-row {
