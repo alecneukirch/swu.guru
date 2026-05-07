@@ -3849,8 +3849,12 @@ async function loadLeaderBases(name, autoBase = null) {
 
 function onLeaderFilterChange() {
   history.replaceState(null, '', buildLeaderHash());
-  if (leaderTab === 'cards')           loadLeaderCards();
-  else if (leaderTab === 'matchups')   loadLeaderMatchups();
+  if (leaderTab === 'cards') loadLeaderCards();
+  else if (leaderTab === 'matchups') {
+    // Don't re-render the list if a specific matchup detail is already open
+    const muOpen = document.getElementById('mu-detail')?.style.display !== 'none';
+    if (!muOpen) loadLeaderMatchups();
+  }
   else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
 }
 
@@ -4940,7 +4944,7 @@ async function loadMatrix() {
     table.addEventListener('click', e => {
       const cell = e.target.closest('.mx-cell[data-row-leader]');
       if (!cell) return;
-      openLeader(cell.dataset.rowLeader);
+      openLeader(cell.dataset.rowLeader, cell.dataset.rowBase);
       pendingMatchupOpponent = cell.dataset.colLeader;
       setLeaderTab('matchups');
     });
