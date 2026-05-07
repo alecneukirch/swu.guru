@@ -1740,6 +1740,9 @@ select option { background: var(--surface2); }
   justify-content: space-between;
   gap: 4px;
 }
+.wk-pips { display:flex; gap:3px; align-items:center; }
+.wk-pip  { width:8px; height:8px; border-radius:50%; background:rgba(231,76,60,0.15); }
+.wk-pip.on { background:rgba(231,76,60,0.88); }
 .ct-incl {
   font-family: var(--mono);
   font-size: 18px;
@@ -4325,9 +4328,12 @@ function renderWeaknesses() {
     const losses = r.game_count - r.wins;
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const t      = (wr - minWr) / wrSpan;
+    const rating = Math.round((1 - t) * 4) + 1;   // 1 (best) – 5 (worst)
     const a      = ((1 - t) * 0.85).toFixed(2);
     const glow   = ((1 - t) * 0.45).toFixed(2);
     const style  = `border-color:rgba(231,76,60,${a});box-shadow:0 0 14px rgba(231,76,60,${glow})`;
+    const pips   = Array.from({length:5}, (_, k) =>
+      `<span class="wk-pip${k < rating ? ' on' : ''}"></span>`).join('');
     artQueue.push({ name: r.card_name, id: 'wk-art-' + i });
     return `<div class="card-tile" style="${style}" data-card="${safe}" id="wk-${i}">
   <div class="ct-art" id="wk-art-${i}"></div>
@@ -4339,7 +4345,7 @@ function renderWeaknesses() {
     <div class="ct-name">${r.card_name}</div>
     <div class="ct-stats">
       <span class="ct-incl">${r.wins}W – ${losses}L</span>
-      <span class="ct-conv">${pct}%</span>
+      <span class="wk-pips">${pips}</span>
     </div>
   </div>
 </div>`;
