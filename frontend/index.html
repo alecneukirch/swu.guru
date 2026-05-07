@@ -2922,14 +2922,12 @@ select option { background: var(--surface2); }
       <button class="btn"        id="sort-t8rate"     onclick="setHomeSort('t8_rate')">T8 Rate</button>
       <button class="btn"        id="sort-wins"       onclick="setHomeSort('wins')">Wins</button>
       <button class="btn"        id="sort-mwr"        onclick="setHomeSort('match_win_rate')">MWR</button>
-      <button class="btn"        id="sort-conversion" onclick="setHomeSort('conversion')">Conversion</button>
     </div>
     <select id="home-sort-select" style="display:none" onchange="setHomeSort(this.value)">
       <option value="total_decks">Sort: Decks</option>
       <option value="t8_rate">Sort: T8 Rate</option>
       <option value="wins">Sort: Wins</option>
       <option value="match_win_rate">Sort: MWR</option>
-      <option value="conversion">Sort: Conversion</option>
     </select>
     <div class="sep"></div>
     <input type="text" id="home-search" placeholder="Search leader…" oninput="renderLeaderGrid()" style="width:160px">
