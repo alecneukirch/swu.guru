@@ -3419,6 +3419,7 @@ function goHome() {
   showPage('home');
 }
 function openLeader(name, autoBase = null) {
+  pendingMatchupOpponent = null;
   currentLeader = name;
   const h = '#leader=' + encodeURIComponent(name) + (autoBase ? '&base=' + encodeURIComponent(autoBase) : '');
   history.pushState(null, '', h);
@@ -3446,11 +3447,26 @@ function openLeader(name, autoBase = null) {
   loadLeaderCards();
 }
 
+function buildLeaderHash() {
+  let h = '#leader=' + encodeURIComponent(currentLeader);
+  const base = document.getElementById('lp-base')?.value;
+  if (base) h += '&base=' + encodeURIComponent(base);
+  if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
+  return h;
+}
+
 function routeFromHash() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (!hash) return false;
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
-  if (params.leader) { openLeader(params.leader, params.base || null); return true; }
+  if (params.leader) {
+    openLeader(params.leader, params.base || null);
+    if (params.tab && params.tab !== 'cards') {
+      if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
+      setLeaderTab(params.tab);
+    }
+    return true;
+  }
   const page = hash.replace(/^#/, '');
   const el = document.getElementById('page-' + page);
   if (el) { showPage(page); return true; }
@@ -3808,9 +3824,7 @@ async function loadLeaderBases(name, autoBase = null) {
 }
 
 function onLeaderFilterChange() {
-  const base = document.getElementById('lp-base').value;
-  const h = '#leader=' + encodeURIComponent(currentLeader) + (base ? '&base=' + encodeURIComponent(base) : '');
-  history.replaceState(null, '', h);
+  history.replaceState(null, '', buildLeaderHash());
   if (leaderTab === 'cards')           loadLeaderCards();
   else if (leaderTab === 'matchups')   loadLeaderMatchups();
   else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
@@ -4085,6 +4099,7 @@ function setLeaderTab(tab) {
     document.getElementById('lp-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('lp-panel-' + t).style.display = t === tab ? '' : 'none';
   });
+  if (currentLeader) history.replaceState(null, '', buildLeaderHash());
   if (tab === 'matchups'   && currentLeader) loadLeaderMatchups();
   if (tab === 'weaknesses' && currentLeader) loadLeaderWeaknesses();
 }
@@ -4093,6 +4108,7 @@ function setLeaderTab(tab) {
 
 let matchupData = [];
 let matchupArtCache = {};
+let pendingMatchupOpponent = null;
 
 async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
@@ -4108,7 +4124,13 @@ async function loadLeaderMatchups() {
   try {
     matchupData = await api(url);
     renderMatchups();
+    if (pendingMatchupOpponent) {
+      const target = matchupData.find(m => m.opponent === pendingMatchupOpponent);
+      pendingMatchupOpponent = null;
+      if (target) openMatchupDetail(target);
+    }
   } catch(e) {
+    pendingMatchupOpponent = null;
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:24px">// ${e.message}</div>`;
   }
 }
@@ -4182,11 +4204,13 @@ function filterMatchups() {
 function closeMatchupDetail() {
   document.getElementById('mu-detail').style.display = 'none';
   document.getElementById('leader-matchups-grid').style.display = '';
+  history.replaceState(null, '', buildLeaderHash());
 }
 
 async function openMatchupDetail(matchup) {
   document.getElementById('leader-matchups-grid').style.display = 'none';
   document.getElementById('mu-detail').style.display = '';
+  history.replaceState(null, '', buildLeaderHash() + '&mu=' + encodeURIComponent(matchup.opponent));
 
   const wr    = matchup.win_rate ?? 0;
   const pct   = Math.round(wr * 100);
