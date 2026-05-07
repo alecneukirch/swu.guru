@@ -4314,14 +4314,13 @@ function renderWeaknesses() {
   const artQueue = [];
 
   grid.innerHTML = weaknessesData.map(r => {
-    const i     = idx++;
-    const wr    = r.win_rate ?? 0;
-    const delta = r.delta ?? 0;
-    const pct   = Math.round(wr * 100);
-    const dpct  = Math.round(Math.abs(delta) * 100);
-    const dSign = delta >= 0 ? '+' : '−';
-    const cc    = delta >= 0.05 ? 'bad' : delta <= -0.05 ? 'good' : '';
-    const safe  = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    const i      = idx++;
+    const wr     = r.win_rate ?? 0;
+    const delta  = r.delta ?? 0;
+    const pct    = Math.round(wr * 100);
+    const losses = r.game_count - r.wins;
+    const cc     = delta >= 0.05 ? 'bad' : delta <= -0.05 ? 'good' : '';
+    const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     artQueue.push({ name: r.card_name, id: 'wk-art-' + i });
     return `<div class="card-tile conv-${cc}" data-card="${safe}" id="wk-${i}">
   <div class="ct-art" id="wk-art-${i}"></div>
@@ -4332,8 +4331,8 @@ function renderWeaknesses() {
   <div class="ct-bottom">
     <div class="ct-name">${r.card_name}</div>
     <div class="ct-stats">
-      <span class="ct-incl">${pct}%</span>
-      <span class="ct-conv ${cc}">${dSign}${dpct}%</span>
+      <span class="ct-incl">${r.wins}W – ${losses}L</span>
+      <span class="ct-conv ${cc}">${pct}%</span>
     </div>
   </div>
 </div>`;
