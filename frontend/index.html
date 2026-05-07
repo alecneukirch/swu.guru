@@ -1089,9 +1089,12 @@ select option { background: var(--surface2); }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 4px;
-  margin: 24px 0 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  margin: 28px 0 12px;
+  border-bottom: 2px solid var(--border2);
+  border-left: 4px solid var(--border2);
+  border-radius: 2px 0 0 2px;
+  background: rgba(255,255,255,0.03);
 }
 .tier-section-header:first-child { margin-top: 8px; }
 .tsh-grade {
@@ -1115,6 +1118,12 @@ select option { background: var(--surface2); }
   font-size: 12px;
   color: var(--text3);
 }
+.tier-section-header.tier-s { border-left-color: #ffd700; }
+.tier-section-header.tier-a { border-left-color: var(--green); }
+.tier-section-header.tier-b { border-left-color: var(--gold); }
+.tier-section-header.tier-c { border-left-color: var(--text2); }
+.tier-section-header.tier-d { border-left-color: var(--red2); }
+.tier-section-header.tier-f { border-left-color: var(--red); }
 .tier-section-header.tier-s .tsh-grade { color: #ffd700; }
 .tier-section-header.tier-a .tsh-grade { color: var(--green); }
 .tier-section-header.tier-b .tsh-grade { color: var(--gold); }
@@ -1773,20 +1782,27 @@ select option { background: var(--surface2); }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 2px 4px;
+  padding: 8px 6px;
+  margin: 4px 0;
   grid-column: 1 / -1;
   cursor: pointer;
   user-select: none;
+  border-radius: 5px;
+  transition: background 0.15s;
+}
+.ct-type-divider:hover {
+  background: rgba(255,255,255,0.05);
 }
 .ct-type-divider:hover .ct-type-label { color: var(--text1); }
 .ct-type-line {
   flex: 1;
-  height: 1px;
+  height: 2px;
   background: var(--border2);
+  border-radius: 1px;
 }
 .ct-type-label {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1797,9 +1813,10 @@ select option { background: var(--surface2); }
   gap: 6px;
 }
 .ct-type-chevron {
-  font-size: 11px;
+  font-size: 13px;
   transition: transform 0.2s;
   display: inline-block;
+  opacity: 0.7;
 }
 .ct-type-divider.collapsed .ct-type-chevron {
   transform: rotate(-90deg);
