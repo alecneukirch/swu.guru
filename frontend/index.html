@@ -3015,9 +3015,9 @@ select option { background: var(--surface2); }
   <div id="lp-panel-weaknesses" style="display:none">
     <div class="controls" style="padding-top:14px">
       <div class="sort-btn-wrap">
-        <span style="color:var(--text3);margin-right:4px">Sort:</span>
-        <div class="gh-col active" id="wk-sort-count" onclick="setWeaknessSort('count')">Count</div>
-        <div class="gh-col"        id="wk-sort-delta" onclick="setWeaknessSort('delta')">Win %Δ</div>
+        <span class="ctrl-label">Sort</span>
+        <button class="btn active" id="wk-sort-count" onclick="setWeaknessSort('count')">Count</button>
+        <button class="btn"        id="wk-sort-delta" onclick="setWeaknessSort('delta')">Win %Δ</button>
       </div>
       <div class="sep"></div>
       <span class="ctrl-label">Min games</span>
