@@ -4313,15 +4313,23 @@ function renderWeaknesses() {
   let idx = 0;
   const artQueue = [];
 
+  const wrs    = weaknessesData.map(r => r.win_rate ?? 0);
+  const minWr  = Math.min(...wrs);
+  const maxWr  = Math.max(...wrs);
+  const wrSpan = maxWr - minWr || 1;
+
   grid.innerHTML = weaknessesData.map(r => {
     const i      = idx++;
     const wr     = r.win_rate ?? 0;
-    const delta  = r.delta ?? 0;
     const pct    = Math.round(wr * 100);
     const losses = r.game_count - r.wins;
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    const t      = (wr - minWr) / wrSpan;
+    const a      = ((1 - t) * 0.85).toFixed(2);
+    const glow   = ((1 - t) * 0.45).toFixed(2);
+    const style  = `border-color:rgba(231,76,60,${a});box-shadow:0 0 14px rgba(231,76,60,${glow})`;
     artQueue.push({ name: r.card_name, id: 'wk-art-' + i });
-    return `<div class="card-tile" data-card="${safe}" id="wk-${i}">
+    return `<div class="card-tile" style="${style}" data-card="${safe}" id="wk-${i}">
   <div class="ct-art" id="wk-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
