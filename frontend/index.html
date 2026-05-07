@@ -3349,6 +3349,12 @@ function convClass(v) {
   if (v >= 0.85) return 'mid';
   return 'bad';
 }
+function cardNameParts(full) {
+  const idx = full.indexOf(' | ');
+  return idx === -1
+    ? { name: full, subtitle: '' }
+    : { name: full.slice(0, idx), subtitle: full.slice(idx + 3) };
+}
 function convTooltip(v) {
   if (v == null) return 'No data';
   const pct = Math.round((v - 1) * 100);
@@ -3985,6 +3991,7 @@ function renderCardTable(rows) {
       const mdStr = r.avg_copies != null ? Math.round(r.avg_copies * 10) / 10 : '—';
       const costVal = (r.cost != null && r.cost > 0) ? r.cost : (r.cost === 0 ? '0' : '');
       const costBadge = costVal !== '' ? `<div class="ct-cost">${costVal}</div>` : '';
+      const { name: ctName, subtitle: ctSub } = cardNameParts(r.card_name);
       return `<div class="card-tile conv-${cc}" data-card="${safe}" data-idx="${i}">
   <div class="ct-art" id="ct-art-${i}"></div>
   <div class="ct-scrim"></div>
@@ -3994,7 +4001,7 @@ function renderCardTable(rows) {
     ${isSpicy(r) ? '<div class="ct-spice" title="Spice — low inclusion, high conversion">🌶</div>' : ''}
   </div>
   <div class="ct-bottom">
-    <div class="ct-name-row">${costBadge}<div class="ct-name">${r.card_name}</div></div>
+    <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` title="${ctSub}"` : ''}>${ctName}</div></div>
     <div class="ct-stats">
       <span class="ct-incl">${fmtPct(r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
@@ -4034,6 +4041,7 @@ function renderCardTable(rows) {
           const mdStr = r.avg_copies != null ? Math.round(r.avg_copies * 10) / 10 : '—';
           const sbCost = (r.cost != null && r.cost > 0) ? r.cost : (r.cost === 0 ? '0' : '');
           const sbCostBadge = sbCost !== '' ? `<div class="ct-cost">${sbCost}</div>` : '';
+          const { name: sbName, subtitle: sbSub } = cardNameParts(r.card_name);
           return `<div class="card-tile conv-${cc}" data-card="${safe}" id="sb-tile-${i}">
   <div class="ct-art" id="sb-art-${i}"></div>
   <div class="ct-scrim"></div>
@@ -4042,7 +4050,7 @@ function renderCardTable(rows) {
     <div class="ct-badge">${r.deck_count}<span class="ct-badge-label">decks</span></div>
   </div>
   <div class="ct-bottom">
-    <div class="ct-name-row">${sbCostBadge}<div class="ct-name">${r.card_name}</div></div>
+    <div class="ct-name-row">${sbCostBadge}<div class="ct-name"${sbSub ? ` title="${sbSub}"` : ''}>${sbName}</div></div>
     <div class="ct-stats">
       <span class="ct-incl">${fmtPct(r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
@@ -4229,6 +4237,7 @@ function renderMatchupCards(data) {
     const dSign  = delta >= 0 ? '+' : '−';
     const cc     = delta >= 0 ? 'good' : 'bad';
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    const { name: mucName, subtitle: mucSub } = cardNameParts(r.card_name);
     artQueue.push({ name: r.card_name, id: 'muc-art-' + i });
     return `<div class="card-tile conv-${cc}" data-card="${safe}" id="muc-${i}">
   <div class="ct-art" id="muc-art-${i}"></div>
@@ -4237,7 +4246,7 @@ function renderMatchupCards(data) {
     <div class="ct-badge">${r.game_count}<span class="ct-badge-label">g</span></div>
   </div>
   <div class="ct-bottom">
-    <div class="ct-name">${r.card_name}</div>
+    <div class="ct-name"${mucSub ? ` title="${mucSub}"` : ''}>${mucName}</div>
     <div class="ct-stats">
       <span class="ct-incl">${pct}%</span>
       <span class="ct-conv ${cc}">${dSign}${dpct}%</span>
@@ -4322,6 +4331,7 @@ function renderWeaknesses() {
     const pct    = Math.round(wr * 100);
     const losses = r.game_count - r.wins;
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    const { name: wkName, subtitle: wkSub } = cardNameParts(r.card_name);
     const t      = (wr - minWr) / wrSpan;
     const rating = 5 - Math.floor(rankByIdx[i] * 5 / n);  // 5 (worst 20%) – 1 (best 20%)
     const a      = ((1 - t) * 0.85).toFixed(2);
@@ -4338,7 +4348,7 @@ function renderWeaknesses() {
     <div class="ct-badge">${pct}%</div>
   </div>
   <div class="ct-bottom">
-    <div class="ct-name">${r.card_name}</div>
+    <div class="ct-name"${wkSub ? ` title="${wkSub}"` : ''}>${wkName}</div>
     <div class="ct-stats">
       <span class="ct-incl">${r.wins}W – ${losses}L</span>
       <span class="wk-pips">${pips}</span>
