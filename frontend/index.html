@@ -4901,7 +4901,7 @@ document.addEventListener('mouseout', e => {
 });
 document.addEventListener('mousemove', e => {
   if (_tt.style.display === 'none') return;
-  const TW = 296, TH = 80;
+  const TW = _tt.offsetWidth, TH = _tt.offsetHeight;
   const vw = window.innerWidth, vh = window.innerHeight;
   let x = e.clientX + 14;
   let y = e.clientY + 18;
