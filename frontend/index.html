@@ -4320,6 +4320,13 @@ function renderWeaknesses() {
   const minWr  = Math.min(...wrs);
   const maxWr  = Math.max(...wrs);
   const wrSpan = maxWr - minWr || 1;
+  const n      = weaknessesData.length;
+
+  // Rank cards by win_rate ascending (rank 0 = worst) for even quintile bucketing
+  const rankByIdx = new Array(n);
+  [...weaknessesData.map((r, i) => ({ wr: r.win_rate ?? 0, i }))]
+    .sort((a, b) => a.wr - b.wr)
+    .forEach(({ i }, rank) => { rankByIdx[i] = rank; });
 
   grid.innerHTML = weaknessesData.map(r => {
     const i      = idx++;
@@ -4328,7 +4335,7 @@ function renderWeaknesses() {
     const losses = r.game_count - r.wins;
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const t      = (wr - minWr) / wrSpan;
-    const rating = Math.round((1 - t) * 4) + 1;   // 1 (best) – 5 (worst)
+    const rating = 5 - Math.floor(rankByIdx[i] * 5 / n);  // 5 (worst 20%) – 1 (best 20%)
     const a      = ((1 - t) * 0.85).toFixed(2);
     const glow   = ((1 - t) * 0.45).toFixed(2);
     const style  = `border-color:rgba(231,76,60,${a});box-shadow:0 0 14px rgba(231,76,60,${glow})`;
