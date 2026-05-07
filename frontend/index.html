@@ -3267,6 +3267,7 @@ let currentFormat  = 'standard';  // 'standard' | 'eternal'
 let homeData       = [];
 let homeSort       = 'total_decks';
 let homeComboData  = [];
+let _homeGen       = 0;
 let currentLeader  = '';
 let leaderData     = [];
 let cardSort       = 'inclusion_rate';
@@ -3518,6 +3519,7 @@ function setFormat(fmt) {
 }
 
 async function loadHome() {
+  const gen = ++_homeGen;
   const fmt = currentFormat;
   const set = fmt === 'eternal'
     ? document.getElementById('eternal-era').value
@@ -3532,6 +3534,7 @@ async function loadHome() {
       api('/api/leaders/by-base?' + deckFilter + qs),
       api('/api/summary?format=' + fmt + (set ? '&meta_id=' + encodeURIComponent(set) : '')),
     ]);
+    if (gen !== _homeGen) return;
     homeData      = data;
     homeComboData = comboData;
     const total = data.reduce((s, r) => s + r.total_decks, 0);
@@ -3541,6 +3544,7 @@ async function loadHome() {
     document.getElementById('mb-matches').textContent = summary.total_matches != null ? summary.total_matches.toLocaleString() : '—';
     renderLeaderGrid();
   } catch(e) {
+    if (gen !== _homeGen) return;
     document.getElementById('leader-grid').innerHTML = `<div class="empty-state">// ${e.message}</div>`;
   }
 }
