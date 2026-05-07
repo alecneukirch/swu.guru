@@ -3014,6 +3014,12 @@ select option { background: var(--surface2); }
   <!-- Weaknesses tab -->
   <div id="lp-panel-weaknesses" style="display:none">
     <div class="controls" style="padding-top:14px">
+      <div class="sort-btn-wrap">
+        <span style="color:var(--text3);margin-right:4px">Sort:</span>
+        <div class="gh-col active" id="wk-sort-count" onclick="setWeaknessSort('count')">Count</div>
+        <div class="gh-col"        id="wk-sort-delta" onclick="setWeaknessSort('delta')">Win %Δ</div>
+      </div>
+      <div class="sep"></div>
       <span class="ctrl-label">Min games</span>
       <input type="number" id="wk-min-games" value="20" min="1" style="width:64px" oninput="loadLeaderWeaknesses()">
     </div>
@@ -3410,6 +3416,9 @@ function openLeader(name, autoBase = null) {
   document.getElementById('lp-base').innerHTML = '<option value="">All bases</option>';
   matchupData    = [];
   weaknessesData = [];
+  weaknessSort   = 'count';
+  document.getElementById('wk-sort-count')?.classList.add('active');
+  document.getElementById('wk-sort-delta')?.classList.remove('active');
   spiceFilter  = false;
   matchupTop8  = false;
   cardsTop8    = false;
@@ -4265,17 +4274,25 @@ function renderMatchupCards(data) {
 // ══ WEAKNESSES ═══════════════════════════════════════════════════════════════
 
 let weaknessesData = [];
+let weaknessSort   = 'count';
+
+function setWeaknessSort(s) {
+  weaknessSort = s;
+  document.getElementById('wk-sort-count').classList.toggle('active', s === 'count');
+  document.getElementById('wk-sort-delta').classList.toggle('active', s === 'delta');
+  loadLeaderWeaknesses();
+}
 
 async function loadLeaderWeaknesses() {
   const grid = document.getElementById('leader-weaknesses-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
-  const minGames = parseInt(document.getElementById('wk-min-games').value) || 5;
+  const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
   const set  = document.getElementById('lp-set').value;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
-    + '/weaknesses?min_games=' + minGames + '&format=' + currentFormat + '&limit=60';
+    + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
   if (set)  url += '&meta_id='    + encodeURIComponent(set);
   if (base) url += '&base_group=' + encodeURIComponent(base);
   try {

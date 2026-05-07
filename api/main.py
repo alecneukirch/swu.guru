@@ -1597,6 +1597,7 @@ def leader_weaknesses(
     meta_id:    Optional[str] = Query(None),
     min_games:  int           = Query(20),
     limit:      int           = Query(60),
+    sort:       str           = Query("count"),  # "count" | "delta"
 ):
     """
     Cards with the highest win rates when played against this leader+base combo,
@@ -1658,7 +1659,7 @@ def leader_weaknesses(
                    - t.total_wins::numeric / NULLIF(t.total_games, 0),
                4) AS delta
         FROM card_stats cs, totals t
-        ORDER BY win_rate DESC, game_count DESC
+        ORDER BY {('game_count' if sort == 'count' else 'delta')} DESC, game_count DESC
         LIMIT %s
     """, [leader] + date_params + base_param +
          [leader] + date_params + base_param +
