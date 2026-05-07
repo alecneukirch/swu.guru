@@ -1,6 +1,6 @@
 # swu.guru
 
-Meta analytics site for Star Wars Unlimited — tracks tournament results, leader win rates, matchup data, and decklists scraped from Melee.gg.
+Meta analytics site for Star Wars Unlimited — tracks tournament results, leader win rates, matchup data, and decklists scraped from Melee.gg. Live at [Swu.Guru](https://swu.guru/).
 
 ## Stack
 
