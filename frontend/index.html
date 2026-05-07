@@ -3691,7 +3691,7 @@ function renderLeaderGrid() {
     const group = byTier[t];
     if (!group.length) return;
     const tier = tierGrade(group[0]._conv);
-    html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span><span class="tsh-count">${group.length}</span></div>`;
+    html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div>`;
     html += `<div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
