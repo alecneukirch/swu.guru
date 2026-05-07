@@ -1586,6 +1586,83 @@ def leader_synergy(
 
 
 # =============================================================================
+#  LEADER WEAKNESSES — cards with high win rates against a leader+base
+# =============================================================================
+
+@app.get("/api/leader/{leader}/weaknesses")
+def leader_weaknesses(
+    leader:     str,
+    base_group: Optional[str] = Query(None),
+    format:     str           = Query("standard"),
+    meta_id:    Optional[str] = Query(None),
+    min_games:  int           = Query(5),
+    limit:      int           = Query(60),
+):
+    """
+    Cards with the highest win rates when played against this leader+base combo,
+    regardless of the opponent deck/leader they're played in.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id)
+
+    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_as_p1 = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
+    base_as_p2 = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
+    base_param = [base_names] if base_names else []
+
+    rows = db.fetchall(f"""
+        WITH target_matches AS (
+            SELECT m.p2_standing_id AS standing_id,
+                   (m.winner = 'p2') AS won
+            FROM {t['matches']} m
+            JOIN {t['events']} e ON e.id = m.event_id
+            WHERE m.p1_leader = %s AND m.winner IS NOT NULL
+              {date_sql} {base_as_p1}
+            UNION ALL
+            SELECT m.p1_standing_id AS standing_id,
+                   (m.winner = 'p1') AS won
+            FROM {t['matches']} m
+            JOIN {t['events']} e ON e.id = m.event_id
+            WHERE m.p2_leader = %s AND m.winner IS NOT NULL
+              {date_sql} {base_as_p2}
+        ),
+        totals AS (
+            SELECT COUNT(*)::INT AS total_games,
+                   SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT AS total_wins
+            FROM target_matches
+        ),
+        card_stats AS (
+            SELECT dc.card_name,
+                   COUNT(*)::INT AS game_count,
+                   SUM(CASE WHEN tm.won THEN 1 ELSE 0 END)::INT AS wins
+            FROM target_matches tm
+            JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
+            WHERE dc.is_sideboard = false
+            GROUP BY dc.card_name
+            HAVING COUNT(*) >= %s
+        )
+        SELECT cs.card_name,
+               cs.game_count,
+               cs.wins,
+               ROUND(cs.wins::numeric / NULLIF(cs.game_count, 0), 4) AS win_rate,
+               t.total_games,
+               t.total_wins,
+               ROUND(t.total_wins::numeric / NULLIF(t.total_games, 0), 4) AS baseline_win_rate,
+               ROUND(
+                   cs.wins::numeric / NULLIF(cs.game_count, 0)
+                   - t.total_wins::numeric / NULLIF(t.total_games, 0),
+               4) AS delta
+        FROM card_stats cs, totals t
+        ORDER BY win_rate DESC, game_count DESC
+        LIMIT %s
+    """, [leader] + date_params + base_param +
+         [leader] + date_params + base_param +
+         [min_games, limit])
+
+    return rows
+
+
+# =============================================================================
 #  LEADER+BASE MATCHUP MATRIX
 # =============================================================================
 

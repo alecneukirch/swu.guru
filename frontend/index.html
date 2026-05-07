@@ -2925,9 +2925,9 @@ select option { background: var(--surface2); }
 
   <!-- Tab bar -->
   <div class="lp-tabs">
-    <button class="lp-tab active" id="lp-tab-cards"    onclick="setLeaderTab('cards')">Cards</button>
+    <button class="lp-tab active" id="lp-tab-cards"      onclick="setLeaderTab('cards')">Cards</button>
     <button class="lp-tab"        id="lp-tab-matchups"  onclick="setLeaderTab('matchups')">Matchups</button>
-    <button class="lp-tab"        id="lp-tab-synergy"   onclick="setLeaderTab('synergy')">Synergy</button>
+    <button class="lp-tab"        id="lp-tab-weaknesses" onclick="setLeaderTab('weaknesses')">Weaknesses</button>
   </div>
 
   <!-- Cards tab -->
@@ -3011,16 +3011,14 @@ select option { background: var(--surface2); }
     </div>
   </div>
 
-  <!-- Synergy tab -->
-  <div id="lp-panel-synergy" style="display:none">
+  <!-- Weaknesses tab -->
+  <div id="lp-panel-weaknesses" style="display:none">
     <div class="controls" style="padding-top:14px">
-      <span class="ctrl-label">Min together</span>
-      <input type="number" id="syn-min-co" value="10" min="3" style="width:64px" oninput="loadLeaderSynergy()">
-      <span class="ctrl-label">Min lift</span>
-      <input type="number" id="syn-min-lift" value="1.1" min="1.0" step="0.05" style="width:64px" oninput="loadLeaderSynergy()">
+      <span class="ctrl-label">Min games</span>
+      <input type="number" id="wk-min-games" value="5" min="1" style="width:64px" oninput="loadLeaderWeaknesses()">
     </div>
-    <div class="synergy-grid" id="leader-synergy-grid">
-      <div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>
+    <div class="card-grid" id="leader-weaknesses-grid">
+      <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
     </div>
   </div>
 </div>
@@ -3410,8 +3408,8 @@ function openLeader(name, autoBase = null) {
   document.getElementById('bc-base').style.display = 'none';
   document.getElementById('breadcrumb').classList.add('visible');
   document.getElementById('lp-base').innerHTML = '<option value="">All bases</option>';
-  matchupData  = [];
-  synergyData  = [];
+  matchupData    = [];
+  weaknessesData = [];
   spiceFilter  = false;
   matchupTop8  = false;
   cardsTop8    = false;
@@ -3790,9 +3788,9 @@ function onLeaderFilterChange() {
   const base = document.getElementById('lp-base').value;
   const h = '#leader=' + encodeURIComponent(currentLeader) + (base ? '&base=' + encodeURIComponent(base) : '');
   history.replaceState(null, '', h);
-  if (leaderTab === 'cards')         loadLeaderCards();
-  else if (leaderTab === 'matchups') loadLeaderMatchups();
-  else if (leaderTab === 'synergy')  loadLeaderSynergy();
+  if (leaderTab === 'cards')           loadLeaderCards();
+  else if (leaderTab === 'matchups')   loadLeaderMatchups();
+  else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
 }
 
 function shareLeader(btn) {
@@ -4065,12 +4063,12 @@ let leaderTab = 'cards';
 
 function setLeaderTab(tab) {
   leaderTab = tab;
-  ['cards','matchups','synergy'].forEach(t => {
+  ['cards','matchups','weaknesses'].forEach(t => {
     document.getElementById('lp-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('lp-panel-' + t).style.display = t === tab ? '' : 'none';
   });
-  if (tab === 'matchups' && currentLeader) loadLeaderMatchups();
-  if (tab === 'synergy'  && currentLeader) loadLeaderSynergy();
+  if (tab === 'matchups'   && currentLeader) loadLeaderMatchups();
+  if (tab === 'weaknesses' && currentLeader) loadLeaderWeaknesses();
 }
 
 // ══ MATCHUPS ════════════════════════════════════════════════════════════════
@@ -4264,105 +4262,72 @@ function renderMatchupCards(data) {
   artQueue.forEach(({ name, id }) => loadCardArt(name, id, 'loaded'));
 }
 
-// ══ SYNERGY ══════════════════════════════════════════════════════════════════
+// ══ WEAKNESSES ═══════════════════════════════════════════════════════════════
 
-let synergyData = [];
+let weaknessesData = [];
 
-async function loadLeaderSynergy() {
-  const grid = document.getElementById('leader-synergy-grid');
+async function loadLeaderWeaknesses() {
+  const grid = document.getElementById('leader-weaknesses-grid');
   if (!currentLeader) return;
-  grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
+  grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
-  const minCo   = parseInt(document.getElementById('syn-min-co').value)   || 10;
-  const minLift = parseFloat(document.getElementById('syn-min-lift').value) || 1.1;
-
+  const minGames = parseInt(document.getElementById('wk-min-games').value) || 5;
+  const set  = document.getElementById('lp-set').value;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
-    + '/synergy?min_co=' + minCo + '&min_lift=' + minLift + '&limit=60';
+    + '/weaknesses?min_games=' + minGames + '&format=' + currentFormat + '&limit=60';
+  if (set)  url += '&meta_id='    + encodeURIComponent(set);
   if (base) url += '&base_group=' + encodeURIComponent(base);
   try {
-    synergyData = await api(url);
-    renderSynergy();
+    weaknessesData = await api(url);
+    renderWeaknesses();
   } catch(e) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:24px">// ${e.message}</div>`;
+    grid.innerHTML = `<div class="empty-state" style="padding:24px;grid-column:1/-1">// ${e.message}</div>`;
   }
 }
 
-function renderSynergy() {
-  const grid = document.getElementById('leader-synergy-grid');
-  if (!synergyData.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:24px">// no synergy pairs found — try lowering min together or min lift</div>';
+function renderWeaknesses() {
+  const grid = document.getElementById('leader-weaknesses-grid');
+  if (!weaknessesData.length) {
+    grid.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no weakness data — not enough games recorded against this leader</div>';
     return;
   }
 
-  grid.innerHTML = synergyData.map((r, i) => {
-    const liftColor = r.lift >= 2.0 ? 'var(--green)' : r.lift >= 1.5 ? 'var(--gold)' : 'var(--text2)';
-    const liftBg    = r.lift >= 2.0 ? 'rgba(46,204,113,0.15)' : r.lift >= 1.5 ? 'rgba(240,180,41,0.15)' : 'rgba(255,255,255,0.06)';
-    const inclA = Math.round((r.incl_a / r.total_decks) * 100);
-    const inclB = Math.round((r.incl_b / r.total_decks) * 100);
-    const nameA = r.card_a.split(' | ')[0];
-    const nameB = r.card_b.split(' | ')[0];
-    return `<div class="synergy-card" id="syn-${i}">
-  <div class="synergy-arts">
-    <div class="synergy-art" id="syn-art-a-${i}">
-      <div class="synergy-art-scrim"></div>
-      <div class="synergy-art-label">${nameA}</div>
-    </div>
-    <div class="synergy-art" id="syn-art-b-${i}">
-      <div class="synergy-art-scrim"></div>
-      <div class="synergy-art-label">${nameB}</div>
-    </div>
+  let idx = 0;
+  const artQueue = [];
+
+  grid.innerHTML = weaknessesData.map(r => {
+    const i     = idx++;
+    const wr    = r.win_rate ?? 0;
+    const delta = r.delta ?? 0;
+    const pct   = Math.round(wr * 100);
+    const dpct  = Math.round(Math.abs(delta) * 100);
+    const dSign = delta >= 0 ? '+' : '−';
+    const cc    = delta >= 0.05 ? 'bad' : delta <= -0.05 ? 'good' : '';
+    const safe  = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    artQueue.push({ name: r.card_name, id: 'wk-art-' + i });
+    return `<div class="card-tile conv-${cc}" data-card="${safe}" id="wk-${i}">
+  <div class="ct-art" id="wk-art-${i}"></div>
+  <div class="ct-scrim"></div>
+  <div class="ct-top">
+    <div class="ct-badge">${r.game_count}<span class="ct-badge-label">g</span></div>
   </div>
-  <div class="synergy-stats-row">
-    <div class="synergy-stat">
-      <div class="synergy-stat-val">${r.co_occur}</div>
-      <div class="synergy-stat-label">Together</div>
-    </div>
-    <div class="synergy-stat">
-      <div class="synergy-stat-val">${inclA}%</div>
-      <div class="synergy-stat-label">${nameA.split(' ')[0]}</div>
-    </div>
-    <div class="synergy-lift-badge" style="color:${liftColor};background:${liftBg}">${r.lift.toFixed(2)}×</div>
-    <div class="synergy-stat">
-      <div class="synergy-stat-val">${inclB}%</div>
-      <div class="synergy-stat-label">${nameB.split(' ')[0]}</div>
-    </div>
-    <div class="synergy-stat">
-      <div class="synergy-stat-val">${r.total_decks}</div>
-      <div class="synergy-stat-label">Total</div>
+  <div class="ct-bottom">
+    <div class="ct-name">${r.card_name}</div>
+    <div class="ct-stats">
+      <span class="ct-incl">${pct}%</span>
+      <span class="ct-conv ${cc}">${dSign}${dpct}%</span>
     </div>
   </div>
 </div>`;
   }).join('');
 
-  // Lazy-load card art — set backgroundImage and add .loaded for opacity
-  synergyData.forEach((r, i) => {
-    const lookupCard = (cardName, elId) => {
-      const el = document.getElementById(elId);
-      if (el) el.dataset.forCard = cardName;
-      const apply = url => {
-        const el2 = document.getElementById(elId);
-        if (el2 && el2.dataset.forCard === cardName) {
-          el2.style.backgroundImage = `url(${url})`;
-          el2.classList.add('loaded');
-        }
-      };
-      if (_cardArtCache[cardName]) { apply(_cardArtCache[cardName]); return; }
-      const parts = cardName.split(' | ');
-      const lookupUrl = parts[1]
-        ? '/api/cards/by-name/' + encodeURIComponent(parts[0].trim()) + '?subtitle=' + encodeURIComponent(parts[1].trim())
-        : '/api/cards/by-name/' + encodeURIComponent(parts[0].trim());
-      api(lookupUrl).then(card => {
-        const url = card?.front_image_url;
-        if (!url) return;
-        _cardArtCache[cardName] = url;
-        _saveArtCache();
-        apply(url);
-      }).catch(() => {});
-    };
-    lookupCard(r.card_a, `syn-art-a-${i}`);
-    lookupCard(r.card_b, `syn-art-b-${i}`);
-  });
+  grid.onclick = e => {
+    const tile = e.target.closest('.card-tile[data-card]');
+    if (tile) openModal(tile.dataset.card);
+  };
+
+  artQueue.forEach(({ name, id }) => loadCardArt(name, id, 'loaded'));
 }
 
 // ══ EVENTS ══════════════════════════════════════════════════════════════════
