@@ -3466,6 +3466,7 @@ function buildLeaderHash() {
   let h = '#leader=' + encodeURIComponent(currentLeader);
   const base = document.getElementById('lp-base')?.value;
   if (base) h += '&base=' + encodeURIComponent(base);
+  if (currentFormat === 'eternal') h += '&fmt=eternal';
   if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
   return h;
 }
@@ -3475,6 +3476,7 @@ function routeFromHash() {
   if (!hash) return false;
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
   if (params.leader) {
+    if (params.fmt === 'eternal') applyFormat('eternal');
     openLeader(params.leader, params.base || null);
     if (params.tab && params.tab !== 'cards') {
       if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
@@ -3489,16 +3491,18 @@ function routeFromHash() {
 }
 
 // ══ HOME ════════════════════════════════════════════════════════════════════
-function setFormat(fmt) {
+function applyFormat(fmt) {
   currentFormat = fmt;
   document.body.classList.toggle('eternal-theme', fmt === 'eternal');
   document.getElementById('fmt-standard').classList.toggle('active', fmt === 'standard');
   document.getElementById('fmt-eternal').classList.toggle('active', fmt === 'eternal');
-  // Swap Set/Era dropdowns based on format
   document.getElementById('lbl-home-set').style.display   = fmt === 'eternal' ? 'none' : '';
   document.getElementById('home-set').style.display        = fmt === 'eternal' ? 'none' : '';
   document.getElementById('lbl-eternal-era').style.display = fmt === 'eternal' ? '' : 'none';
   document.getElementById('eternal-era').style.display     = fmt === 'eternal' ? '' : 'none';
+}
+function setFormat(fmt) {
+  applyFormat(fmt);
   const activePage = document.querySelector('.page.active')?.id;
   if (activePage === 'page-matrix') {
     loadMatrix();
