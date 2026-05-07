@@ -4557,26 +4557,6 @@ function renderAdvancedTab() {
   ).join('')}
 </div>`;
 
-  // Conversion by leader bars (same as overview but in advanced context)
-  const convHtml = `
-<div class="conv-by-legend" style="margin-bottom:24px">
-  <div class="section-title">Conversion by Legend</div>
-  ${modalLeaderData.map(r => {
-    const cc  = convClass(r.conversion);
-    const bw  = Math.min(100, Math.round((r.deck_count / Math.max(...modalLeaderData.map(x=>x.deck_count),1)) * 100));
-    return `<div class="cbl-row">
-  <div class="cbl-name" title="${r.leader}">${shortName(r.leader)}</div>
-  <div class="cbl-bar-wrap">
-    <div class="cbl-bar-fill ${cc}" style="width:${bw}%"></div>
-    <span class="cbl-pill ${cc}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
-  </div>
-  <div class="cbl-right">
-    <div><span style="color:var(--green)">${r.t8_count}</span> / ${r.deck_count}</div>
-  </div>
-</div>`;
-  }).join('')}
-</div>`;
-
   // Copy matrices
   const matricesHtml = `
 <div class="matrix-section">
@@ -4587,7 +4567,7 @@ function renderAdvancedTab() {
   </div>
 </div>`;
 
-  return pctHtml + convHtml + matricesHtml;
+  return pctHtml + matricesHtml;
 }
 
 function setPct(v) {
