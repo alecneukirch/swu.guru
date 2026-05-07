@@ -1595,7 +1595,7 @@ def leader_weaknesses(
     base_group: Optional[str] = Query(None),
     format:     str           = Query("standard"),
     meta_id:    Optional[str] = Query(None),
-    min_games:  int           = Query(5),
+    min_games:  int           = Query(20),
     limit:      int           = Query(60),
 ):
     """
@@ -1638,6 +1638,11 @@ def leader_weaknesses(
             FROM target_matches tm
             JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
             WHERE dc.is_sideboard = false
+              AND NOT EXISTS (
+                  SELECT 1 FROM cards c
+                  WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
+                    AND (c.is_leader = true OR c.is_base = true)
+              )
             GROUP BY dc.card_name
             HAVING COUNT(*) >= %s
         )
