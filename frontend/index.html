@@ -2970,10 +2970,9 @@ select option { background: var(--surface2); }
           <input type="text" id="lp-filter" placeholder="Filter…" oninput="filterCards()" style="width:110px;padding:3px 8px;font-size:12px">
           <button class="btn sb-jump-btn" onclick="document.getElementById('leader-sb-panel').scrollIntoView({behavior:'smooth',block:'start'})">↓ Sideboard</button>
         </div>
-        <!-- Row 3: top8 + spice -->
+        <!-- Row 3: spice -->
         <div class="cgh-row">
           <div class="sep cgh-sep" style="margin:0 4px"></div>
-          <button class="btn" id="btn-cards-top8" onclick="toggleCardsTop8()" title="Only show cards from decks that made top 8">Top 8 only</button>
           <button class="btn" id="btn-spice" onclick="toggleSpice()">🌶 Spice</button>
         </div>
         <!-- Row 4: cost filters -->
@@ -2998,8 +2997,6 @@ select option { background: var(--surface2); }
   <!-- Matchups tab -->
   <div id="lp-panel-matchups" style="display:none">
     <div class="controls" style="padding-top:14px">
-      <button class="btn" id="mu-top8-btn" onclick="toggleMatchupTop8()" title="Only count matches where at least one player made top 8">Top 8 only</button>
-      <div class="sep"></div>
       <input type="text" id="mu-search" placeholder="Search opponent…" oninput="filterMatchups()" style="width:160px;padding:3px 8px;font-size:12px">
     </div>
     <div class="matchup-grid" id="leader-matchups-grid">
@@ -3427,10 +3424,6 @@ function openLeader(name, autoBase = null) {
   document.getElementById('wk-sort-count')?.classList.add('active');
   document.getElementById('wk-sort-delta')?.classList.remove('active');
   spiceFilter  = false;
-  matchupTop8  = false;
-  cardsTop8    = false;
-  document.getElementById('mu-top8-btn')?.classList.remove('active');
-  document.getElementById('btn-cards-top8')?.classList.remove('active');
   document.getElementById('btn-spice')?.classList.remove('active');
   leaderTab    = 'cards';
   setLeaderTab('cards');
@@ -3843,7 +3836,6 @@ async function loadLeaderCards() {
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat;
     if (set)        url += '&meta_id=' + encodeURIComponent(set);
     if (base)       url += '&base_group=' + encodeURIComponent(base);
-    if (cardsTop8)  url += '&top8_only=true';
     leaderData = await api(url) || [];
     filterCards();
   } catch(e) {
@@ -3861,12 +3853,6 @@ function toggleSpice() {
   filterCards();
 }
 
-let cardsTop8 = false;
-function toggleCardsTop8() {
-  cardsTop8 = !cardsTop8;
-  document.getElementById('btn-cards-top8')?.classList.toggle('active', cardsTop8);
-  loadLeaderCards();
-}
 
 function filterCards() {
   const q = document.getElementById('lp-filter').value.toLowerCase();
@@ -4091,13 +4077,6 @@ function setLeaderTab(tab) {
 
 let matchupData = [];
 let matchupArtCache = {};
-let matchupTop8 = false;
-
-function toggleMatchupTop8() {
-  matchupTop8 = !matchupTop8;
-  document.getElementById('mu-top8-btn')?.classList.toggle('active', matchupTop8);
-  loadLeaderMatchups();
-}
 
 async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
@@ -4109,7 +4088,6 @@ async function loadLeaderMatchups() {
   const muParams = ['format=' + currentFormat];
   if (set)          muParams.push('meta_id='    + encodeURIComponent(set));
   if (base)         muParams.push('base_group=' + encodeURIComponent(base));
-  if (matchupTop8)  muParams.push('top8_only=true');
   url += '?' + muParams.join('&');
   try {
     matchupData = await api(url);
@@ -4211,7 +4189,6 @@ async function openMatchupDetail(matchup) {
     + '&format=' + currentFormat;
   if (set)         url += '&meta_id='    + encodeURIComponent(set);
   if (base)        url += '&base_group=' + encodeURIComponent(base);
-  if (matchupTop8) url += '&top8_only=true';
 
   try {
     const data = await api(url);
