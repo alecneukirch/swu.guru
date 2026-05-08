@@ -1344,6 +1344,18 @@ select option { background: var(--surface2); }
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+.ev-section-header td {
+  padding: 18px 12px 6px;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.ev-upcoming td { color: var(--text); }
+.ev-upcoming td:first-child { color: var(--gold); }
 
 /* Controls bar above tiles */
 .card-grid-header {
@@ -4453,14 +4465,33 @@ function filterEvents() {
 function renderEvents(rows) {
   const tbody = document.getElementById('ev-tbody');
   if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">// no events</td></tr>'; return; }
-  tbody.innerHTML = rows.map(e => `<tr>
+  const today = new Date().toISOString().slice(0, 10);
+  let html = '';
+  let shownUpcomingHeader = false;
+  let shownPastHeader = false;
+  for (const e of rows) {
+    const upcoming = e.date && e.date > today;
+    if (upcoming && !shownUpcomingHeader) {
+      html += `<tr class="ev-section-header"><td colspan="6">UPCOMING</td></tr>`;
+      shownUpcomingHeader = true;
+    }
+    if (!upcoming && !shownPastHeader) {
+      html += `<tr class="ev-section-header"><td colspan="6">PAST</td></tr>`;
+      shownPastHeader = true;
+    }
+    const link = e.melee_url
+      ? `<a href="${e.melee_url}" target="_blank" class="btn" style="font-size:10px;padding:3px 8px">${upcoming ? 'INFO↗' : 'MELEE↗'}</a>`
+      : '';
+    html += `<tr${upcoming ? ' class="ev-upcoming"' : ''}>
   <td style="font-weight:500">${e.name || '—'}</td>
   <td class="mono dim" style="font-size:12px">${e.date || '—'}</td>
   <td class="dim" style="font-size:12px">${[e.city,e.country].filter(Boolean).join(', ') || '—'}</td>
   <td class="mono">${e.player_count ?? '—'}</td>
   <td style="font-family:var(--mono);font-size:11px;color:var(--gold)">${e.set_code || '—'}</td>
-  <td>${e.melee_url ? `<a href="${e.melee_url}" target="_blank" class="btn" style="font-size:10px;padding:3px 8px">MELEE↗</a>` : ''}</td>
-</tr>`).join('');
+  <td>${link}</td>
+</tr>`;
+  }
+  tbody.innerHTML = html;
 }
 
 // ══ CARD MODAL ═══════════════════════════════════════════════════════════════

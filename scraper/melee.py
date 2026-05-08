@@ -912,16 +912,31 @@ def sync_from_swu(
         log.info(f"[{i}/{len(stubs)}] {stub['name']} ({stub.get('date','?')})  melee={melee_id}")
 
         try:
-            # Skip future events
             event_date = stub.get("date")
+            event_meta = {
+                "name":         stub["name"],
+                "date":         event_date,
+                "player_count": None,
+                "set_code":     None,
+                "melee_url":    stub["melee_url"],
+                "venue":        stub.get("venue"),
+                "country":      stub.get("country"),
+            }
+
+            # Upcoming event — upsert the stub so it appears in the events table,
+            # but don't attempt to scrape melee (no results yet).
+            is_future = False
             if event_date:
                 try:
-                    if _date.fromisoformat(event_date) > _date.today():
-                        log.info(f"  Future event ({event_date}) -- skipping")
-                        skipped += 1
-                        continue
+                    is_future = _date.fromisoformat(event_date) > _date.today()
                 except ValueError:
                     pass
+
+            if is_future:
+                upsert_event({"melee_id": melee_id, **event_meta}, tbl=tbls["events"])
+                log.info(f"  Upcoming — stub upserted")
+                skipped += 1
+                continue
 
             # Skip if already fully scraped
             existing = db.fetchone(
@@ -936,15 +951,6 @@ def sync_from_swu(
                 log.info(f"  Already scraped ({existing['n']} standings) -- skipping")
                 skipped += 1
                 continue
-
-            event_meta = {
-                "name":         stub["name"],
-                "date":         stub["date"],
-                "player_count": None,
-                "set_code":     None if eternal else None,  # SWU API doesn't expose set_code
-                "venue":        stub.get("venue"),
-                "country":      stub.get("country"),
-            }
 
             result = import_tournament(melee_id, event_meta, fetch_cards, eternal=eternal)
             if result:
