@@ -4,7 +4,7 @@ scraper/melee.py
 Pulls full tournament data from melee.gg using the same approach
 proven in the existing swu-tracker project.
 
-Flow:
+Flow (hub source):
   1. swu-competitivehub.com/tournaments-results/  -- get Premier LAW event list
   2. hub event page                               -- extract melee tournament ID
   3. melee.gg/Tournament/View/{id}               -- parse round button IDs from HTML
@@ -12,8 +12,13 @@ Flow:
   5. POST /Match/GetRoundMatches/{round_id}      -- all pairings per round
   6. GET  /Decklist/View/{uuid}                  -- card list per deck (optional)
 
+Flow (SWU API source, preferred):
+  1. admin.starwarsunlimited.com/api/event-search  -- official event list w/ melee URLs
+  2. Steps 3-6 above (melee scraping is the same)
+
 Usage:
-    python -m scraper.melee                       # all Premier LAW events
+    python -m scraper.melee                       # all Premier LAW events (hub)
+    python -m scraper.melee --swu                 # all Premier PQ events (SWU API)
     python -m scraper.melee --limit 20            # most recent 20
     python -m scraper.melee --melee-id 408083     # single tournament by melee ID
     python -m scraper.melee --cards               # also fetch full decklists
@@ -40,7 +45,13 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 HUB_BASE = "https://www.swu-competitivehub.com"
+SWU_API  = "https://admin.starwarsunlimited.com"
 MELEE    = "https://melee.gg"
+
+# Event type IDs on starwarsunlimited.com
+SWU_TYPE_PQ = 4   # Planetary Qualifier
+SWU_TYPE_SQ = 5   # Sector Qualifier
+SWU_TYPE_GC = 3   # Galactic Championship
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -738,6 +749,226 @@ def import_tournament(
     return {"event_id": ev_id, "standings": len(standings), "matches": total_matches}
 
 
+# ── SWU Official API ───────────────────────────────────────────────────────
+
+def swu_api_event_list(
+    event_type_ids: list = None,
+    since_ms:       int  = 0,
+    eternal:        bool = False,
+    limit:          int  = 0,
+) -> list[dict]:
+    """
+    Fetch events from the official SWU Strapi API.
+    Returns stubs with melee_id already extracted:
+      {name, date, melee_id, melee_url, format, country, city, venue, event_type}
+
+    event_type_ids: list of SWU type IDs (default [SWU_TYPE_PQ])
+    since_ms: Unix timestamp in milliseconds for startDate filter (0 = no filter)
+    eternal: if True, only return Eternal-format events
+    """
+    import urllib.parse
+
+    if event_type_ids is None:
+        event_type_ids = [SWU_TYPE_PQ]
+
+    sess = _get_session()
+    all_events = []
+
+    for type_id in event_type_ids:
+        page = 1
+        while True:
+            params = {
+                "locale":                                      "en",
+                "populate[0]":                                 "*",
+                "pagination[pageSize]":                        100,
+                "pagination[page]":                            page,
+                "sort[0]":                                     "startDate:desc",
+                "filters[$and][0][type][id][$eq]":             type_id,
+            }
+            if since_ms:
+                params["filters[$and][1][startDate][$gte]"] = since_ms
+
+            log.info(f"  SWU API type={type_id} page={page} …")
+            try:
+                resp = sess.get(
+                    f"{SWU_API}/api/event-search",
+                    params=params,
+                    headers={
+                        "Accept":          "application/json",
+                        "Accept-Encoding": "gzip, deflate",  # avoid Brotli
+                        "Origin":          "https://starwarsunlimited.com",
+                        "Referer":         "https://starwarsunlimited.com/",
+                    },
+                    timeout=20,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                log.error(f"  SWU API request failed: {e}")
+                break
+
+            items      = data.get("data", [])
+            pagination = data.get("meta", {}).get("pagination", {})
+
+            for e in items:
+                attrs     = e.get("attributes", {})
+                melee_url = attrs.get("url", "") or ""
+
+                if "melee.gg" not in melee_url:
+                    continue
+
+                m = re.search(r"/(\d+)$", melee_url)
+                if not m:
+                    continue
+                melee_id = m.group(1)
+
+                fmt_name = (
+                    attrs.get("format", {})
+                         .get("data", {})
+                         .get("attributes", {})
+                         .get("name", "Premier")
+                )
+                is_eternal = fmt_name.lower() == "eternal"
+                if eternal and not is_eternal:
+                    continue
+                if not eternal and is_eternal:
+                    continue
+
+                loc       = attrs.get("location", {}).get("data", {})
+                loc_attrs = loc.get("attributes", {}) if loc else {}
+                address   = loc_attrs.get("address") or {}
+
+                all_events.append({
+                    "name":       attrs.get("name", ""),
+                    "date":       (attrs.get("startDate", "") or "")[:10],
+                    "melee_id":   melee_id,
+                    "melee_url":  melee_url,
+                    "format":     "eternal" if is_eternal else "standard",
+                    "country":    address.get("country"),
+                    "city":       address.get("city"),
+                    "venue":      loc_attrs.get("name"),
+                    "event_type": (
+                        attrs.get("type", {})
+                             .get("data", {})
+                             .get("attributes", {})
+                             .get("name")
+                    ),
+                })
+
+                if limit and len(all_events) >= limit:
+                    break
+
+            log.info(f"    {len(items)} returned, {len(all_events)} total with melee links so far")
+
+            if limit and len(all_events) >= limit:
+                break
+            if page >= pagination.get("pageCount", 1):
+                break
+            page += 1
+            time.sleep(SLEEP)
+
+    return all_events[:limit] if limit else all_events
+
+
+def sync_from_swu(
+    event_type_ids: list = None,
+    fetch_cards:    bool = False,
+    since_days:     int  = 0,
+    eternal:        bool = False,
+    limit:          int  = 0,
+):
+    """
+    Sync Premier (or Eternal) events from the official SWU API.
+    The API provides the melee URL directly — no hub scraping needed.
+    """
+    from datetime import date as _date, timedelta
+
+    if event_type_ids is None:
+        event_type_ids = [SWU_TYPE_PQ]
+
+    since_ms = 0
+    if since_days > 0:
+        cutoff   = _date.today() - timedelta(days=since_days)
+        since_ms = int(cutoff.strftime("%s")) * 1000
+        log.info(f"--days {since_days}: fetching events since {cutoff}")
+
+    tbls   = _table_names(eternal)
+    stubs  = swu_api_event_list(
+        event_type_ids=event_type_ids,
+        since_ms=since_ms,
+        eternal=eternal,
+        limit=limit,
+    )
+
+    if not stubs:
+        log.warning("No events with melee links found via SWU API")
+        return
+
+    log.info(f"{len(stubs)} events with melee links to process")
+    ok = fail = skipped = 0
+
+    for i, stub in enumerate(stubs, 1):
+        melee_id = stub["melee_id"]
+        log.info(f"[{i}/{len(stubs)}] {stub['name']} ({stub.get('date','?')})  melee={melee_id}")
+
+        try:
+            # Skip future events
+            event_date = stub.get("date")
+            if event_date:
+                try:
+                    if _date.fromisoformat(event_date) > _date.today():
+                        log.info(f"  Future event ({event_date}) -- skipping")
+                        skipped += 1
+                        continue
+                except ValueError:
+                    pass
+
+            # Skip if already fully scraped
+            existing = db.fetchone(
+                f"""SELECT e.id, COUNT(s.id) AS n
+                   FROM {tbls['events']} e
+                   LEFT JOIN {tbls['standings']} s ON s.event_id = e.id
+                   WHERE e.melee_id = %s
+                   GROUP BY e.id""",
+                (melee_id,)
+            )
+            if existing and (existing["n"] or 0) > 0:
+                log.info(f"  Already scraped ({existing['n']} standings) -- skipping")
+                skipped += 1
+                continue
+
+            event_meta = {
+                "name":         stub["name"],
+                "date":         stub["date"],
+                "player_count": None,
+                "set_code":     None if eternal else None,  # SWU API doesn't expose set_code
+                "venue":        stub.get("venue"),
+                "country":      stub.get("country"),
+            }
+
+            result = import_tournament(melee_id, event_meta, fetch_cards, eternal=eternal)
+            if result:
+                log.info(f"  Done: {result['standings']} standings, {result['matches']} matches")
+                ok += 1
+            else:
+                fail += 1
+
+        except Exception as e:
+            log.error(f"  Failed: {e}")
+            import traceback; traceback.print_exc()
+            fail += 1
+
+    log.info(f"\nSync complete: {ok} imported, {fail} failed, {skipped} skipped")
+
+    log.info("Refreshing materialized views...")
+    if eternal:
+        db.execute_autocommit("SELECT refresh_eternal_views()")
+    else:
+        db.execute_autocommit("SELECT refresh_all_views()")
+        _refresh_player_identities()
+    log.info("Done.")
+
+
 # ── Sync from hub ──────────────────────────────────────────────────────────
 
 def sync_from_hub(
@@ -1177,6 +1408,10 @@ if __name__ == "__main__":
     parser.add_argument("--refresh-views", action="store_true", help="Just refresh materialized views")
     parser.add_argument("--resolve-uuids", action="store_true", help="Resolve melee account UUIDs from decklist pages")
     parser.add_argument("--eternal",       action="store_true", help="Scrape Eternal format events (uses eternal_ tables)")
+    parser.add_argument("--swu",           action="store_true", help="Use official SWU API instead of hub (preferred)")
+    parser.add_argument("--swu-type",      type=int, action="append", dest="swu_types",
+                        metavar="TYPE_ID",
+                        help=f"SWU event type ID to fetch (default: {SWU_TYPE_PQ}=PQ). Repeatable.")
     args = parser.parse_args()
 
     if args.resolve_uuids:
@@ -1192,6 +1427,14 @@ if __name__ == "__main__":
             db.execute_autocommit("SELECT refresh_eternal_views()")
         else:
             db.execute_autocommit("SELECT refresh_all_views()")
+    elif args.swu:
+        sync_from_swu(
+            event_type_ids = args.swu_types or [SWU_TYPE_PQ],
+            fetch_cards    = args.cards,
+            since_days     = args.days,
+            eternal        = args.eternal,
+            limit          = args.limit,
+        )
     else:
         sync_from_hub(
             set_code    = args.set,
