@@ -123,18 +123,20 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
                  WHERE 1=1 {date_sql})                                  AS total_matches
             FROM {t['events']} e
             LEFT JOIN {t['standings']} s ON s.event_id = e.id
-            WHERE 1=1 {date_sql}
+            WHERE 1=1 {date_sql} AND e.date <= CURRENT_DATE
         """, date_params + date_params)
     else:
         row = db.fetchone(f"""
             SELECT
-                (SELECT COUNT(*) FROM {t['events']})                   AS total_events,
+                (SELECT COUNT(*) FROM {t['events']} WHERE date <= CURRENT_DATE)
+                                                                       AS total_events,
                 (SELECT COUNT(*) FROM {t['standings']})                AS total_standings,
                 (SELECT COUNT(DISTINCT leader) FROM {t['standings']} WHERE leader IS NOT NULL)
                                                                        AS unique_leaders,
                 (SELECT COUNT(*) FROM {t['standings']} WHERE has_decklist)
                                                                        AS decklists_with_cards,
-                (SELECT MAX(date) FROM {t['events']})                  AS last_event_date,
+                (SELECT MAX(date) FROM {t['events']} WHERE date <= CURRENT_DATE)
+                                                                       AS last_event_date,
                 (SELECT COUNT(*) FROM {t['matches']})                  AS total_matches
         """)
     return row or {}

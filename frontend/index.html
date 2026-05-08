@@ -3484,8 +3484,9 @@ function showPage(name) {
   document.getElementById('breadcrumb').classList.remove('visible');
   if (name === 'home') history.replaceState(null, '', location.pathname);
   else location.hash = name;
-  if (name === 'events')   loadEvents();
-  if (name === 'matrix')   loadMatrix();
+  if (name === 'home')      loadHome();
+  if (name === 'events')    loadEvents();
+  if (name === 'matrix')    loadMatrix();
   if (name === 'decklists') loadDecklists();
   if (name === 'players')   loadPlayers();
 }
