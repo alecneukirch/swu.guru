@@ -4453,11 +4453,13 @@ async function loadEvents() {
 }
 
 function filterEvents() {
-  const q   = document.getElementById('ev-search').value.toLowerCase();
-  const set = document.getElementById('ev-set').value;
-  let rows  = eventsData;
+  const q     = document.getElementById('ev-search').value.toLowerCase();
+  const set   = document.getElementById('ev-set').value;
+  const today = new Date().toISOString().slice(0, 10);
+  let rows    = eventsData;
   if (q)   rows = rows.filter(e => e.name?.toLowerCase().includes(q));
-  if (set) rows = rows.filter(e => e.set_code === set);
+  // Upcoming events are always shown regardless of set filter
+  if (set) rows = rows.filter(e => !e.date || e.date > today || e.set_code === set);
   document.getElementById('events-sub').textContent = `${rows.length} events`;
   renderEvents(rows);
 }

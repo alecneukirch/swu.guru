@@ -893,6 +893,20 @@ def sync_from_swu(
         log.info(f"--days {since_days}: fetching events since {cutoff}")
 
     tbls   = _table_names(eternal)
+
+    # Look up current meta's set_code to tag upcoming event stubs
+    try:
+        fmt_col = "eternal" if eternal else "premiere"
+        cur_meta = db.fetchone(
+            "SELECT set_code FROM metas WHERE is_current = TRUE AND format = %s LIMIT 1",
+            (fmt_col,)
+        )
+        current_set_code = cur_meta["set_code"] if cur_meta else None
+    except Exception:
+        current_set_code = None
+    if current_set_code:
+        log.info(f"Current meta set_code: {current_set_code}")
+
     stubs  = swu_api_event_list(
         event_type_ids=event_type_ids,
         since_ms=since_ms,
@@ -933,6 +947,7 @@ def sync_from_swu(
                     pass
 
             if is_future:
+                event_meta["set_code"] = current_set_code
                 upsert_event({"melee_id": melee_id, **event_meta}, tbl=tbls["events"])
                 log.info(f"  Upcoming — stub upserted")
                 skipped += 1
