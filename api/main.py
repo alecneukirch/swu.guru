@@ -1419,6 +1419,11 @@ def leader_matchup_cards(
             FROM matchup_games mg
             JOIN {t['decklist_cards']} dc ON dc.standing_id = mg.standing_id
             WHERE dc.is_sideboard = false
+              AND NOT EXISTS (
+                  SELECT 1 FROM cards c
+                  WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
+                    AND (c.is_leader = true OR c.is_base = true)
+              )
             GROUP BY dc.card_name
             HAVING COUNT(*) >= %s
         )
