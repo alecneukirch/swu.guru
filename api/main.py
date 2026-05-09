@@ -38,17 +38,17 @@ def meta_date_filter(meta_id: Optional[str]) -> tuple[str, list]:
     """
     if not meta_id:
         return "", []
+
     row = db.fetchone(
         "SELECT start_date, end_date FROM metas WHERE id = %s",
         (meta_id,)
     )
     if not row:
         # Fall back to set_code match if meta not found
-        # (handles the case where metas haven't been synced yet)
         set_code = meta_id.split("-")[0]  # "JTL-post-ban" -> "JTL"
-        return "AND e.set_code = %s", [set_code]
+        return "AND e.set_code = %s AND e.date <= CURRENT_DATE", [set_code]
 
-    parts, params = [], []
+    parts, params = ["e.date <= CURRENT_DATE"], []
     if row.get("start_date"):
         parts.append("e.date >= %s")
         params.append(row["start_date"])
@@ -56,8 +56,6 @@ def meta_date_filter(meta_id: Optional[str]) -> tuple[str, list]:
         parts.append("e.date < %s")
         params.append(row["end_date"])
 
-    if not parts:
-        return "", []
     return "AND " + " AND ".join(parts), params
 
 def _tnames(format: str) -> dict:
@@ -1257,7 +1255,7 @@ def leader_matchups(
             {top8_join}
             WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
               AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
-              {date_sql} {own_as_p1} {top8_where}
+              AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {top8_where}
             GROUP BY m.p2_leader, m.p2_base
         ),
         as_p2 AS (
@@ -1271,7 +1269,7 @@ def leader_matchups(
             {top8_join}
             WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
               AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
-              {date_sql} {own_as_p2} {top8_where}
+              AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where}
             GROUP BY m.p1_leader, m.p1_base
         )
         SELECT opponent, opponent_base,
@@ -1398,7 +1396,7 @@ def leader_matchup_cards(
             {top8_join}
             WHERE m.p1_leader = %s AND m.p2_leader = %s
               AND m.winner IS NOT NULL
-              {date_sql} {own_as_p1} {opp_as_p1} {top8_where}
+              AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {opp_as_p1} {top8_where}
             UNION ALL
             SELECT m.p2_standing_id AS standing_id,
                    (m.winner = 'p2') AS won
@@ -1407,7 +1405,7 @@ def leader_matchup_cards(
             {top8_join}
             WHERE m.p2_leader = %s AND m.p1_leader = %s
               AND m.winner IS NOT NULL
-              {date_sql} {own_as_p2} {opp_as_p2} {top8_where}
+              AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {opp_as_p2} {top8_where}
         ),
         totals AS (
             SELECT COUNT(*)::INT AS total_games,
@@ -1620,14 +1618,14 @@ def leader_weaknesses(
             FROM {t['matches']} m
             JOIN {t['events']} e ON e.id = m.event_id
             WHERE m.p1_leader = %s AND m.winner IS NOT NULL
-              {date_sql} {base_as_p1}
+              AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
             UNION ALL
             SELECT m.p1_standing_id AS standing_id,
                    (m.winner = 'p1') AS won
             FROM {t['matches']} m
             JOIN {t['events']} e ON e.id = m.event_id
             WHERE m.p2_leader = %s AND m.winner IS NOT NULL
-              {date_sql} {base_as_p2}
+              AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
         ),
         totals AS (
             SELECT COUNT(*)::INT AS total_games,
@@ -1699,7 +1697,7 @@ def matchup_matrix_by_base(
         JOIN {t['events']} e ON e.id = s.event_id
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
-          {date_sql}
+          AND e.date <= CURRENT_DATE {date_sql}
         GROUP BY s.leader, s.base
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
@@ -1786,7 +1784,7 @@ def matchup_matrix_by_base(
           AND m.p1_leader IS NOT NULL AND m.p2_leader IS NOT NULL
           AND m.p1_leader IN ({ldr_ph}) AND m.p2_leader IN ({ldr_ph})
           AND m.p1_leader != m.p2_leader
-          {date_sql}
+          AND e.date <= CURRENT_DATE {date_sql}
           {top8_where}
     """, all_leaders + all_leaders + date_params)
 
