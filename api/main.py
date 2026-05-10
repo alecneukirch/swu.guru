@@ -30,31 +30,38 @@ app = FastAPI(title="SWU Cards", version="1.0.0")
 # This means a query for "JTL-post-ban" only includes events that took place
 # between 2025-04-11 and 2025-07-11, not all JTL events.
 
-def meta_date_filter(meta_id: Optional[str]) -> tuple[str, list]:
+def meta_date_filter(meta_id: Optional[str], days: Optional[int] = None) -> tuple[str, list]:
     """
-    Returns (sql_fragment, params) for filtering events by meta era.
-    sql_fragment is something like "AND e.date >= %s AND e.date < %s"
-    Returns ('', []) if meta_id is None/empty.
+    Returns (sql_fragment, params) for filtering events by meta era and/or
+    a rolling window of the last N days.
+    Returns ('', []) when neither meta_id nor days is set (callers use
+    materialized views in that case).
     """
-    if not meta_id:
+    if not meta_id and not days:
         return "", []
 
-    row = db.fetchone(
-        "SELECT start_date, end_date FROM metas WHERE id = %s",
-        (meta_id,)
-    )
-    if not row:
-        # Fall back to set_code match if meta not found
-        set_code = meta_id.split("-")[0]  # "JTL-post-ban" -> "JTL"
-        return "AND e.set_code = %s AND e.date <= CURRENT_DATE", [set_code]
-
     parts, params = ["e.date <= CURRENT_DATE"], []
-    if row.get("start_date"):
-        parts.append("e.date >= %s")
-        params.append(row["start_date"])
-    if row.get("end_date"):
-        parts.append("e.date < %s")
-        params.append(row["end_date"])
+
+    if days:
+        parts.append("e.date >= CURRENT_DATE - INTERVAL '%s days'")
+        params.append(days)
+
+    if meta_id:
+        row = db.fetchone(
+            "SELECT start_date, end_date FROM metas WHERE id = %s",
+            (meta_id,)
+        )
+        if not row:
+            set_code = meta_id.split("-")[0]
+            parts.append("e.set_code = %s")
+            params.append(set_code)
+        else:
+            if row.get("start_date"):
+                parts.append("e.date >= %s")
+                params.append(row["start_date"])
+            if row.get("end_date"):
+                parts.append("e.date < %s")
+                params.append(row["end_date"])
 
     return "AND " + " AND ".join(parts), params
 
@@ -103,9 +110,9 @@ def favicon_ico():
 # =============================================================================
 
 @app.get("/api/summary")
-def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None)):
+def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None), days: Optional[int] = Query(None)):
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     if date_sql:
         row = db.fetchone(f"""
@@ -150,6 +157,7 @@ def leaders(
     min_decks: int            = Query(5),
     or_has_t8: bool           = Query(False, description="Also include leaders with any top-8 finish regardless of deck count"),
     format:    str            = Query("standard"),
+    days:      Optional[int]  = Query(None),
 ):
     """
     Returns aggregated leader stats (summed across all bases).
@@ -158,7 +166,7 @@ def leaders(
     (e.g. 'JTL-post-ban', 'SOR', 'eternal-post-ban').
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     t8_having_raw = (
         "OR COUNT(DISTINCT s.id) FILTER "
@@ -290,13 +298,14 @@ def leaders_by_base(
     min_decks: int            = Query(3),
     or_has_t8: bool           = Query(False),
     format:    str            = Query("standard"),
+    days:      Optional[int]  = Query(None),
 ):
     """
     Returns stats for each leader+base-group combo.
     Base groups use aspect/ability classification: plain, splash, force, or rare.
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     t8_having_raw = (
         "OR COUNT(DISTINCT s.id) FILTER "
@@ -471,10 +480,11 @@ def leader_stats(
     meta_id:    Optional[str] = Query(None),
     base_group: Optional[str] = Query(None, description="Comma-separated base names to filter by"),
     format:     str            = Query("standard"),
+    days:       Optional[int]  = Query(None),
 ):
     """Hero stats for the leader page header. Supports base group filtering."""
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
     base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
 
     if base_names:
@@ -643,6 +653,7 @@ def leader_bases(
     leader:  str,
     meta_id: Optional[str] = Query(None),
     format:  str            = Query("standard"),
+    days:    Optional[int]  = Query(None),
 ):
     """
     Returns base groups (not individual bases) for the filter dropdown.
@@ -650,12 +661,12 @@ def leader_bases(
     and whether they have a special ability, since these are functionally
     interchangeable from a deckbuilding perspective.
     """
-    cache_key = (leader, meta_id or '', format)
+    cache_key = (leader, meta_id or '', format, days)
     if cache_key in _bases_cache:
         return _bases_cache[cache_key]
 
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     # Get individual base counts from standings
     if date_sql:
@@ -757,6 +768,7 @@ def leader_cards(
     min_decks:    int             = Query(5),
     top8_only:    bool            = Query(False),
     format:       str             = Query("standard"),
+    days:         Optional[int]   = Query(None),
 ):
     """
     Card list for a leader with inclusion %, avg copies, T8 conversion.
@@ -765,7 +777,7 @@ def leader_cards(
     top8_only restricts the deck universe to only decks that made top 8.
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
     base_names  = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
     sb_filter   = "" if is_sideboard is None else ("AND dc.is_sideboard = true" if is_sideboard else "AND dc.is_sideboard = false")
     base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
@@ -1216,6 +1228,7 @@ def leader_matchups(
     min_games:  int            = Query(3),
     top8_only:  bool           = Query(False),
     format:     str            = Query("standard"),
+    days:       Optional[int]  = Query(None),
 ):
     """
     Win/loss record for a leader against each opponent leader+base combo.
@@ -1223,7 +1236,7 @@ def leader_matchups(
     top8_only restricts to matches where at least one player made top 8.
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
     own_bases = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
 
     own_as_p1  = "AND m.p1_base = ANY(%s::text[])" if own_bases else ""
@@ -1354,13 +1367,14 @@ def leader_matchup_cards(
     min_games:      int             = Query(3),
     top8_only:      bool            = Query(False),
     format:         str             = Query("standard"),
+    days:           Optional[int]   = Query(None),
 ):
     """
     Cards that over/underperform for {leader} vs {opponent}+bases.
     win_rate per card vs baseline_win_rate; sorted by delta DESC.
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     own_bases = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
     opp_bases = [b.strip() for b in opponent_bases.split(',') if b.strip()] if opponent_bases else []
@@ -1449,12 +1463,13 @@ def leader_matchup_cards(
 def matchup_matrix(
     meta_id:   Optional[str] = Query(None),
     min_games: int            = Query(5),
+    days:      Optional[int]  = Query(None),
 ):
     """
     Full symmetric matchup matrix: every leader vs every leader.
     Returns flattened list of {leader, opponent, matches, wins, losses, win_rate}.
     """
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     if date_sql:
         rows = db.fetchall(f"""
@@ -1603,13 +1618,14 @@ def leader_weaknesses(
     min_games:  int           = Query(20),
     limit:      int           = Query(60),
     sort:       str           = Query("count"),  # "count" | "delta"
+    days:       Optional[int] = Query(None),
 ):
     """
     Cards with the highest win rates when played against this leader+base combo,
     regardless of the opponent deck/leader they're played in.
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
     base_as_p1 = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
@@ -1685,6 +1701,7 @@ def matchup_matrix_by_base(
     top_n:     int            = Query(40,  description="Max combos to include"),
     top8_only: bool           = Query(False, description="Only count matches where at least one player made top 8"),
     format:    str            = Query("standard"),
+    days:      Optional[int]  = Query(None),
 ):
     """
     Win-rate matrix of top leader+base combos vs each other.
@@ -1692,7 +1709,7 @@ def matchup_matrix_by_base(
     win_rate > 0.5 means the row deck wins more than 50%% vs that column.
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     # Step 1: get the top combos by deck count
     combos_raw = db.fetchall(f"""
@@ -1873,9 +1890,10 @@ def matchup_matrix_by_base(
 def recent_top8(
     limit:   int = Query(20, ge=1, le=100),
     meta_id: Optional[str] = Query(None),
+    days:    Optional[int]  = Query(None),
 ):
     """Recent events with their top 8 standings, for the decklists page."""
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     events = db.fetchall(f"""
         SELECT e.id, e.name, e.date, e.player_count, e.melee_url,
@@ -1955,9 +1973,10 @@ def players(
     offset:  int = Query(0,   ge=0),
     search:  Optional[str] = Query(None),
     meta_id: Optional[str] = Query(None),
+    days:    Optional[int]  = Query(None),
 ):
     """Player leaderboard — grouped by stable identity UUID."""
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
     search_sql   = "AND (m.display_name ILIKE %s OR s.player_name ILIKE %s)" if search else ""
     search_param = ['%' + search + '%', '%' + search + '%'] if search else []
 
@@ -2026,9 +2045,10 @@ def players(
 def player_detail(
     identity_id: str,
     meta_id:     Optional[str] = Query(None),
+    days:        Optional[int]  = Query(None),
 ):
     """Full event history for a player identity (may span multiple melee IDs)."""
-    date_sql, date_params = meta_date_filter(meta_id)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
     rows = db.fetchall(f"""
         SELECT

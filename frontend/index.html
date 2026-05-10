@@ -133,8 +133,18 @@ body::before {
 .nav-btn:hover { color: var(--text2); }
 .nav-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
 
-.nav-format-toggle {
+.nav-days-toggle {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 4px;
+}
+.nav-format-toggle {
+  margin-left: 8px;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -159,6 +169,26 @@ body::before {
 }
 .fmt-btn:hover { color: var(--text2); }
 .fmt-btn.active {
+  background: var(--surface2);
+  color: var(--gold);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.days-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.15s, color 0.15s;
+}
+.days-btn:hover { color: var(--text2); }
+.days-btn.active {
   background: var(--surface2);
   color: var(--gold);
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
@@ -2932,6 +2962,11 @@ select option { background: var(--surface2); }
   <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
   <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
   <button class="nav-btn"        id="nav-events"    onclick="showPage('events')">Events</button>
+  <div class="nav-days-toggle">
+    <button class="days-btn active" id="days-all" onclick="setDays(null)">Full</button>
+    <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
+    <button class="days-btn"        id="days-14"  onclick="setDays(14)">2W</button>
+  </div>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -3317,6 +3352,7 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
 
 // ── State ──────────────────────────────────────────────────────────────────
 let currentFormat  = 'standard';  // 'standard' | 'eternal'
+let currentDays    = null;         // null | 28 | 14
 let homeData       = [];
 let homeSort       = 'total_decks';
 let homeComboData  = [];
@@ -3572,13 +3608,34 @@ function setFormat(fmt) {
   }
 }
 
+function setDays(d) {
+  currentDays = d;
+  document.getElementById('days-all').classList.toggle('active', d === null);
+  document.getElementById('days-28').classList.toggle('active', d === 28);
+  document.getElementById('days-14').classList.toggle('active', d === 14);
+  const activePage = document.querySelector('.page.active')?.id;
+  if (activePage === 'page-matrix') loadMatrix();
+  else if (currentLeader) {
+    renderLeaderHero(currentLeader);
+    if (leaderTab === 'cards') loadLeaderCards();
+    else if (leaderTab === 'matchups') loadLeaderMatchups();
+    else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
+  } else {
+    loadHome();
+  }
+}
+
+function daysQS() {
+  return currentDays ? '&days=' + currentDays : '';
+}
+
 async function loadHome() {
   const gen = ++_homeGen;
   const fmt = currentFormat;
   const set = fmt === 'eternal'
     ? document.getElementById('eternal-era').value
     : document.getElementById('home-set').value;
-  const qs  = (set ? '&meta_id=' + encodeURIComponent(set) : '') + '&format=' + fmt;
+  const qs  = (set ? '&meta_id=' + encodeURIComponent(set) : '') + '&format=' + fmt + daysQS();
   try {
     const deckFilter = fmt === 'eternal'
       ? 'min_decks=3&or_has_t8=true'
@@ -3586,7 +3643,7 @@ async function loadHome() {
     const [data, comboData, summary] = await Promise.all([
       api('/api/leaders?' + deckFilter + qs),
       api('/api/leaders/by-base?' + deckFilter + qs),
-      api('/api/summary?format=' + fmt + (set ? '&meta_id=' + encodeURIComponent(set) : '')),
+      api('/api/summary?format=' + fmt + (set ? '&meta_id=' + encodeURIComponent(set) : '') + daysQS()),
     ]);
     if (gen !== _homeGen) return;
     homeData      = data;
@@ -3818,6 +3875,7 @@ async function renderLeaderHero(name) {
     const statsParams = ['format=' + currentFormat];
     if (set)  statsParams.push('meta_id='    + encodeURIComponent(set));
     if (base) statsParams.push('base_group=' + encodeURIComponent(base));
+    if (currentDays) statsParams.push('days=' + currentDays);
     statsUrl += '?' + statsParams.join('&');
     const stats = await api(statsUrl);
     const asp  = aspect(name);
@@ -3882,7 +3940,7 @@ async function loadLeaderBases(name, autoBase = null) {
   const sel    = document.getElementById('lp-base');
   sel.innerHTML = '<option value="">All bases</option>';
   try {
-    const groups = await api('/api/leader/' + encodeURIComponent(name) + '/bases?format=' + currentFormat + (set ? '&meta_id='+encodeURIComponent(set) : ''));
+    const groups = await api('/api/leader/' + encodeURIComponent(name) + '/bases?format=' + currentFormat + (set ? '&meta_id='+encodeURIComponent(set) : '') + daysQS());
     groups.forEach(g => {
       const opt = document.createElement('option');
       opt.value       = (g.bases || []).join(',');
@@ -3950,6 +4008,7 @@ async function loadLeaderCards() {
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat;
     if (set)        url += '&meta_id=' + encodeURIComponent(set);
     if (base)       url += '&base_group=' + encodeURIComponent(base);
+    url += daysQS();
     leaderData = await api(url) || [];
     filterCards();
   } catch(e) {
@@ -4208,6 +4267,7 @@ async function loadLeaderMatchups() {
   const muParams = ['format=' + currentFormat];
   if (set)          muParams.push('meta_id='    + encodeURIComponent(set));
   if (base)         muParams.push('base_group=' + encodeURIComponent(base));
+  if (currentDays)  muParams.push('days='       + currentDays);
   url += '?' + muParams.join('&');
   try {
     const data = await api(url);
@@ -4320,6 +4380,7 @@ async function openMatchupDetail(matchup) {
     + '&format=' + currentFormat;
   if (set)         url += '&meta_id='    + encodeURIComponent(set);
   if (base)        url += '&base_group=' + encodeURIComponent(base);
+  url += daysQS();
 
   try {
     const data = await api(url);
@@ -4411,6 +4472,7 @@ async function loadLeaderWeaknesses() {
     + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
   if (set)  url += '&meta_id='    + encodeURIComponent(set);
   if (base) url += '&base_group=' + encodeURIComponent(base);
+  url += daysQS();
   try {
     weaknessesData = await api(url);
     renderWeaknesses();
@@ -4887,8 +4949,9 @@ async function loadMatrix() {
 
   const minDecks = currentFormat === 'eternal' ? 1 : 5;
   let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}`;
-  if (meta)       url += `&meta_id=${encodeURIComponent(meta)}`;
-  if (matrixTop8) url += `&top8_only=true`;
+  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
+  if (matrixTop8)  url += `&top8_only=true`;
+  if (currentDays) url += `&days=${currentDays}`;
 
   try {
     const d = await api(url);
@@ -5094,8 +5157,9 @@ async function loadPlayers() {
   const meta   = document.getElementById('pl-set')?.value || '';
   const search = document.getElementById('pl-search')?.value || '';
   let url = `/api/players?limit=200`;
-  if (meta)   url += `&meta_id=${encodeURIComponent(meta)}`;
-  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
+  if (search)      url += `&search=${encodeURIComponent(search)}`;
+  if (currentDays) url += `&days=${currentDays}`;
   try {
     const res = await api(url);
     _playersData = res.players || [];
@@ -5184,7 +5248,8 @@ async function openPlayerDetail(playerId, playerName) {
   try {
     const meta = document.getElementById('pl-set')?.value || '';
     let url = `/api/players/${encodeURIComponent(playerId)}`;
-    if (meta) url += `?meta_id=${encodeURIComponent(meta)}`;
+    const playerQS = [meta ? `meta_id=${encodeURIComponent(meta)}` : '', currentDays ? `days=${currentDays}` : ''].filter(Boolean).join('&');
+    if (playerQS) url += `?${playerQS}`;
     const rows = await api(url);
 
     const events  = rows.length;
@@ -5343,7 +5408,8 @@ async function loadDecklists() {
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   const meta = document.getElementById('dl-set')?.value || '';
   let url = `/api/events/recent-top8?limit=${_decklistsN}`;
-  if (meta) url += `&meta_id=${encodeURIComponent(meta)}`;
+  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
+  if (currentDays) url += `&days=${currentDays}`;
   try {
     const events = await api(url);
     // Flatten to rows
