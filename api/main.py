@@ -1886,6 +1886,162 @@ def matchup_matrix_by_base(
     }
 
 
+# =============================================================================
+#  META CALL  —  Field EV: best decks weighted by opponent meta share
+# =============================================================================
+
+@app.get("/api/meta-call")
+def meta_call(
+    meta_id:   Optional[str] = Query(None),
+    min_decks: int            = Query(5),
+    min_games: int            = Query(5),
+    top_n:     int            = Query(30),
+    format:    str            = Query("standard"),
+    days:      Optional[int]  = Query(None),
+):
+    """
+    Ranks leader+base combos by field EV: expected win rate against the current
+    meta field, weighted by each opponent's meta share.
+    field_ev > 0.5 = positive expectation vs the field.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days)
+
+    combos_raw = db.fetchall(f"""
+        SELECT s.leader, s.base,
+               COUNT(DISTINCT s.id)::INT AS decks
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        WHERE s.leader IS NOT NULL AND s.leader != ''
+          AND s.base   IS NOT NULL AND s.base   != ''
+          AND e.date <= CURRENT_DATE {date_sql}
+        GROUP BY s.leader, s.base
+        HAVING COUNT(DISTINCT s.id) >= %s
+        ORDER BY decks DESC
+        LIMIT %s
+    """, date_params + [min_decks, top_n * 3])
+
+    if not combos_raw:
+        return {"decks": [], "total_decks": 0}
+
+    all_base_names = list({r["base"] for r in combos_raw})
+    ph = ','.join(['%s'] * len(all_base_names))
+    card_info = db.fetchall(f"""
+        SELECT DISTINCT ON (name) name,
+               COALESCE(aspects[1], 'none') AS aspect,
+               rarity, card_text, deploy_box, epic_action
+        FROM cards
+        WHERE is_base = true AND variant_type = 'Standard'
+          AND name IN ({ph})
+        ORDER BY name, set_code DESC
+    """, all_base_names)
+    base_meta_map = {r["name"]: r for r in card_info}
+
+    groups: dict = {}
+    for r in combos_raw:
+        m       = base_meta_map.get(r["base"], {})
+        aspect  = m.get("aspect", "none") or "none"
+        rarity  = m.get("rarity", "Common") or "Common"
+        ability = _base_ability_type(
+            m.get("card_text") or "", m.get("deploy_box") or "",
+            m.get("epic_action") or "", r["base"]
+        )
+        grp_key = _base_group_key(aspect, ability, rarity, r["base"])
+        grp_lbl = _base_group_label(aspect, ability, rarity, r["base"])
+        combo   = f"{r['leader']}|||{grp_key}"
+        if combo not in groups:
+            groups[combo] = {"leader": r["leader"], "base_group": grp_lbl,
+                             "base_key": grp_key, "bases": [], "decks": 0}
+        groups[combo]["decks"] += r["decks"]
+        if r["base"] not in groups[combo]["bases"]:
+            groups[combo]["bases"].append(r["base"])
+
+    combos = sorted(groups.values(), key=lambda x: -x["decks"])[:top_n]
+    total_decks = sum(c["decks"] for c in combos)
+    if not combos or not total_decks:
+        return {"decks": [], "total_decks": 0}
+
+    all_leaders = list({c["leader"] for c in combos})
+    ldr_ph = ','.join(['%s'] * len(all_leaders))
+
+    matches = db.fetchall(f"""
+        SELECT m.p1_leader, m.p1_base, m.p2_leader, m.p2_base, m.winner
+        FROM {t['matches']} m
+        JOIN {t['events']} e ON e.id = m.event_id
+        WHERE m.winner IS NOT NULL
+          AND m.p1_leader IS NOT NULL AND m.p2_leader IS NOT NULL
+          AND m.p1_leader IN ({ldr_ph}) AND m.p2_leader IN ({ldr_ph})
+          AND m.p1_leader != m.p2_leader
+          AND e.date <= CURRENT_DATE {date_sql}
+    """, all_leaders + all_leaders + date_params)
+
+    base_to_combo: dict = {}
+    for c in combos:
+        for b in c["bases"]:
+            base_to_combo[f"{c['leader']}||{b}"] = f"{c['leader']}|||{c['base_key']}"
+
+    from collections import defaultdict
+    pair_stats: dict = defaultdict(lambda: {"wins": 0, "games": 0})
+    for m in matches:
+        p1_key = base_to_combo.get(f"{m['p1_leader']}||{m['p1_base']}")
+        p2_key = base_to_combo.get(f"{m['p2_leader']}||{m['p2_base']}")
+        if not p1_key or not p2_key or p1_key == p2_key:
+            continue
+        pair_stats[(p1_key, p2_key)]["games"] += 1
+        pair_stats[(p2_key, p1_key)]["games"] += 1
+        if m["winner"] == "p1":
+            pair_stats[(p1_key, p2_key)]["wins"] += 1
+        else:
+            pair_stats[(p2_key, p1_key)]["wins"] += 1
+
+    result = []
+    for deck in combos:
+        deck_key   = f"{deck['leader']}|||{deck['base_key']}"
+        deck_share = deck["decks"] / total_decks
+
+        ev_num      = 0.0
+        ev_den      = 0.0
+        matchups    = []
+
+        for opp in combos:
+            opp_key   = f"{opp['leader']}|||{opp['base_key']}"
+            if opp_key == deck_key:
+                continue
+            opp_share = opp["decks"] / total_decks
+            stat      = pair_stats.get((deck_key, opp_key), {"wins": 0, "games": 0})
+            if stat["games"] < min_games:
+                continue
+            wr = stat["wins"] / stat["games"]
+            ev_num += opp_share * wr
+            ev_den += opp_share
+            matchups.append({
+                "opponent":            opp["leader"],
+                "opponent_base_group": opp["base_group"],
+                "opponent_base_key":   opp["base_key"],
+                "opponent_share":      round(opp_share, 4),
+                "win_rate":            round(wr, 4),
+                "games":               stat["games"],
+            })
+
+        field_ev = round(ev_num / ev_den, 4) if ev_den > 0 else None
+        matchups.sort(key=lambda x: -x["win_rate"])
+
+        result.append({
+            "leader":     deck["leader"],
+            "base_group": deck["base_group"],
+            "base_key":   deck["base_key"],
+            "bases":      deck["bases"],
+            "decks":      deck["decks"],
+            "meta_share": round(deck_share, 4),
+            "field_ev":   field_ev,
+            "coverage":   round(ev_den, 4),
+            "matchups":   matchups,
+        })
+
+    result.sort(key=lambda x: (-(x["field_ev"] or 0), -x["decks"]))
+    return {"decks": result, "total_decks": total_decks}
+
+
 @app.get("/api/events/recent-top8")
 def recent_top8(
     limit:   int = Query(20, ge=1, le=100),
