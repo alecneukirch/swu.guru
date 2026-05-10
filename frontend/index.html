@@ -138,7 +138,22 @@ body::before {
   margin-left: auto;
   display: flex;
   align-items: center;
+  gap: 8px;
 }
+#nav-set {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  height: 32px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+#nav-set:focus { border-color: var(--gold); }
 .nav-days-toggle {
   display: flex;
   align-items: center;
@@ -3138,6 +3153,9 @@ select option { background: var(--surface2); }
   <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
   <button class="nav-btn"        id="nav-events"    onclick="showPage('events')">Events</button>
   <div class="nav-days-wrapper">
+    <select id="nav-set" onchange="setNavMeta(this.value)">
+      <option value="">All metas</option>
+    </select>
     <div class="nav-days-toggle">
       <button class="days-btn active" id="days-14"  onclick="setDays(14)">2W</button>
       <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
@@ -3177,14 +3195,6 @@ select option { background: var(--surface2); }
     <div class="mb-stat"><div class="mb-val" id="mb-leaders">—</div><div class="mb-label">Leaders</div></div>
   </div>
   <div class="controls">
-    <span class="ctrl-label" id="lbl-home-set">Set</span>
-    <select id="home-set" onchange="loadHome()">
-      <option value="">All metas</option>
-    </select>
-    <span class="ctrl-label" id="lbl-eternal-era" style="display:none">Era</span>
-    <select id="eternal-era" onchange="loadHome()" style="display:none">
-      <option value="">All eras</option>
-    </select>
     <div class="sort-btn-wrap">
       <div class="sep"></div>
       <span class="ctrl-label">Sort</span>
@@ -3213,10 +3223,6 @@ select option { background: var(--surface2); }
 
   <!-- Shared filters (apply to all tabs) -->
   <div class="controls lp-shared-controls" style="padding-top:16px;padding-bottom:0">
-    <span class="ctrl-label">Set</span>
-    <select id="lp-set" onchange="onLeaderFilterChange()">
-      <option value="">All metas</option>
-    </select>
     <span class="ctrl-label">Base</span>
     <select id="lp-base" onchange="onLeaderFilterChange()">
       <option value="">All bases</option>
@@ -3335,10 +3341,6 @@ select option { background: var(--surface2); }
     </div>
   </div>
   <div class="controls">
-    <span class="ctrl-label">Set</span>
-    <select id="mx-set" onchange="loadMatrix()">
-      <option value="">All metas</option>
-    </select>
     <div class="sep"></div>
     <button class="btn" id="mx-top8-btn" onclick="toggleMatrixTop8()" title="Only count matches where at least one player made top 8">Top 8 only</button>
   </div>
@@ -3360,10 +3362,6 @@ select option { background: var(--surface2); }
     </div>
   </div>
   <div class="controls">
-    <span class="ctrl-label">Set</span>
-    <select id="ev-set" onchange="loadEvents()">
-      <option value="">All metas</option>
-    </select>
     <input type="text" id="ev-search" placeholder="Search events…" oninput="filterEvents()" style="width:200px">
   </div>
   <div class="table-wrap">
@@ -3397,33 +3395,6 @@ select option { background: var(--surface2); }
     </div>
   </div>
   <div class="controls">
-    <span class="ctrl-label">Set</span>
-    <select id="pl-set" onchange="loadPlayers()">
-      <option value="">All metas</option>
-    </select>
-    <div class="sep"></div>
-    <input type="text" id="pl-search" placeholder="Search player…"
-      oninput="searchPlayers()" style="width:160px">
-  </div>
-  <div class="table-wrap" id="players-wrap">
-    <div class="loading" style="padding:24px">loading…</div>
-  </div>
-</div>
-
-<!-- ══ PLAYERS PAGE ══ -->
-<div class="page" id="page-players">
-  <div class="page-header">
-    <div>
-      <div class="page-title">PLAYERS</div>
-      <div class="page-sub" id="players-sub">loading…</div>
-    </div>
-  </div>
-  <div class="controls">
-    <span class="ctrl-label">Set</span>
-    <select id="pl-set" onchange="loadPlayers()">
-      <option value="">All metas</option>
-    </select>
-    <div class="sep"></div>
     <input type="text" id="pl-search" placeholder="Search player…"
       oninput="searchPlayers()" style="width:180px">
     <div class="sep"></div>
@@ -3477,12 +3448,6 @@ select option { background: var(--surface2); }
       <div class="page-sub" id="picks-sub">Best decks weighted by expected matchup frequency</div>
     </div>
   </div>
-  <div class="controls">
-    <span class="ctrl-label">Set</span>
-    <select id="pk-set" onchange="loadPicks()">
-      <option value="">All metas</option>
-    </select>
-  </div>
   <div id="picks-wrap" style="padding:0 24px 32px">
     <div class="loading" style="padding:24px">loading…</div>
   </div>
@@ -3497,11 +3462,6 @@ select option { background: var(--surface2); }
     </div>
   </div>
   <div class="controls">
-    <span class="ctrl-label">Set</span>
-    <select id="dl-set" onchange="loadDecklists()">
-      <option value="">All metas</option>
-    </select>
-    <div class="sep"></div>
     <span class="ctrl-label">Show</span>
     <button class="btn active" id="dl-n20"  onclick="setDecklistsN(20)">20 events</button>
     <button class="btn"        id="dl-n50"  onclick="setDecklistsN(50)">50 events</button>
@@ -3549,6 +3509,9 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
 // ── State ──────────────────────────────────────────────────────────────────
 let currentFormat  = 'standard';  // 'standard' | 'eternal'
 let currentDays    = 14;           // null | 28 | 14
+let currentMeta    = '';           // selected meta/era id, or '' for all
+let _stdMetaOpts   = '<option value="">All metas</option>';
+let _eternalMetaOpts = '<option value="">All eras</option>';
 let homeData       = [];
 let homeSort       = 'total_decks';
 let homeComboData  = [];
@@ -3789,10 +3752,11 @@ function applyFormat(fmt) {
   document.body.classList.toggle('eternal-theme', fmt === 'eternal');
   document.getElementById('fmt-standard').classList.toggle('active', fmt === 'standard');
   document.getElementById('fmt-eternal').classList.toggle('active', fmt === 'eternal');
-  document.getElementById('lbl-home-set').style.display   = fmt === 'eternal' ? 'none' : '';
-  document.getElementById('home-set').style.display        = fmt === 'eternal' ? 'none' : '';
-  document.getElementById('lbl-eternal-era').style.display = fmt === 'eternal' ? '' : 'none';
-  document.getElementById('eternal-era').style.display     = fmt === 'eternal' ? '' : 'none';
+  const navSet = document.getElementById('nav-set');
+  if (navSet) {
+    navSet.innerHTML = fmt === 'eternal' ? _eternalMetaOpts : _stdMetaOpts;
+    currentMeta = navSet.value;
+  }
 }
 function setFormat(fmt) {
   applyFormat(fmt);
@@ -3830,9 +3794,7 @@ function daysQS() {
 async function loadHome() {
   const gen = ++_homeGen;
   const fmt = currentFormat;
-  const set = fmt === 'eternal'
-    ? document.getElementById('eternal-era').value
-    : document.getElementById('home-set').value;
+  const set = currentMeta;
   const qs  = (set ? '&meta_id=' + encodeURIComponent(set) : '') + '&format=' + fmt + daysQS();
   try {
     const deckFilter = fmt === 'eternal'
@@ -4067,7 +4029,7 @@ async function renderLeaderHero(name) {
   const hero = document.getElementById('leader-hero');
   hero.innerHTML = '<div style="padding:24px;color:var(--text3);font-family:var(--mono)">loading…</div>';
   try {
-    const set  = document.getElementById('lp-set').value;
+    const set  = currentMeta;
     const base = document.getElementById('lp-base').value;
     let statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats';
     const statsParams = ['format=' + currentFormat];
@@ -4134,7 +4096,7 @@ async function renderLeaderHero(name) {
 }
 
 async function loadLeaderBases(name, autoBase = null) {
-  const set    = document.getElementById('lp-set').value;
+  const set    = currentMeta;
   const sel    = document.getElementById('lp-base');
   sel.innerHTML = '<option value="">All bases</option>';
   try {
@@ -4182,7 +4144,7 @@ function shareLeader(btn) {
 
 async function loadLeaderCards() {
   if (!currentLeader) return;
-  const set  = document.getElementById('lp-set').value;
+  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
 
   // Refresh hero stats to reflect base filter
@@ -4459,7 +4421,7 @@ async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
-  const set  = document.getElementById('lp-set').value;
+  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups';
   const muParams = ['format=' + currentFormat];
@@ -4570,7 +4532,7 @@ async function openMatchupDetail(matchup) {
   document.getElementById('mu-detail-wr').style.color = color;
   document.getElementById('mu-cards-grid').innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
 
-  const set  = document.getElementById('lp-set').value;
+  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
     + '?opponent=' + encodeURIComponent(matchup.opponent)
@@ -4664,7 +4626,7 @@ async function loadLeaderWeaknesses() {
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
   const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
-  const set  = document.getElementById('lp-set').value;
+  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
@@ -4756,7 +4718,7 @@ async function loadEvents() {
 
 function filterEvents() {
   const q     = document.getElementById('ev-search').value.toLowerCase();
-  const set   = document.getElementById('ev-set').value;
+  const set   = currentMeta;
   const today = new Date().toISOString().slice(0, 10);
   let rows    = eventsData;
   if (q)   rows = rows.filter(e => e.name?.toLowerCase().includes(q));
@@ -5141,7 +5103,7 @@ async function loadMatrix() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
 
-  const meta = document.getElementById('mx-set')?.value || '';
+  const meta = currentMeta;
   // top_n uses max of rows/cols so we always have enough combos for both axes
   const topN = Math.max(matrixRows, matrixCols);
 
@@ -5352,7 +5314,7 @@ async function loadPlayers() {
   const wrap = document.getElementById('players-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const meta   = document.getElementById('pl-set')?.value || '';
+  const meta   = currentMeta;
   const search = document.getElementById('pl-search')?.value || '';
   let url = `/api/players?limit=200`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
@@ -5444,7 +5406,7 @@ async function openPlayerDetail(playerId, playerName) {
   document.body.style.overflow = 'hidden';
 
   try {
-    const meta = document.getElementById('pl-set')?.value || '';
+    const meta = currentMeta;
     let url = `/api/players/${encodeURIComponent(playerId)}`;
     const playerQS = [meta ? `meta_id=${encodeURIComponent(meta)}` : '', currentDays ? `days=${currentDays}` : ''].filter(Boolean).join('&');
     if (playerQS) url += `?${playerQS}`;
@@ -5604,7 +5566,7 @@ async function loadDecklists() {
   const wrap = document.getElementById('decklists-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const meta = document.getElementById('dl-set')?.value || '';
+  const meta = currentMeta;
   let url = `/api/events/recent-top8?limit=${_decklistsN}`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
   if (currentDays) url += `&days=${currentDays}`;
@@ -5747,26 +5709,44 @@ async function populateMetaDropdowns() {
     ]);
 
     if (options?.length) {
-      const optHtml = '<option value="">All metas</option>'
+      _stdMetaOpts = '<option value="">All metas</option>'
         + options.map(m =>
             `<option value="${m.id}"${m.is_current ? ' selected' : ''}>${m.name}</option>`
           ).join('');
-      ['home-set','lp-set','ev-set','mx-set','dl-set','pl-set','pk-set'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = optHtml;
-      });
     }
 
     if (eternalOptions?.length) {
-      const eternalOptHtml = '<option value="">All eras</option>'
+      _eternalMetaOpts = '<option value="">All eras</option>'
         + eternalOptions.map(m =>
             `<option value="${m.id}"${m.is_current ? ' selected' : ''}>${m.name}</option>`
           ).join('');
-      const el = document.getElementById('eternal-era');
-      if (el) el.innerHTML = eternalOptHtml;
+    }
+
+    const navSet = document.getElementById('nav-set');
+    if (navSet) {
+      navSet.innerHTML = currentFormat === 'eternal' ? _eternalMetaOpts : _stdMetaOpts;
+      currentMeta = navSet.value;
     }
   } catch(e) {
     console.warn('Could not load meta eras:', e);
+  }
+}
+
+function setNavMeta(val) {
+  currentMeta = val;
+  const activePage = document.querySelector('.page.active')?.id;
+  if (activePage === 'page-matrix') loadMatrix();
+  else if (activePage === 'page-picks') loadPicks();
+  else if (activePage === 'page-events') { loadEvents(); }
+  else if (activePage === 'page-players') loadPlayers();
+  else if (activePage === 'page-decklists') loadDecklists();
+  else if (currentLeader) {
+    renderLeaderHero(currentLeader);
+    if (leaderTab === 'cards') loadLeaderCards();
+    else if (leaderTab === 'matchups') loadLeaderMatchups();
+    else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
+  } else {
+    loadHome();
   }
 }
 
@@ -5793,7 +5773,7 @@ async function loadPicks() {
   const wrap = document.getElementById('picks-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const meta      = document.getElementById('pk-set')?.value || '';
+  const meta      = currentMeta;
   const minDecks  = currentFormat === 'eternal' ? 3 : 10;
   let url = `/api/meta-call?min_decks=${minDecks}&min_games=2&top_n=30&format=${currentFormat}`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
