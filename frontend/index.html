@@ -5816,7 +5816,7 @@ function renderPicks() {
   const showIntro = !localStorage.getItem('metacall_intro_seen');
   let html = '';
   if (showIntro) {
-    html += `<div class="picks-intro">
+    html += `<div class="picks-intro" onclick="dismissPicksIntro()" style="cursor:pointer">
       <div class="picks-intro-icon">💡</div>
       <div class="picks-intro-body">
         <div class="picks-intro-title">Showing the last 2 weeks</div>
