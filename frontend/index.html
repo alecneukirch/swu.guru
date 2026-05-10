@@ -133,8 +133,13 @@ body::before {
 .nav-btn:hover { color: var(--text2); }
 .nav-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
 
-.nav-days-toggle {
+.nav-days-wrapper {
+  position: relative;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.nav-days-toggle {
   display: flex;
   align-items: center;
   gap: 3px;
@@ -142,6 +147,55 @@ body::before {
   border: 1px solid var(--border2);
   border-radius: 8px;
   padding: 4px;
+}
+.days-intro-popup {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 270px;
+  background: var(--surface);
+  border: 1px solid rgba(212,175,55,0.45);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  z-index: 500;
+  cursor: pointer;
+}
+.days-intro-popup::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 24px;
+  width: 10px;
+  height: 10px;
+  background: var(--surface);
+  border-left: 1px solid rgba(212,175,55,0.45);
+  border-top: 1px solid rgba(212,175,55,0.45);
+  transform: rotate(45deg);
+}
+.days-intro-popup-title {
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.days-intro-popup-text {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.days-intro-popup-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border: 1px solid rgba(212,175,55,0.4);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gold);
+  cursor: pointer;
 }
 .nav-format-toggle {
   margin-left: 8px;
@@ -2056,36 +2110,6 @@ select option { background: var(--surface2); }
 }
 
 /* ── Picks page ───────────────────────────────────────────── */
-.picks-intro {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  background: linear-gradient(135deg, rgba(212,175,55,0.07), rgba(212,175,55,0.03));
-  border: 1px solid rgba(212,175,55,0.35);
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 16px;
-  max-width: 900px;
-}
-.picks-intro-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
-.picks-intro-body { flex: 1; min-width: 0; }
-.picks-intro-title { font-weight: 700; color: var(--gold); font-size: 13px; margin-bottom: 4px; }
-.picks-intro-text  { font-size: 13px; color: var(--text2); line-height: 1.5; }
-.picks-intro-text strong { color: var(--text); }
-.picks-intro-dismiss {
-  flex-shrink: 0;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 5px 12px;
-  border: 1px solid rgba(212,175,55,0.4);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--gold);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.picks-intro-dismiss:hover { background: rgba(212,175,55,0.1); }
 
 .picks-list {
   display: flex;
@@ -3113,10 +3137,17 @@ select option { background: var(--surface2); }
   <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
   <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
   <button class="nav-btn"        id="nav-events"    onclick="showPage('events')">Events</button>
-  <div class="nav-days-toggle">
-    <button class="days-btn active" id="days-all" onclick="setDays(null)">Full</button>
-    <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
-    <button class="days-btn"        id="days-14"  onclick="setDays(14)">2W</button>
+  <div class="nav-days-wrapper">
+    <div class="nav-days-toggle">
+      <button class="days-btn active" id="days-14"  onclick="setDays(14)">2W</button>
+      <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
+      <button class="days-btn"        id="days-all" onclick="setDays(null)">Full</button>
+    </div>
+    <div class="days-intro-popup" id="days-intro-popup" onclick="dismissPicksIntro()">
+      <div class="days-intro-popup-title">Recent data, by default</div>
+      <div class="days-intro-popup-text">This toggle adjusts the time window used across all pages. Switch to Full for all-time data.</div>
+      <button class="days-intro-popup-btn" onclick="dismissPicksIntro()">Got it</button>
+    </div>
   </div>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
@@ -3522,7 +3553,7 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
 
 // ── State ──────────────────────────────────────────────────────────────────
 let currentFormat  = 'standard';  // 'standard' | 'eternal'
-let currentDays    = null;         // null | 28 | 14
+let currentDays    = 14;           // null | 28 | 14
 let homeData       = [];
 let homeSort       = 'total_decks';
 let homeComboData  = [];
@@ -5748,19 +5779,12 @@ function setPicksMuSort(col) {
 async function loadPicks() {
   const firstVisit = !localStorage.getItem('metacall_intro_seen');
 
-  // On first visit, switch to 2W — setDays will re-invoke loadPicks
-  if (firstVisit && currentDays !== 14) {
-    setDays(14);
-    return;
-  }
-
   const wrap = document.getElementById('picks-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   const meta      = document.getElementById('pk-set')?.value || '';
-  const minGames  = 2;
   const minDecks  = currentFormat === 'eternal' ? 3 : 10;
-  let url = `/api/meta-call?min_decks=${minDecks}&min_games=${minGames}&top_n=30&format=${currentFormat}`;
+  let url = `/api/meta-call?min_decks=${minDecks}&min_games=2&top_n=30&format=${currentFormat}`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
   if (currentDays) url += `&days=${currentDays}`;
   try {
@@ -5771,6 +5795,8 @@ async function loadPicks() {
       `${_picksData.length} decks · ${total.toLocaleString()} total decklists`;
     if (firstVisit) {
       document.querySelector('.nav-days-toggle')?.classList.add('highlight');
+      const popup = document.getElementById('days-intro-popup');
+      if (popup) popup.style.display = 'block';
     }
     renderPicks();
   } catch(e) {
@@ -5781,7 +5807,8 @@ async function loadPicks() {
 function dismissPicksIntro() {
   localStorage.setItem('metacall_intro_seen', '1');
   document.querySelector('.nav-days-toggle')?.classList.remove('highlight');
-  renderPicks();
+  const popup = document.getElementById('days-intro-popup');
+  if (popup) popup.style.display = 'none';
 }
 
 function renderPicks() {
@@ -5805,19 +5832,7 @@ function renderPicks() {
     return _picksMuDir === -1 ? '↓' : '↑';
   };
 
-  const showIntro = !localStorage.getItem('metacall_intro_seen');
-  let html = '';
-  if (showIntro) {
-    html += `<div class="picks-intro" onclick="dismissPicksIntro()" style="cursor:pointer">
-      <div class="picks-intro-icon">💡</div>
-      <div class="picks-intro-body">
-        <div class="picks-intro-title">Showing the last 2 weeks</div>
-        <div class="picks-intro-text">Field EV is most meaningful over recent data. Use the <strong>Full / 4W / 2W</strong> toggle in the top nav to adjust the time window.</div>
-      </div>
-      <button class="picks-intro-dismiss" onclick="dismissPicksIntro()">Got it</button>
-    </div>`;
-  }
-  html += '<div class="picks-list">';
+  let html = '<div class="picks-list">';
   _picksData.forEach((deck, i) => {
     const key      = `${deck.leader}|||${deck.base_key}`;
     const isOpen   = _picksOpenKeys.has(key);
