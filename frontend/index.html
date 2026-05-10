@@ -150,9 +150,9 @@ body::before {
 }
 .days-intro-popup {
   display: none;
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  position: fixed;
+  top: 62px;
+  right: 24px;
   width: 270px;
   background: var(--surface);
   border: 1px solid rgba(212,175,55,0.45);
@@ -3143,11 +3143,6 @@ select option { background: var(--surface2); }
       <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
       <button class="days-btn"        id="days-all" onclick="setDays(null)">Full</button>
     </div>
-    <div class="days-intro-popup" id="days-intro-popup" onclick="dismissPicksIntro()">
-      <div class="days-intro-popup-title">Recent data, by default</div>
-      <div class="days-intro-popup-text">This toggle adjusts the time window used across all pages. Switch to Full for all-time data.</div>
-      <button class="days-intro-popup-btn" onclick="dismissPicksIntro()">Got it</button>
-    </div>
   </div>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
@@ -5913,5 +5908,11 @@ function renderPicks() {
   <button class="mob-nav-btn"        id="mob-decklists" onclick="showPage('decklists')">Decks</button>
   <button class="mob-nav-btn"        id="mob-events"    onclick="showPage('events')">Events</button>
 </nav>
+
+<div class="days-intro-popup" id="days-intro-popup" onclick="dismissPicksIntro()">
+  <div class="days-intro-popup-title">Recent data, by default</div>
+  <div class="days-intro-popup-text">This toggle adjusts the time window used across all pages. Switch to Full for all-time data.</div>
+  <button class="days-intro-popup-btn" onclick="event.stopPropagation();dismissPicksIntro()">Got it</button>
+</div>
 </body>
 </html>
