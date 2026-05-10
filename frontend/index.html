@@ -2122,13 +2122,11 @@ select option { background: var(--surface2); }
 .pick-mu-chip.bad  { background: rgba(255,99,99,0.12);  color: var(--red2); }
 
 .pick-detail {
-  display: none;
   grid-column: 1 / -1;
   margin-top: 4px;
   border-top: 1px solid var(--border2);
   padding-top: 12px;
 }
-.pick-row.open .pick-detail { display: block; }
 .pick-mu-table {
   width: 100%;
   border-collapse: collapse;
@@ -3421,10 +3419,6 @@ select option { background: var(--surface2); }
       <option value="10">10</option>
       <option value="20">20</option>
     </select>
-    <div class="sep"></div>
-    <span class="ctrl-label">Sort</span>
-    <button class="btn active" id="pk-sort-ev"    onclick="setPicksSort('ev')">Field EV</button>
-    <button class="btn"        id="pk-sort-share" onclick="setPicksSort('share')">Meta %</button>
   </div>
   <div id="picks-wrap" style="padding:0 24px 32px">
     <div class="loading" style="padding:24px">loading…</div>
@@ -5697,13 +5691,20 @@ async function populateMetaDropdowns() {
 
 // ══ PICKS PAGE ══════════════════════════════════════════════════════════════
 
-let _picksData  = [];
-let _picksSort  = 'ev';  // 'ev' | 'share'
+let _picksData     = [];
+let _picksOpenKeys = new Set();   // tracks which expanded rows are open
+let _picksMuSort   = 'win_rate';  // column to sort matchup detail by
+let _picksMuDir    = -1;          // -1 = desc, 1 = asc
 
-function setPicksSort(s) {
-  _picksSort = s;
-  document.getElementById('pk-sort-ev').classList.toggle('active', s === 'ev');
-  document.getElementById('pk-sort-share').classList.toggle('active', s === 'share');
+function togglePickRow(key) {
+  if (_picksOpenKeys.has(key)) _picksOpenKeys.delete(key);
+  else _picksOpenKeys.add(key);
+  renderPicks();
+}
+
+function setPicksMuSort(col) {
+  if (_picksMuSort === col) _picksMuDir *= -1;
+  else { _picksMuSort = col; _picksMuDir = -1; }
   renderPicks();
 }
 
@@ -5736,35 +5737,42 @@ function renderPicks() {
     return;
   }
 
-  const sorted = [..._picksData].sort((a, b) =>
-    _picksSort === 'share'
-      ? b.meta_share - a.meta_share
-      : (b.field_ev ?? 0) - (a.field_ev ?? 0)
-  );
-
   const fmtEV    = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
   const fmtShare = v => (v * 100).toFixed(1) + '%';
   const evClass  = v => v == null ? 'neu' : v >= 0.515 ? 'pos' : v <= 0.485 ? 'neg' : 'neu';
 
+  const sortedMatchups = (matchups) => {
+    const col = _picksMuSort;
+    return [...matchups].sort((a, b) => _picksMuDir * (b[col] - a[col]));
+  };
+
+  const sortArrow = col => {
+    if (_picksMuSort !== col) return '<span style="opacity:0.3">↕</span>';
+    return _picksMuDir === -1 ? '↓' : '↑';
+  };
+
   let html = '<div class="picks-list">';
-  sorted.forEach((deck, i) => {
+  _picksData.forEach((deck, i) => {
+    const key      = `${deck.leader}|||${deck.base_key}`;
+    const isOpen   = _picksOpenKeys.has(key);
     const rank     = i + 1;
     const rankCls  = rank <= 3 ? 'top3' : '';
     const name     = shortName(deck.leader);
     const asp      = aspect(deck.leader);
     const aspCls   = 'lc-aspect aspect-' + asp.toLowerCase();
-    const good     = deck.matchups.slice(0, 2);
-    const bad      = deck.matchups.slice(-2).reverse();
 
+    // Chips: always by win rate (best 2 + worst 2 of original order)
+    const byWR  = [...deck.matchups].sort((a, b) => b.win_rate - a.win_rate);
+    const good  = byWR.slice(0, 2);
+    const bad   = byWR.slice(-2).reverse();
     const muChips = [
       ...good.map(m => `<span class="pick-mu-chip good" title="${m.games} games">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
       ...bad.map(m =>  `<span class="pick-mu-chip bad"  title="${m.games} games">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
     ].join('');
 
-    // Full matchup detail table
     let detailRows = '';
-    for (const m of deck.matchups) {
-      const wr = m.win_rate;
+    for (const m of sortedMatchups(deck.matchups)) {
+      const wr  = m.win_rate;
       const col = wr >= 0.52 ? 'var(--green)' : wr <= 0.48 ? 'var(--red2)' : 'var(--text2)';
       detailRows += `<tr>
         <td style="color:var(--text)">${shortName(m.opponent)}</td>
@@ -5774,16 +5782,23 @@ function renderPicks() {
         <td style="color:var(--text3)">${m.games}</td>
       </tr>`;
     }
+    const thStyle = 'cursor:pointer;user-select:none';
     const detail = detailRows ? `
-      <div class="pick-detail">
+      <div class="pick-detail" style="display:${isOpen ? 'block' : 'none'}">
         <table class="pick-mu-table">
-          <thead><tr><th>Opponent</th><th>Base</th><th>Win Rate</th><th>Meta %</th><th>Games</th></tr></thead>
+          <thead><tr>
+            <th>Opponent</th>
+            <th>Base</th>
+            <th style="${thStyle}" onclick="event.stopPropagation();setPicksMuSort('win_rate')">Win Rate ${sortArrow('win_rate')}</th>
+            <th style="${thStyle}" onclick="event.stopPropagation();setPicksMuSort('opponent_share')">Meta % ${sortArrow('opponent_share')}</th>
+            <th style="${thStyle}" onclick="event.stopPropagation();setPicksMuSort('games')">Games ${sortArrow('games')}</th>
+          </tr></thead>
           <tbody>${detailRows}</tbody>
         </table>
       </div>` : '';
 
     html += `
-    <div class="pick-row" onclick="this.classList.toggle('open')">
+    <div class="pick-row${isOpen ? ' open' : ''}" onclick="togglePickRow(${JSON.stringify(key)})">
       <div class="pick-rank ${rankCls}">#${rank}</div>
       <div class="pick-deck">
         <div class="pick-leader">
