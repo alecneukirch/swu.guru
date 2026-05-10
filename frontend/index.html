@@ -166,7 +166,7 @@ body::before {
   content: '';
   position: absolute;
   top: -6px;
-  right: 24px;
+  left: var(--arrow-left, 50%);
   width: 10px;
   height: 10px;
   background: var(--surface);
@@ -5721,9 +5721,21 @@ function renderDecklistsTable(rows) {
   setInterval(checkStatus, 30000);
 
   if (!localStorage.getItem('metacall_intro_seen')) {
-    document.querySelector('.nav-days-toggle')?.classList.add('highlight');
+    const toggle = document.querySelector('.nav-days-toggle');
+    toggle?.classList.add('highlight');
     const popup = document.getElementById('days-intro-popup');
-    if (popup) popup.style.display = 'block';
+    if (popup && toggle) {
+      const rect = toggle.getBoundingClientRect();
+      const popupW = 270;
+      let left = rect.left + rect.width / 2 - popupW / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - popupW - 8));
+      popup.style.left = left + 'px';
+      popup.style.right = 'auto';
+      popup.style.top = (rect.bottom + 10) + 'px';
+      const arrowLeft = Math.round(rect.left + rect.width / 2 - left - 5);
+      popup.style.setProperty('--arrow-left', arrowLeft + 'px');
+      popup.style.display = 'block';
+    }
   }
 })();
 
