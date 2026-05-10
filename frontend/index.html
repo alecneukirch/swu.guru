@@ -3064,13 +3064,12 @@ select option { background: var(--surface2); }
 <!-- NAV -->
 <nav id="nav">
   <div class="nav-logo">SWU<span>//</span>GURU</div>
-  <button class="nav-btn active" id="nav-home"    onclick="showPage('home')">Leaders</button>
-  <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
-
+  <button class="nav-btn active" id="nav-home"      onclick="showPage('home')">Leaders</button>
+  <button class="nav-btn"        id="nav-picks"     onclick="showPage('picks')">Picks</button>
+  <button class="nav-btn"        id="nav-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
   <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
   <button class="nav-btn"        id="nav-events"    onclick="showPage('events')">Events</button>
-  <button class="nav-btn"        id="nav-picks"     onclick="showPage('picks')">Picks</button>
   <div class="nav-days-toggle">
     <button class="days-btn active" id="days-all" onclick="setDays(null)">Full</button>
     <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
@@ -3422,6 +3421,10 @@ select option { background: var(--surface2); }
       <option value="10">10</option>
       <option value="20">20</option>
     </select>
+    <div class="sep"></div>
+    <span class="ctrl-label">Sort</span>
+    <button class="btn active" id="pk-sort-ev"    onclick="setPicksSort('ev')">Field EV</button>
+    <button class="btn"        id="pk-sort-share" onclick="setPicksSort('share')">Meta %</button>
   </div>
   <div id="picks-wrap" style="padding:0 24px 32px">
     <div class="loading" style="padding:24px">loading…</div>
@@ -5694,7 +5697,15 @@ async function populateMetaDropdowns() {
 
 // ══ PICKS PAGE ══════════════════════════════════════════════════════════════
 
-let _picksData = [];
+let _picksData  = [];
+let _picksSort  = 'ev';  // 'ev' | 'share'
+
+function setPicksSort(s) {
+  _picksSort = s;
+  document.getElementById('pk-sort-ev').classList.toggle('active', s === 'ev');
+  document.getElementById('pk-sort-share').classList.toggle('active', s === 'share');
+  renderPicks();
+}
 
 async function loadPicks() {
   const wrap = document.getElementById('picks-wrap');
@@ -5725,12 +5736,18 @@ function renderPicks() {
     return;
   }
 
-  const fmtEV = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
+  const sorted = [..._picksData].sort((a, b) =>
+    _picksSort === 'share'
+      ? b.meta_share - a.meta_share
+      : (b.field_ev ?? 0) - (a.field_ev ?? 0)
+  );
+
+  const fmtEV    = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
   const fmtShare = v => (v * 100).toFixed(1) + '%';
-  const evClass = v => v == null ? 'neu' : v >= 0.515 ? 'pos' : v <= 0.485 ? 'neg' : 'neu';
+  const evClass  = v => v == null ? 'neu' : v >= 0.515 ? 'pos' : v <= 0.485 ? 'neg' : 'neu';
 
   let html = '<div class="picks-list">';
-  _picksData.forEach((deck, i) => {
+  sorted.forEach((deck, i) => {
     const rank     = i + 1;
     const rankCls  = rank <= 3 ? 'top3' : '';
     const name     = shortName(deck.leader);
@@ -5769,7 +5786,10 @@ function renderPicks() {
     <div class="pick-row" onclick="this.classList.toggle('open')">
       <div class="pick-rank ${rankCls}">#${rank}</div>
       <div class="pick-deck">
-        <div class="pick-leader"><span class="${aspCls}" style="width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle"></span>${name}</div>
+        <div class="pick-leader">
+          <span class="${aspCls}" style="width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle"></span>
+          <a onclick="event.stopPropagation();openLeader(${JSON.stringify(deck.leader)})" style="color:inherit;text-decoration:none;cursor:pointer" title="Open leader page">${name}</a>
+        </div>
         <div class="pick-base">${deck.base_group}</div>
       </div>
       <div class="pick-share">
@@ -5792,11 +5812,11 @@ function renderPicks() {
 <!-- Mobile bottom nav (hidden on desktop via CSS) -->
 <nav id="mobile-nav">
   <button class="mob-nav-btn active" id="mob-home"      onclick="showPage('home')">Leaders</button>
+  <button class="mob-nav-btn"        id="mob-picks"     onclick="showPage('picks')">Picks</button>
   <button class="mob-nav-btn"        id="mob-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="mob-nav-btn"        id="mob-players"   onclick="showPage('players')">Players</button>
   <button class="mob-nav-btn"        id="mob-decklists" onclick="showPage('decklists')">Decks</button>
   <button class="mob-nav-btn"        id="mob-events"    onclick="showPage('events')">Events</button>
-  <button class="mob-nav-btn"        id="mob-picks"     onclick="showPage('picks')">Picks</button>
 </nav>
 </body>
 </html>
