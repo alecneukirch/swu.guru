@@ -1972,6 +1972,31 @@ select option { background: var(--surface2); }
   color: var(--bg);
 }
 
+/* Global cards page — aspect filter buttons */
+.cp-asp-btn {
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.cp-asp-btn:hover { border-color: var(--asp-color); color: var(--asp-color); }
+.cp-asp-btn.active {
+  border-color: var(--asp-color);
+  background: color-mix(in srgb, var(--asp-color) 18%, transparent);
+  color: var(--asp-color);
+}
+/* Cards page grid wrapper */
+#cp-grid-wrap {
+  padding: 0 24px 32px;
+}
+
 /* SB section divider in card grid */
 .ct-sb-divider {
   grid-column: 1 / -1;
@@ -3156,6 +3181,7 @@ select option { background: var(--surface2); }
   <button class="nav-btn"        id="nav-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
   <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
+  <button class="nav-btn"        id="nav-cards"      onclick="showPage('cards')">Cards</button>
   <button class="nav-btn"        id="nav-events"    onclick="showPage('events')">Events</button>
   <div class="nav-days-wrapper">
     <select id="nav-set" onchange="setNavMeta(this.value)">
@@ -3458,6 +3484,55 @@ select option { background: var(--surface2); }
   </div>
 </div>
 
+<!-- ══ CARDS PAGE ══ -->
+<div class="page" id="page-cards">
+  <div class="page-header">
+    <div>
+      <div class="page-title">CARDS</div>
+      <div class="page-sub" id="cards-sub">Card conversion rates across all decks</div>
+    </div>
+  </div>
+  <!-- Filter row 1: sort + min + search + aspects -->
+  <div class="controls" style="flex-wrap:wrap;gap:8px;row-gap:6px">
+    <div class="sort-btn-wrap">
+      <span style="color:var(--text3);margin-right:4px">Sort:</span>
+      <button class="btn active" id="cp-sort-decks" onclick="setCpSort('deck_count')">Decks</button>
+      <button class="btn"        id="cp-sort-conv"  onclick="setCpSort('conversion')">Conversion</button>
+      <button class="btn"        id="cp-sort-incl"  onclick="setCpSort('inclusion_rate')">Inclusion</button>
+      <button class="btn"        id="cp-sort-t8s"   onclick="setCpSort('t8_count')">T8s</button>
+    </div>
+    <div class="sep"></div>
+    <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
+    <input type="number" id="cp-min-decks" value="5" min="1" max="999"
+      style="width:52px;padding:3px 6px;font-size:12px" oninput="loadCardsPage()">
+    <div class="sep"></div>
+    <input type="text" id="cp-search" placeholder="Search cards…" oninput="filterGlobalCards()" style="width:130px;padding:3px 8px;font-size:12px">
+    <div class="sep"></div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">
+      <button class="cp-asp-btn" data-asp="Aggression" onclick="toggleCpAspect('Aggression',this)" style="--asp-color:var(--aggression)">Aggression</button>
+      <button class="cp-asp-btn" data-asp="Command"    onclick="toggleCpAspect('Command',this)"    style="--asp-color:var(--green)">Command</button>
+      <button class="cp-asp-btn" data-asp="Cunning"    onclick="toggleCpAspect('Cunning',this)"    style="--asp-color:var(--cunning)">Cunning</button>
+      <button class="cp-asp-btn" data-asp="Heroism"    onclick="toggleCpAspect('Heroism',this)"    style="--asp-color:var(--heroism)">Heroism</button>
+      <button class="cp-asp-btn" data-asp="Vigilance"  onclick="toggleCpAspect('Vigilance',this)"  style="--asp-color:var(--blue)">Vigilance</button>
+      <button class="cp-asp-btn" data-asp="Villainy"   onclick="toggleCpAspect('Villainy',this)"   style="--asp-color:var(--villainy-text)">Villainy</button>
+    </div>
+  </div>
+  <!-- Filter row 2: cost + trait + keyword -->
+  <div class="controls" style="padding-top:6px;flex-wrap:wrap;gap:8px">
+    <div id="cp-cost-filters" style="display:flex;gap:3px;flex-wrap:wrap"></div>
+    <div class="sep"></div>
+    <select id="cp-trait" onchange="filterGlobalCards()" style="padding:3px 8px;font-size:12px;height:28px">
+      <option value="">All traits</option>
+    </select>
+    <select id="cp-keyword" onchange="filterGlobalCards()" style="padding:3px 8px;font-size:12px;height:28px">
+      <option value="">All keywords</option>
+    </select>
+  </div>
+  <div class="card-grid" id="cp-grid" style="padding:0 24px 32px">
+    <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
+  </div>
+</div>
+
 <!-- ══ DECKLISTS PAGE ══ -->
 <div class="page" id="page-decklists">
   <div class="page-header">
@@ -3690,6 +3765,7 @@ function showPage(name) {
   if (name === 'decklists') loadDecklists();
   if (name === 'players')   loadPlayers();
   if (name === 'picks')     loadPicks();
+  if (name === 'cards')     loadCardsPage();
 }
 function goHome() {
   showPage('home');
@@ -3782,6 +3858,7 @@ function setDays(d) {
   const activePage = document.querySelector('.page.active')?.id;
   if (activePage === 'page-matrix') loadMatrix();
   else if (activePage === 'page-picks') loadPicks();
+  else if (activePage === 'page-cards') loadCardsPage();
   else if (currentLeader) {
     renderLeaderHero(currentLeader);
     if (leaderTab === 'cards') loadLeaderCards();
@@ -5745,6 +5822,7 @@ function setNavMeta(val) {
   else if (activePage === 'page-events') { loadEvents(); }
   else if (activePage === 'page-players') loadPlayers();
   else if (activePage === 'page-decklists') loadDecklists();
+  else if (activePage === 'page-cards')     loadCardsPage();
   else if (currentLeader) {
     renderLeaderHero(currentLeader);
     if (leaderTab === 'cards') loadLeaderCards();
@@ -5753,6 +5831,200 @@ function setNavMeta(val) {
   } else {
     loadHome();
   }
+}
+
+// ══ GLOBAL CARDS PAGE ═══════════════════════════════════════════════════════
+
+let _cpData        = [];
+let _cpSort        = 'deck_count';
+let _cpDir         = -1;
+const _cpActiveCosts   = new Set();
+const _cpActiveAspects = new Set();
+
+function setCpSort(col) {
+  _cpDir  = _cpSort === col ? _cpDir * -1 : -1;
+  _cpSort = col;
+  ['decks','conv','incl','t8s'].forEach(id => document.getElementById('cp-sort-'+id)?.classList.remove('active'));
+  const map = { deck_count:'decks', conversion:'conv', inclusion_rate:'incl', t8_count:'t8s' };
+  if (map[col]) document.getElementById('cp-sort-' + map[col])?.classList.add('active');
+  filterGlobalCards();
+}
+
+function toggleCpAspect(asp, btn) {
+  if (_cpActiveAspects.has(asp)) { _cpActiveAspects.delete(asp); btn.classList.remove('active'); }
+  else { _cpActiveAspects.add(asp); btn.classList.add('active'); }
+  filterGlobalCards();
+}
+
+function initCpCostFilters() {
+  const wrap = document.getElementById('cp-cost-filters');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  _cpActiveCosts.clear();
+  [0,1,2,3,4,5,6,7,8,'9+'].forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'cost-btn';
+    btn.textContent = c;
+    btn.dataset.cost = c;
+    btn.onclick = () => {
+      if (_cpActiveCosts.has(c)) { _cpActiveCosts.delete(c); btn.classList.remove('active'); }
+      else { _cpActiveCosts.add(c); btn.classList.add('active'); }
+      filterGlobalCards();
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+async function loadCardsPage() {
+  const wrap = document.getElementById('cp-grid');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
+  const minDecks = parseInt(document.getElementById('cp-min-decks')?.value) || 5;
+  let url = `/api/cards/stats?format=${currentFormat}&min_decks=${minDecks}`;
+  if (currentMeta) url += `&meta_id=${encodeURIComponent(currentMeta)}`;
+  if (currentDays) url += `&days=${currentDays}`;
+  try {
+    _cpData = await api(url) || [];
+    initCpCostFilters();
+    populateCpDropdowns(_cpData);
+    filterGlobalCards();
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state" style="padding:24px;grid-column:1/-1">// ${e.message}</div>`;
+  }
+}
+
+function populateCpDropdowns(data) {
+  const traitSet = new Set();
+  const kwSet    = new Set();
+  data.forEach(r => {
+    (r.traits   || []).forEach(t => traitSet.add(t));
+    (r.keywords || []).forEach(k => kwSet.add(k));
+  });
+  const traitSel = document.getElementById('cp-trait');
+  const kwSel    = document.getElementById('cp-keyword');
+  if (!traitSel || !kwSel) return;
+  const curTrait = traitSel.value;
+  const curKw    = kwSel.value;
+  traitSel.innerHTML = '<option value="">All traits</option>'
+    + [...traitSet].sort().map(t => `<option value="${t}"${t===curTrait?' selected':''}>${t}</option>`).join('');
+  kwSel.innerHTML = '<option value="">All keywords</option>'
+    + [...kwSet].sort().map(k => `<option value="${k}"${k===curKw?' selected':''}>${k}</option>`).join('');
+}
+
+function filterGlobalCardsRows(data) {
+  const q     = (document.getElementById('cp-search')?.value || '').toLowerCase();
+  const trait = document.getElementById('cp-trait')?.value || '';
+  const kw    = document.getElementById('cp-keyword')?.value || '';
+  let rows = data;
+  if (q) rows = rows.filter(r => (r.card_name||'').toLowerCase().includes(q));
+  if (_cpActiveCosts.size > 0) rows = rows.filter(r => {
+    const bucket = (r.cost ?? 0) >= 9 ? '9+' : (r.cost ?? 0);
+    return _cpActiveCosts.has(bucket);
+  });
+  if (_cpActiveAspects.size > 0) rows = rows.filter(r =>
+    [..._cpActiveAspects].some(a => (r.aspects||[]).includes(a))
+  );
+  if (trait) rows = rows.filter(r => (r.traits   || []).includes(trait));
+  if (kw)    rows = rows.filter(r => (r.keywords  || []).includes(kw));
+  return rows;
+}
+
+function filterGlobalCards() {
+  renderGlobalCards(filterGlobalCardsRows(_cpData));
+}
+
+function renderGlobalCards(rows) {
+  const wrap = document.getElementById('cp-grid');
+  if (!wrap) return;
+
+  const sub = document.getElementById('cards-sub');
+  if (sub) sub.textContent = rows.length
+    ? `${rows.length} cards · conversion vs meta baseline`
+    : 'no results';
+
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no cards matching filters</div>';
+    return;
+  }
+
+  const statSortCols = ['deck_count', 'inclusion_rate', 't8_count', 'avg_copies'];
+  const useTypeSections = statSortCols.includes(_cpSort);
+  const sectionKey = r => {
+    const t = r.card_type || 'Unit';
+    return t === 'Unit' ? (r.arena === 'Space' ? 'Space' : 'Ground') : t;
+  };
+  const SECTION_ORDER = { 'Ground': 0, 'Space': 1, 'Event': 2, 'Upgrade': 3 };
+
+  const sorted = [...rows].sort((a, b) => {
+    if (useTypeSections) {
+      const sa = SECTION_ORDER[sectionKey(a)] ?? 9, sb = SECTION_ORDER[sectionKey(b)] ?? 9;
+      if (sa !== sb) return sa - sb;
+      const ca = a.cost ?? 0, cb = b.cost ?? 0;
+      if (ca !== cb) return ca - cb;
+    }
+    let av = a[_cpSort], bv = b[_cpSort];
+    if (av == null) av = _cpDir > 0 ? Infinity : -Infinity;
+    if (bv == null) bv = _cpDir > 0 ? Infinity : -Infinity;
+    return _cpDir * (av - bv);
+  });
+
+  const sections = [];
+  if (useTypeSections) {
+    let cur = null;
+    for (const r of sorted) {
+      const t = sectionKey(r);
+      if (!cur || cur.type !== t) { cur = { type: t, rows: [] }; sections.push(cur); }
+      cur.rows.push(r);
+    }
+  } else {
+    sections.push({ type: null, rows: sorted });
+  }
+
+  let idx = 0;
+  wrap.innerHTML = sections.map(sec => {
+    const tiles = sec.rows.map(r => {
+      const i = idx++;
+      const cc   = convClass(r.conversion);
+      const safe = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+      const costVal = (r.cost != null && r.cost > 0) ? r.cost : (r.cost === 0 ? '0' : '');
+      const costBadge = costVal !== '' ? `<div class="ct-cost">${costVal}</div>` : '';
+      const { name: ctName, subtitle: ctSub } = cardNameParts(r.card_name);
+      return `<div class="card-tile conv-${cc}" data-card="${safe}" data-idx="${i}">
+  <div class="ct-art" id="cp-art-${i}"></div>
+  <div class="ct-scrim"></div>
+  <div class="ct-top">
+    <div class="ct-badge">${r.deck_count}<span class="ct-badge-label">decks</span></div>
+    <div class="ct-badge">${r.t8_count}<span class="ct-badge-label">t8s</span></div>
+  </div>
+  <div class="ct-bottom">
+    <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` data-tooltip="${ctSub}"` : ''}>${ctName}</div></div>
+    <div class="ct-stats">
+      <span class="ct-incl">${fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+
+    if (!useTypeSections || !sec.type) return tiles;
+    const typeLabel = sec.type === 'Ground' ? 'Ground Units' : sec.type === 'Space' ? 'Space Units' : sec.type + 's';
+    const secId = 'cp-sec-' + sec.type;
+    return `<div class="ct-type-section" id="${secId}">
+  <div class="ct-type-divider" onclick="toggleTypeSection('${secId}')">
+    <div class="ct-type-line"></div>
+    <span class="ct-type-label"><span class="ct-type-chevron">▾</span>${typeLabel}</span>
+    <div class="ct-type-line"></div>
+  </div>
+  ${tiles}
+</div>`;
+  }).join('');
+
+  wrap.onclick = e => {
+    const tile = e.target.closest('.card-tile[data-card]');
+    if (tile) openModal(tile.dataset.card);
+  };
+
+  sorted.forEach((r, i) => loadCardArt(r.card_name, 'cp-art-' + i, 'loaded'));
 }
 
 // ══ PICKS PAGE ══════════════════════════════════════════════════════════════
@@ -5903,6 +6175,7 @@ function renderPicks() {
   <button class="mob-nav-btn"        id="mob-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="mob-nav-btn"        id="mob-players"   onclick="showPage('players')">Players</button>
   <button class="mob-nav-btn"        id="mob-decklists" onclick="showPage('decklists')">Decks</button>
+  <button class="mob-nav-btn"        id="mob-cards"     onclick="showPage('cards')">Cards</button>
   <button class="mob-nav-btn"        id="mob-events"    onclick="showPage('events')">Events</button>
 </nav>
 

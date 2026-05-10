@@ -1088,6 +1088,95 @@ def cards_list(
     return rows
 
 
+@app.get("/api/cards/stats")
+def cards_stats(
+    format:    str           = Query("standard"),
+    meta_id:   Optional[str] = Query(None),
+    days:      Optional[int] = Query(None),
+    min_decks: int           = Query(5),
+):
+    """
+    All non-leader non-base cards with meta-wide conversion stats:
+    deck_count, t8_count, inclusion_rate, conversion vs. meta baseline.
+    Aspects, traits, keywords are returned for client-side filtering.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days)
+
+    rows = db.fetchall(f"""
+        WITH totals AS (
+            SELECT
+                COUNT(DISTINCT s.id)::INT AS total_decks,
+                COUNT(DISTINCT s.id) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                )::INT AS total_t8s
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE s.placement IS NOT NULL
+              {date_sql}
+        ),
+        card_stats AS (
+            SELECT
+                dc.card_name,
+                COUNT(DISTINCT s.id)::INT AS deck_count,
+                ROUND(SUM(dc.quantity)::numeric / NULLIF(COUNT(DISTINCT s.id),0)::numeric, 2) AS avg_copies,
+                COUNT(DISTINCT s.id) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                )::INT AS t8_count
+            FROM {t['decklist_cards']} dc
+            JOIN {t['standings']} s ON s.id = dc.standing_id
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE s.placement IS NOT NULL
+              AND dc.is_sideboard = false
+              {date_sql}
+            GROUP BY dc.card_name
+            HAVING COUNT(DISTINCT s.id) >= %s
+        )
+        SELECT
+            cs.card_name,
+            cs.deck_count,
+            cs.avg_copies,
+            cs.t8_count,
+            tot.total_decks,
+            tot.total_t8s,
+            ROUND(cs.deck_count::numeric / NULLIF(tot.total_decks,0)::numeric, 4) AS inclusion_rate,
+            ROUND(cs.t8_count::numeric / NULLIF(cs.deck_count,0)::numeric, 4) AS card_t8_rate,
+            ROUND(tot.total_t8s::numeric / NULLIF(tot.total_decks,0)::numeric, 4) AS baseline_t8_rate,
+            ROUND(
+                (cs.t8_count::numeric / NULLIF(cs.deck_count,0)::numeric)
+                / NULLIF(tot.total_t8s::numeric / NULLIF(tot.total_decks,0)::numeric, 0),
+            4) AS conversion,
+            c.type AS card_type,
+            COALESCE(c.cost, 0) AS cost,
+            c.arena,
+            c.aspects,
+            c.traits,
+            c.keywords,
+            c.front_image_url,
+            c.rarity
+        FROM card_stats cs
+        CROSS JOIN totals tot
+        JOIN (
+            SELECT DISTINCT ON (name, COALESCE(subtitle,''))
+                name, subtitle, type, cost, arena, aspects, traits, keywords,
+                front_image_url, rarity
+            FROM cards
+            WHERE variant_type = 'Standard'
+              AND is_leader = false
+              AND is_base   = false
+            ORDER BY name, COALESCE(subtitle,''), set_code DESC
+        ) c ON c.name = SPLIT_PART(cs.card_name, ' | ', 1)
+            AND (
+                SPLIT_PART(cs.card_name, ' | ', 2) = ''
+                OR c.subtitle = SPLIT_PART(cs.card_name, ' | ', 2)
+            )
+        WHERE c.type IS NOT NULL
+        ORDER BY cs.deck_count DESC, cs.t8_count DESC
+    """, date_params + date_params + [min_decks])
+
+    return rows
+
+
 @app.get("/api/cards/by-name/{name:path}")
 def card_by_name(name: str, subtitle: Optional[str] = Query(None), response: Response = None):
     """
