@@ -2045,7 +2045,48 @@ select option { background: var(--surface2); }
   border-top: 1px solid var(--border2);
 }
 
+/* ── Days toggle highlight (picks intro) ──────────────────── */
+@keyframes days-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,175,55,0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(212,175,55,0); }
+}
+.nav-days-toggle.highlight {
+  border-color: var(--gold);
+  animation: days-pulse 1.2s ease infinite;
+}
+
 /* ── Picks page ───────────────────────────────────────────── */
+.picks-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(212,175,55,0.07), rgba(212,175,55,0.03));
+  border: 1px solid rgba(212,175,55,0.35);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  max-width: 900px;
+}
+.picks-intro-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+.picks-intro-body { flex: 1; min-width: 0; }
+.picks-intro-title { font-weight: 700; color: var(--gold); font-size: 13px; margin-bottom: 4px; }
+.picks-intro-text  { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.picks-intro-text strong { color: var(--text); }
+.picks-intro-dismiss {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border: 1px solid rgba(212,175,55,0.4);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gold);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.picks-intro-dismiss:hover { background: rgba(212,175,55,0.1); }
+
 .picks-list {
   display: flex;
   flex-direction: column;
@@ -3067,7 +3108,7 @@ select option { background: var(--surface2); }
 <nav id="nav">
   <div class="nav-logo">SWU<span>//</span>GURU</div>
   <button class="nav-btn active" id="nav-home"      onclick="showPage('home')">Leaders</button>
-  <button class="nav-btn"        id="nav-picks"     onclick="showPage('picks')">Picks</button>
+  <button class="nav-btn"        id="nav-picks"     onclick="showPage('picks')">Meta Call</button>
   <button class="nav-btn"        id="nav-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
   <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
@@ -5713,6 +5754,14 @@ function setPicksMuSort(col) {
 }
 
 async function loadPicks() {
+  const firstVisit = !localStorage.getItem('metacall_intro_seen');
+
+  // On first visit, switch to 2W — setDays will re-invoke loadPicks
+  if (firstVisit && currentDays !== 14) {
+    setDays(14);
+    return;
+  }
+
   const wrap = document.getElementById('picks-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
@@ -5728,10 +5777,19 @@ async function loadPicks() {
     const total = d.total_decks || 0;
     document.getElementById('picks-sub').textContent =
       `${_picksData.length} decks · ${total.toLocaleString()} total decklists`;
+    if (firstVisit) {
+      document.querySelector('.nav-days-toggle')?.classList.add('highlight');
+    }
     renderPicks();
   } catch(e) {
     wrap.innerHTML = `<div class="empty-state" style="padding:24px">// ${e.message}</div>`;
   }
+}
+
+function dismissPicksIntro() {
+  localStorage.setItem('metacall_intro_seen', '1');
+  document.querySelector('.nav-days-toggle')?.classList.remove('highlight');
+  renderPicks();
 }
 
 function renderPicks() {
@@ -5755,7 +5813,19 @@ function renderPicks() {
     return _picksMuDir === -1 ? '↓' : '↑';
   };
 
-  let html = '<div class="picks-list">';
+  const showIntro = !localStorage.getItem('metacall_intro_seen');
+  let html = '';
+  if (showIntro) {
+    html += `<div class="picks-intro">
+      <div class="picks-intro-icon">💡</div>
+      <div class="picks-intro-body">
+        <div class="picks-intro-title">Showing the last 2 weeks</div>
+        <div class="picks-intro-text">Field EV is most meaningful over recent data. Use the <strong>Full / 4W / 2W</strong> toggle in the top nav to adjust the time window.</div>
+      </div>
+      <button class="picks-intro-dismiss" onclick="dismissPicksIntro()">Got it</button>
+    </div>`;
+  }
+  html += '<div class="picks-list">';
   _picksData.forEach((deck, i) => {
     const key      = `${deck.leader}|||${deck.base_key}`;
     const isOpen   = _picksOpenKeys.has(key);
@@ -5831,7 +5901,7 @@ function renderPicks() {
 <!-- Mobile bottom nav (hidden on desktop via CSS) -->
 <nav id="mobile-nav">
   <button class="mob-nav-btn active" id="mob-home"      onclick="showPage('home')">Leaders</button>
-  <button class="mob-nav-btn"        id="mob-picks"     onclick="showPage('picks')">Picks</button>
+  <button class="mob-nav-btn"        id="mob-picks"     onclick="showPage('picks')">Meta</button>
   <button class="mob-nav-btn"        id="mob-matrix"    onclick="showPage('matrix')">Matrix</button>
   <button class="mob-nav-btn"        id="mob-players"   onclick="showPage('players')">Players</button>
   <button class="mob-nav-btn"        id="mob-decklists" onclick="showPage('decklists')">Decks</button>
