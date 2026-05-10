@@ -2250,24 +2250,39 @@ def players(
               AND e.player_count IS NOT NULL
               {date_sql}
               {search_sql}
+        ),
+        aggregated AS (
+            SELECT
+                identity_id,
+                (ARRAY_AGG(display_name ORDER BY event_date DESC))[1] AS player_name,
+                COUNT(DISTINCT event_id)::INT                          AS events_played,
+                COUNT(*) FILTER (
+                    WHERE placement <= GREATEST(CEIL(player_count::numeric * 0.08)::INT, 1)
+                )::INT                                                 AS top8s,
+                COUNT(*) FILTER (WHERE placement = 1)::INT            AS wins,
+                (ARRAY_AGG(
+                    CASE WHEN leader IS NOT NULL
+                         THEN leader || COALESCE(' / ' || base, '') END
+                    ORDER BY event_date DESC
+                ) FILTER (WHERE leader IS NOT NULL))[1]               AS last_deck,
+                MAX(event_date)                                        AS last_played
+            FROM mapped
+            GROUP BY identity_id
         )
         SELECT
-            identity_id,
-            (ARRAY_AGG(display_name ORDER BY event_date DESC))[1] AS player_name,
-            COUNT(DISTINCT event_id)::INT                          AS events_played,
-            COUNT(*) FILTER (
-                WHERE placement <= GREATEST(CEIL(player_count::numeric * 0.08)::INT, 1)
-            )::INT                                                 AS top8s,
-            COUNT(*) FILTER (WHERE placement = 1)::INT            AS wins,
-            (ARRAY_AGG(
-                CASE WHEN leader IS NOT NULL
-                     THEN leader || COALESCE(' / ' || base, '') END
-                ORDER BY event_date DESC
-            ) FILTER (WHERE leader IS NOT NULL))[1]               AS last_deck,
-            MAX(event_date)                                        AS last_played
-        FROM mapped
-        GROUP BY identity_id
-        ORDER BY wins DESC, top8s DESC, events_played DESC
+            a.identity_id,
+            a.player_name,
+            a.events_played,
+            a.top8s,
+            a.wins,
+            a.last_deck,
+            a.last_played,
+            pi.hri_rating,
+            pi.hri_rd,
+            pi.melee_username AS hri_username
+        FROM aggregated a
+        LEFT JOIN player_identities pi ON pi.id::TEXT = a.identity_id
+        ORDER BY a.wins DESC, a.top8s DESC, a.events_played DESC
         LIMIT %s OFFSET %s
     """, date_params + search_param + [limit, offset])
 

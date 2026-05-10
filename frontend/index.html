@@ -3000,8 +3000,12 @@ select option { background: var(--surface2); }
 .pt-name:hover { color: var(--gold); }
 .pt-num    { font-family: var(--mono); color: var(--text2); text-align: right; }
 .pt-wins   { font-family: var(--mono); font-weight: 700; color: var(--gold); text-align: right; }
+.pt-hri    { font-family: var(--mono); font-size: 13px; text-align: right; white-space: nowrap; }
 .pt-deck   { font-size: 12px; color: var(--text3); }
 .pt-date   { font-family: var(--mono); font-size: 12px; color: var(--text3); white-space: nowrap; }
+.hri-link  { color: var(--blue); text-decoration: none; }
+.hri-link:hover { text-decoration: underline; }
+.hri-rd    { font-size: 11px; color: var(--text3); margin-left: 2px; }
 
 /* Player detail panel */
 #player-detail-panel {
@@ -5451,12 +5455,16 @@ function renderPlayersTable(rows) {
     const deckShort = parts[0] ? shortName(parts[0]) + (parts[1] ? ' / ' + parts[1] : '') : '—';
     const safe = (r.identity_id||'').replace(/'/g,"\\'");
     const safeName = (r.player_name||'').replace(/'/g,"\\'");
+    const hriCell = r.hri_rating
+      ? `<a class="hri-link" href="https://hri.gg/players/${encodeURIComponent(r.hri_username||r.player_name)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${r.hri_rating}<span class="hri-rd"> ±${r.hri_rd||'?'}</span></a>`
+      : `<span style="color:var(--text3)">—</span>`;
     return `<tr onclick="openPlayerDetail('${safe}', '${safeName}')">
   <td style="font-family:var(--mono);font-size:13px;color:var(--text3);width:40px">${i+1}</td>
   <td class="pt-name">${r.player_name || '—'}</td>
   <td class="pt-num">${r.events_played}</td>
   <td class="pt-num">${r.top8s}</td>
   <td class="pt-wins">${r.wins}</td>
+  <td class="pt-hri">${hriCell}</td>
   <td class="pt-deck">${deckShort}</td>
   <td class="pt-date">${r.last_played || '—'}</td>
 </tr>`;
@@ -5469,6 +5477,7 @@ function renderPlayersTable(rows) {
     ${th('events_played','Events','right')}
     ${th('top8s','Top 8s','right')}
     ${th('wins','Wins','right')}
+    ${th('hri_rating','HRI Rating','right')}
     ${th('last_deck','Last Deck')}
     ${th('last_played','Last Played')}
   </tr></thead>
@@ -5947,8 +5956,6 @@ function renderGlobalCards(rows) {
     return;
   }
 
-  const statSortCols = ['deck_count', 'inclusion_rate', 't8_count', 'avg_copies'];
-  const useTypeSections = statSortCols.includes(_cpSort);
   const sectionKey = r => {
     const t = r.card_type || 'Unit';
     return t === 'Unit' ? (r.arena === 'Space' ? 'Space' : 'Ground') : t;
@@ -5956,12 +5963,8 @@ function renderGlobalCards(rows) {
   const SECTION_ORDER = { 'Ground': 0, 'Space': 1, 'Event': 2, 'Upgrade': 3 };
 
   const sorted = [...rows].sort((a, b) => {
-    if (useTypeSections) {
-      const sa = SECTION_ORDER[sectionKey(a)] ?? 9, sb = SECTION_ORDER[sectionKey(b)] ?? 9;
-      if (sa !== sb) return sa - sb;
-      const ca = a.cost ?? 0, cb = b.cost ?? 0;
-      if (ca !== cb) return ca - cb;
-    }
+    const sa = SECTION_ORDER[sectionKey(a)] ?? 9, sb = SECTION_ORDER[sectionKey(b)] ?? 9;
+    if (sa !== sb) return sa - sb;
     let av = a[_cpSort], bv = b[_cpSort];
     if (av == null) av = _cpDir > 0 ? Infinity : -Infinity;
     if (bv == null) bv = _cpDir > 0 ? Infinity : -Infinity;
@@ -5969,15 +5972,11 @@ function renderGlobalCards(rows) {
   });
 
   const sections = [];
-  if (useTypeSections) {
-    let cur = null;
-    for (const r of sorted) {
-      const t = sectionKey(r);
-      if (!cur || cur.type !== t) { cur = { type: t, rows: [] }; sections.push(cur); }
-      cur.rows.push(r);
-    }
-  } else {
-    sections.push({ type: null, rows: sorted });
+  let cur = null;
+  for (const r of sorted) {
+    const t = sectionKey(r);
+    if (!cur || cur.type !== t) { cur = { type: t, rows: [] }; sections.push(cur); }
+    cur.rows.push(r);
   }
 
   let idx = 0;
@@ -6006,7 +6005,7 @@ function renderGlobalCards(rows) {
 </div>`;
     }).join('');
 
-    if (!useTypeSections || !sec.type) return tiles;
+    if (!sec.type) return tiles;
     const typeLabel = sec.type === 'Ground' ? 'Ground Units' : sec.type === 'Space' ? 'Space Units' : sec.type + 's';
     const secId = 'cp-sec-' + sec.type;
     return `<div class="ct-type-section" id="${secId}">
