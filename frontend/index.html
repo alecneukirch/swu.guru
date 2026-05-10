@@ -5798,7 +5798,7 @@ function renderPicks() {
       </div>` : '';
 
     html += `
-    <div class="pick-row${isOpen ? ' open' : ''}" onclick="togglePickRow(${JSON.stringify(key)})">
+    <div class="pick-row${isOpen ? ' open' : ''}" onclick="togglePickRow('${key}')">
       <div class="pick-rank ${rankCls}">#${rank}</div>
       <div class="pick-deck">
         <div class="pick-leader">
