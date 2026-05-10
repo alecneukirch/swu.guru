@@ -3456,14 +3456,6 @@ select option { background: var(--surface2); }
     <select id="pk-set" onchange="loadPicks()">
       <option value="">All metas</option>
     </select>
-    <div class="sep"></div>
-    <span class="ctrl-label" style="color:var(--text3);font-size:12px">Min games</span>
-    <select id="pk-min-games" onchange="loadPicks()" style="width:70px">
-      <option value="3">3</option>
-      <option value="5" selected>5</option>
-      <option value="10">10</option>
-      <option value="20">20</option>
-    </select>
   </div>
   <div id="picks-wrap" style="padding:0 24px 32px">
     <div class="loading" style="padding:24px">loading…</div>
@@ -5766,7 +5758,7 @@ async function loadPicks() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   const meta      = document.getElementById('pk-set')?.value || '';
-  const minGames  = document.getElementById('pk-min-games')?.value || '5';
+  const minGames  = 2;
   const minDecks  = currentFormat === 'eternal' ? 3 : 10;
   let url = `/api/meta-call?min_decks=${minDecks}&min_games=${minGames}&top_n=30&format=${currentFormat}`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
