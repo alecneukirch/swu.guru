@@ -5747,7 +5747,7 @@ function renderPicks() {
 
   const sortedMatchups = (matchups) => {
     const col = _picksMuSort;
-    return [...matchups].sort((a, b) => _picksMuDir * (b[col] - a[col]));
+    return [...matchups].sort((a, b) => _picksMuDir * (a[col] - b[col]));
   };
 
   const sortArrow = col => {
