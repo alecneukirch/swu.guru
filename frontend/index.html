@@ -2140,13 +2140,17 @@ select option { background: var(--surface2); }
   padding: 4px 8px;
   border-bottom: 1px solid var(--border2);
 }
+.pick-mu-table th:nth-child(3),
+.pick-mu-table th:nth-child(4),
+.pick-mu-table th:nth-child(5) { text-align: right; }
 .pick-mu-table td {
   padding: 5px 8px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
   color: var(--text2);
 }
 .pick-mu-table td:nth-child(3),
-.pick-mu-table td:nth-child(4) {
+.pick-mu-table td:nth-child(4),
+.pick-mu-table td:nth-child(5) {
   font-family: var(--mono);
   text-align: right;
 }
@@ -5693,8 +5697,8 @@ async function populateMetaDropdowns() {
 
 let _picksData     = [];
 let _picksOpenKeys = new Set();   // tracks which expanded rows are open
-let _picksMuSort   = 'win_rate';  // column to sort matchup detail by
-let _picksMuDir    = -1;          // -1 = desc, 1 = asc
+let _picksMuSort   = 'games';  // column to sort matchup detail by
+let _picksMuDir    = -1;       // -1 = desc, 1 = asc
 
 function togglePickRow(key) {
   if (_picksOpenKeys.has(key)) _picksOpenKeys.delete(key);
