@@ -3613,9 +3613,9 @@ select option { background: var(--surface2); }
     <div class="sep"></div>
     <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
       Min pilot ELO
-      <input type="range" id="mx-elo-slider" min="0" max="2000" step="50" value="0"
+      <input type="range" id="mx-elo-slider" min="0" max="2000" step="50" value="1500"
         style="width:140px;accent-color:var(--gold)" oninput="onMatrixEloSlide(this.value)">
-      <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">No filter</span>
+      <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">≥ 1500</span>
     </label>
   </div>
   <div style="padding:0 24px 8px">
@@ -5669,7 +5669,7 @@ let _matrixData = null;
 
 let matrixRows  = 20;
 let matrixCols  = 20;
-let matrixMinElo = 0;
+let matrixMinElo = 1500;
 let _matrixEloTimer = null;
 
 // Cost filter state
