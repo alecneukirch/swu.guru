@@ -2325,9 +2325,13 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
     """Leader+base combo breakdown for a single event."""
     t = _tnames(format)
 
+    ev_meta = db.fetchone(f"SELECT player_count FROM {t['events']} WHERE id = %s", [event_id])
+    player_count = ev_meta['player_count'] if ev_meta else None
+
     combos = db.fetchall(f"""
         WITH ev AS (SELECT player_count FROM {t['events']} WHERE id = %s),
-        top_n AS (SELECT GREATEST(CEIL((SELECT player_count FROM ev)::numeric * 0.08)::INT, 1) AS cutoff),
+        top_n  AS (SELECT GREATEST(CEIL((SELECT player_count FROM ev)::numeric * 0.08)::INT, 1) AS cutoff),
+        day2_n AS (SELECT GREATEST(CEIL((SELECT player_count FROM ev)::numeric * 0.13)::INT, 1) AS cutoff),
         standings AS (
             SELECT s.leader, s.base, s.placement, s.player_name, s.melee_player_id
             FROM {t['standings']} s
@@ -2365,7 +2369,8 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         SELECT
             s.leader, s.base,
             COUNT(*)::INT AS total_decks,
-            COUNT(*) FILTER (WHERE s.placement <= (SELECT cutoff FROM top_n))::INT AS top8_count,
+            COUNT(*) FILTER (WHERE s.placement <= (SELECT cutoff FROM top_n))::INT  AS top8_count,
+            COUNT(*) FILTER (WHERE s.placement <= (SELECT cutoff FROM day2_n))::INT AS day2_count,
             COUNT(*) FILTER (WHERE s.placement = 1)::INT AS wins,
             MIN(s.placement) AS best_placement,
             COALESCE(ms.match_wins,  0)::INT AS match_wins,
@@ -2420,6 +2425,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
             'base_group':     base_group,
             'total_decks':    r['total_decks'],
             'top8_count':     r['top8_count'],
+            'day2_count':     r['day2_count'],
             'wins':           r['wins'],
             'best_placement': r['best_placement'],
             'match_wins':     r['match_wins'],
@@ -2429,7 +2435,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
             'rated_count':    r['rated_count'],
             'placements':     r['placements'] or [],
         })
-    return result
+    return {'player_count': player_count, 'combos': result}
 
 
 @app.get("/api/players")
