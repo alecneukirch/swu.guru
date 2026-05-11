@@ -663,37 +663,41 @@ def import_tournament(
     }, tbl=tbls["events"])
 
     # Step 2: standings from the best available round.
-    # Prefer Finals/Semifinals (they have correct final placements).
-    # Fall back to last completed Swiss round if elimination rounds aren't done.
-    completed = [r for r in standings_rounds if r["completed"]]
+    # Try rounds in priority order; fall back if a round returns empty standings.
+    elim_order = {"final": 3, "semifinal": 2, "quarterfinal": 1, "top ": 0}
 
-    elim_keywords = ("final", "semifinal", "quarterfinal", "top ")
-    elim_rounds = [r for r in completed
-                   if any(r["name"].lower().startswith(k) for k in elim_keywords)]
-
-    # Check if Finals exists but isn't complete — we'll use best completed elim instead.
-    all_finals = [r for r in standings_rounds if r["name"].lower().startswith("final")]
-    finals_pending = all_finals and not all_finals[-1]["completed"]
-
-    if elim_rounds:
-        # Use the best completed elimination round (Finals > Semifinals > Quarterfinals)
-        elim_order = {"final": 3, "semifinal": 2, "quarterfinal": 1, "top ": 0}
-        elim_rounds.sort(key=lambda r: max(
+    def elim_priority(r):
+        return max(
             (v for k, v in elim_order.items() if r["name"].lower().startswith(k)),
-            default=0
-        ))
-        final_round = elim_rounds[-1]
-        if finals_pending:
-            log.info(f"  Finals not complete — using {final_round['name']} as fallback")
-    elif completed:
-        # No elimination rounds done yet — use last completed Swiss round
-        final_round = completed[-1]
-    else:
-        final_round = standings_rounds[-1]
+            default=-1
+        )
+
+    # Candidates: completed elim rounds (best first), then completed swiss (last first)
+    completed = [r for r in standings_rounds if r["completed"]]
+    elim_rounds = sorted(
+        [r for r in completed if elim_priority(r) >= 0],
+        key=elim_priority, reverse=True
+    )
+    swiss_rounds = [r for r in completed if elim_priority(r) < 0]
+
+    candidates = elim_rounds + list(reversed(swiss_rounds))
+    if not candidates:
+        candidates = list(reversed(standings_rounds))
+
+    standings = []
+    final_round = None
+    for candidate in candidates:
+        raw_standings = melee_round_standings(candidate["id"])
+        standings = [parse_standing_row(r) for r in raw_standings]
+        if standings:
+            if final_round is not None:
+                log.info(f"  Falling back from empty round — using {candidate['name']}")
+            final_round = candidate
+            break
+        log.info(f"  {candidate['name']} returned 0 standings, trying next round…")
+        final_round = candidate  # track last tried for logging
 
     log.info(f"  Standings from: {final_round['name']} (id={final_round['id']})")
-    raw_standings = melee_round_standings(final_round["id"])
-    standings     = [parse_standing_row(r) for r in raw_standings]
     log.info(f"  {len(standings)} players")
 
     if not standings:
