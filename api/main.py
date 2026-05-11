@@ -1897,6 +1897,7 @@ def matchup_matrix_by_base(
     min_games: int            = Query(1,   description="Min H2H games for a cell to show"),
     top_n:     int            = Query(40,  description="Max combos to include"),
     top8_only: bool           = Query(False, description="Only count matches where at least one player made top 8"),
+    min_elo:   int            = Query(0,   description="Min HRI rating for both pilots (0 = no filter)"),
     format:    str            = Query("standard"),
     days:      Optional[int]  = Query(None),
 ):
@@ -1976,35 +1977,40 @@ def matchup_matrix_by_base(
     all_leaders = list({c["leader"] for c in combos})
     ldr_ph = ','.join(['%s'] * len(all_leaders))
 
-    # top8_join and top8_where are paired: the join brings in placement data,
-    # the where clause filters to matches involving at least one top-8 finisher.
-    # Both must be interpolated into the same query or neither should be.
-    top8_join  = ""
-    top8_where = ""
+    extra_join  = ""
+    extra_where = ""
     if top8_only:
-        # Only matches where at least one player made top 8 in their event
-        top8_join  = f"""
+        extra_join  = f"""
             LEFT JOIN {t['standings']} s1t ON s1t.id = m.p1_standing_id
             LEFT JOIN {t['standings']} s2t ON s2t.id = m.p2_standing_id
             LEFT JOIN {t['events']}    et  ON et.id  = m.event_id"""
-        top8_where = """
+        extra_where = """
             AND (
                 s1t.placement <= GREATEST(CEIL(et.player_count::numeric * 0.08)::INT, 1)
                 OR
                 s2t.placement <= GREATEST(CEIL(et.player_count::numeric * 0.08)::INT, 1)
             )"""
+    elif min_elo > 0:
+        extra_join  = f"""
+            LEFT JOIN {t['standings']} s1e ON s1e.id = m.p1_standing_id
+            LEFT JOIN player_id_map pm1e  ON pm1e.melee_player_id = s1e.melee_player_id AND pm1e.status != 'rejected'
+            LEFT JOIN player_identities pi1e ON pi1e.id = pm1e.identity_id
+            LEFT JOIN {t['standings']} s2e ON s2e.id = m.p2_standing_id
+            LEFT JOIN player_id_map pm2e  ON pm2e.melee_player_id = s2e.melee_player_id AND pm2e.status != 'rejected'
+            LEFT JOIN player_identities pi2e ON pi2e.id = pm2e.identity_id"""
+        extra_where = f"AND pi1e.hri_rating >= {int(min_elo)} AND pi2e.hri_rating >= {int(min_elo)}"
 
     matches = db.fetchall(f"""
         SELECT m.p1_leader, m.p1_base, m.p2_leader, m.p2_base, m.winner
         FROM {t['matches']} m
         JOIN {t['events']} e ON e.id = m.event_id
-        {top8_join}
+        {extra_join}
         WHERE m.winner IS NOT NULL
           AND m.p1_leader IS NOT NULL AND m.p2_leader IS NOT NULL
           AND m.p1_leader IN ({ldr_ph}) AND m.p2_leader IN ({ldr_ph})
           AND m.p1_leader != m.p2_leader
           AND e.date <= CURRENT_DATE {date_sql}
-          {top8_where}
+          {extra_where}
     """, all_leaders + all_leaders + date_params)
 
     # Map base -> combo_key for fast lookup

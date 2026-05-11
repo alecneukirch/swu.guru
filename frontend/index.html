@@ -3611,7 +3611,12 @@ select option { background: var(--surface2); }
   </div>
   <div class="controls">
     <div class="sep"></div>
-    <button class="btn" id="mx-top8-btn" onclick="toggleMatrixTop8()" title="Only count matches where at least one player made top 8">Top 8 only</button>
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
+      Min pilot ELO
+      <input type="range" id="mx-elo-slider" min="0" max="2000" step="50" value="0"
+        style="width:140px;accent-color:var(--gold)" oninput="onMatrixEloSlide(this.value)">
+      <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">No filter</span>
+    </label>
   </div>
   <div style="padding:0 24px 8px">
     <input type="text" id="mx-search" placeholder="Filter leaders…" oninput="filterMatrix()"
@@ -5664,7 +5669,8 @@ let _matrixData = null;
 
 let matrixRows  = 20;
 let matrixCols  = 20;
-let matrixTop8  = false;
+let matrixMinElo = 0;
+let _matrixEloTimer = null;
 
 // Cost filter state
 const _activeCosts = new Set();
@@ -5740,11 +5746,12 @@ function filterMatrix() {
   });
 }
 
-function toggleMatrixTop8() {
-  matrixTop8 = !matrixTop8;
-  const btn = document.getElementById('mx-top8-btn');
-  if (btn) btn.classList.toggle('active', matrixTop8);
-  loadMatrix().then(() => filterMatrix());
+function onMatrixEloSlide(val) {
+  matrixMinElo = parseInt(val, 10);
+  const lbl = document.getElementById('mx-elo-label');
+  if (lbl) lbl.textContent = matrixMinElo > 0 ? `≥ ${matrixMinElo}` : 'No filter';
+  clearTimeout(_matrixEloTimer);
+  _matrixEloTimer = setTimeout(() => loadMatrix().then(() => filterMatrix()), 400);
 }
 
 function showMoreMatrixRows() {
@@ -5768,7 +5775,7 @@ async function loadMatrix() {
   const minDecks = currentFormat === 'eternal' ? 1 : 5;
   let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
-  if (matrixTop8)  url += `&top8_only=true`;
+  if (matrixMinElo > 0) url += `&min_elo=${matrixMinElo}`;
   if (currentDays) url += `&days=${currentDays}`;
 
   try {
