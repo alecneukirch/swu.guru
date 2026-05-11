@@ -5957,7 +5957,7 @@ function filterGlobalCardsRows(data) {
     return _cpActiveCosts.has(bucket);
   });
   if (_cpActiveAspects.size > 0) rows = rows.filter(r =>
-    [..._cpActiveAspects].some(a => (r.aspects||[]).includes(a))
+    [..._cpActiveAspects].every(a => (r.aspects||[]).includes(a))
   );
   if (trait) rows = rows.filter(r => (r.traits   || []).includes(trait));
   if (kw)    rows = rows.filter(r => (r.keywords  || []).includes(kw));
