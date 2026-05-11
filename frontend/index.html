@@ -6711,7 +6711,7 @@ function renderPicks() {
     const rank    = i + 1;
     const rankCls = rank <= 3 ? 'top3' : '';
     const name    = shortName(deck.leader);
-    const asp     = aspect(deck.leader);
+    const asp     = deck.base_aspect || 'none';
     const aspCls  = 'lc-aspect aspect-' + asp.toLowerCase();
 
     const positives = deck.matchups.filter(m => m.win_rate > 0.5).sort((a, b) => b.games - a.games);

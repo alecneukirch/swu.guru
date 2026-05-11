@@ -2170,7 +2170,8 @@ def meta_call(
         combo   = f"{r['leader']}|||{grp_key}"
         if combo not in groups:
             groups[combo] = {"leader": r["leader"], "base_group": grp_lbl,
-                             "base_key": grp_key, "bases": [], "decks": 0}
+                             "base_key": grp_key, "base_aspect": aspect,
+                             "bases": [], "decks": 0}
         groups[combo]["decks"] += r["decks"]
         if r["base"] not in groups[combo]["bases"]:
             groups[combo]["bases"].append(r["base"])
@@ -2246,10 +2247,11 @@ def meta_call(
         matchups.sort(key=lambda x: -x["win_rate"])
 
         result.append({
-            "leader":     deck["leader"],
-            "base_group": deck["base_group"],
-            "base_key":   deck["base_key"],
-            "bases":      deck["bases"],
+            "leader":       deck["leader"],
+            "base_group":   deck["base_group"],
+            "base_key":     deck["base_key"],
+            "base_aspect":  deck["base_aspect"],
+            "bases":        deck["bases"],
             "decks":      deck["decks"],
             "meta_share": round(deck_share, 4),
             "field_ev":   field_ev,
