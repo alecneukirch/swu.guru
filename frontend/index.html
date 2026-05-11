@@ -4038,7 +4038,21 @@ function routeFromHash() {
   }
   if (params.event) {
     const ev = eventsData.find(e => String(e.id) === String(params.event));
-    openEvent(params.event, ev?.name || 'Event', ev?.date, ev?.player_count);
+    if (ev) {
+      openEvent(params.event, ev.name, ev.date, ev.player_count);
+    } else {
+      // eventsData not loaded yet — open with placeholder then fill in header once fetched
+      openEvent(params.event, '', '', '');
+      api(`/api/events?limit=1&format=${currentFormat}`).then(() => {
+        const found = eventsData.find(e => String(e.id) === String(params.event));
+        if (found && currentEventId === params.event) {
+          document.getElementById('ep-title').textContent = found.name || '—';
+          document.getElementById('bc-event-name').textContent = found.name || 'Event';
+          const sub = [found.date, found.player_count ? found.player_count + ' players' : null].filter(Boolean).join(' · ');
+          document.getElementById('ep-sub').textContent = sub;
+        }
+      }).catch(() => {});
+    }
     return true;
   }
   const page = hash.replace(/^#/, '');
@@ -4191,6 +4205,40 @@ async function fetchLeaderCard(leaderName) {
 }
 
 
+function mkCard(r, i, conv, maxD, pfx = 'limg') {
+  const asp = aspect(r.leader);
+  const t8p = fmtPct(r.t8_rate);
+  const mp  = fmtPct(r.meta_share);
+  const cv  = fmtConv(conv);
+  const cc  = convClass(conv);
+  const barW = Math.round((r.total_decks / maxD) * 100);
+  const safe      = r.leader.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  const safeKey   = (r.base_key || '').replace(/"/g,'&quot;');
+  const safeBases = (r.bases || []).join(',').replace(/"/g,'&quot;');
+  const eloColor = r.avg_hri_rating >= 1700 ? 'var(--green)' : r.avg_hri_rating >= 1550 ? 'var(--gold)' : 'var(--text2)';
+  const eloBadge = r.avg_hri_rating
+    ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
+    : '';
+  return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
+  <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
+  ${eloBadge}
+  <div class="lc-body">
+    <div class="lc-rank" id="${pfx}-rank-${i}"></div>
+    <div class="lc-name">${shortName(r.leader)}</div>
+    <div class="lc-base">${r.base_group || '—'}</div>
+    <div class="lc-conversion ${cc}" data-tooltip="${convTooltip(conv)}">${convArrow(conv)} ${cv}</div>
+    <div class="lc-bar"><div class="lc-bar-fill" style="width:${barW}%"></div></div>
+    <div class="lc-stats">
+      <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">${r.total_decks}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold)">${mp}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:${r.t8_rate>=0.2?'var(--green)':r.t8_rate>=0.12?'var(--gold)':'var(--text2)'}">${t8p}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${r.wins}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${r.match_win_rate>=0.52?'var(--green)':r.match_win_rate>0?'var(--text2)':'var(--text3)'}">${r.match_games>0?Math.round(r.match_win_rate*100)+'%':'—'}</div></div>
+    </div>
+  </div>
+</div>`;
+}
+
 function renderLeaderGrid() {
   const search = document.getElementById('home-search').value.toLowerCase();
   const grid   = document.getElementById('leader-grid');
@@ -4242,40 +4290,6 @@ function renderLeaderGrid() {
   let imgIdx = 0;
   const allRows = [];
 
-  function mkCard(r, i, conv, pfx = 'limg') {
-    const asp = aspect(r.leader);
-    const t8p = fmtPct(r.t8_rate);
-    const mp  = fmtPct(r.meta_share);
-    const cv  = fmtConv(conv);
-    const cc  = convClass(conv);
-    const barW = Math.round((r.total_decks / maxD) * 100);
-    const safe      = r.leader.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-    const safeKey   = (r.base_key || '').replace(/"/g,'&quot;');
-    const safeBases = (r.bases || []).join(',').replace(/"/g,'&quot;');
-    const eloColor = r.avg_hri_rating >= 1700 ? 'var(--green)' : r.avg_hri_rating >= 1550 ? 'var(--gold)' : 'var(--text2)';
-    const eloBadge = r.avg_hri_rating
-      ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
-      : '';
-    return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
-  <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
-  ${eloBadge}
-  <div class="lc-body">
-    <div class="lc-rank" id="${pfx}-rank-${i}"></div>
-    <div class="lc-name">${shortName(r.leader)}</div>
-    <div class="lc-base">${r.base_group || '—'}</div>
-    <div class="lc-conversion ${cc}" data-tooltip="${convTooltip(conv)}">${convArrow(conv)} ${cv}</div>
-    <div class="lc-bar"><div class="lc-bar-fill" style="width:${barW}%"></div></div>
-    <div class="lc-stats">
-      <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">${r.total_decks}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold)">${mp}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:${r.t8_rate>=0.2?'var(--green)':r.t8_rate>=0.12?'var(--gold)':'var(--text2)'}">${t8p}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${r.wins}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${r.match_win_rate>=0.52?'var(--green)':r.match_win_rate>0?'var(--text2)':'var(--text3)'}">${r.match_games>0?Math.round(r.match_win_rate*100)+'%':'—'}</div></div>
-    </div>
-  </div>
-</div>`;
-  }
-
   TIER_ORDER.forEach(t => {
     const group = byTier[t];
     if (!group.length) return;
@@ -4284,7 +4298,7 @@ function renderLeaderGrid() {
     html += `<div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
-      html += mkCard(r, i, r._conv);
+      html += mkCard(r, i, r._conv, maxD);
       allRows.push({ r, i });
     });
     html += `</div>`;
@@ -4296,7 +4310,7 @@ function renderLeaderGrid() {
     html += `<div class="tier-section-grid rogue-grid">`;
     rogueRows.forEach(r => {
       const i = imgIdx++;
-      html += mkCard(r, i, r.conversion);
+      html += mkCard(r, i, r.conversion, maxD);
       allRows.push({ r, i });
     });
     html += `</div>`;
@@ -5156,7 +5170,7 @@ function renderEvents(rows) {
       ? `<a href="${e.melee_url}" target="_blank" class="btn" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation()">${upcoming ? 'INFO↗' : 'MELEE↗'}</a>`
       : '';
     const cls = [upcoming ? 'ev-upcoming' : '', !upcoming ? 'ev-clickable' : ''].filter(Boolean).join(' ');
-    html += `<tr class="${cls}" data-ev-id="${e.id}" data-ev-name="${(e.name||'').replace(/"/g,'&quot;')}" data-ev-date="${e.date||''}" data-ev-players="${e.player_count||''}">
+    html += `<tr class="${cls}" data-ev-id="${e.id}" data-ev-name="${(e.name||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" data-ev-date="${e.date||''}" data-ev-players="${e.player_count||''}">
   <td>${e.name || '—'}</td>
   <td>${e.date || '—'}</td>
   <td>${[e.city,e.country].filter(Boolean).join(', ') || '—'}</td>
@@ -5276,7 +5290,7 @@ function renderEventGrid() {
     html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div><div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
-      html += mkCard(r, i, r._conv, 'ep');
+      html += mkCard(r, i, r._conv, maxD, 'ep');
       allRows.push({ r, i });
     });
     html += `</div>`;
