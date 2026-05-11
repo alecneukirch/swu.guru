@@ -1190,6 +1190,28 @@ select option { background: var(--surface2); }
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
 }
+.lc-elo-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(9,9,15,0.78);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.lc-elo-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
 .lc-stat-label { font-size: 12px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
 .lc-stat-val   { font-family: var(--mono); font-size: 16px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
 
@@ -4036,8 +4058,13 @@ function renderLeaderGrid() {
     const safe      = r.leader.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     const safeKey   = (r.base_key || '').replace(/"/g,'&quot;');
     const safeBases = (r.bases || []).join(',').replace(/"/g,'&quot;');
+    const eloColor = r.avg_hri_rating >= 1700 ? 'var(--green)' : r.avg_hri_rating >= 1550 ? 'var(--gold)' : 'var(--text2)';
+    const eloBadge = r.avg_hri_rating
+      ? `<div class="lc-elo-badge" data-tooltip="Avg HRI Premier rating of players piloting this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
+      : '';
     return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
   <div class="lc-img-wrap" id="limg-wrap-${i}"></div>
+  ${eloBadge}
   <div class="lc-body">
     <div class="lc-rank" id="lc-rank-${i}"></div>
     <div class="lc-name">${shortName(r.leader)}</div>
@@ -4050,7 +4077,6 @@ function renderLeaderGrid() {
       <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:${r.t8_rate>=0.2?'var(--green)':r.t8_rate>=0.12?'var(--gold)':'var(--text2)'}">${t8p}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${r.wins}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${r.match_win_rate>=0.52?'var(--green)':r.match_win_rate>0?'var(--text2)':'var(--text3)'}">${r.match_games>0?Math.round(r.match_win_rate*100)+'%':'—'}</div></div>
-      <div class="lc-stat" data-tooltip="Avg HRI Premier rating of players who piloted this leader"><div class="lc-stat-label">Avg ELO</div><div class="lc-stat-val" style="color:${r.avg_hri_rating>=1700?'var(--green)':r.avg_hri_rating>=1550?'var(--gold)':r.avg_hri_rating?'var(--text2)':'var(--text3)'}">${r.avg_hri_rating||'—'}</div></div>
     </div>
   </div>
 </div>`;

@@ -433,6 +433,26 @@ def leaders_by_base(
     total_all_t8s   = sum(r['top8_count']  for r in rows)
     meta_t8_rate    = (total_all_t8s / total_all_decks) if total_all_decks else 0
 
+    # Avg HRI Premier rating per (leader, base) — weighted into combo groups below
+    hri_rows = db.fetchall(f"""
+        SELECT
+            s.leader,
+            s.base,
+            ROUND(AVG(pi.hri_rating))::INT AS avg_hri_rating,
+            COUNT(pi.hri_rating)           AS rated_count
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map m ON m.melee_player_id = s.melee_player_id
+            AND m.status != 'rejected'
+        JOIN player_identities pi ON pi.id = m.identity_id
+        WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          {date_sql}
+        GROUP BY s.leader, s.base
+    """, date_params)
+    hri_by_pair = {(r['leader'], r['base']): r for r in hri_rows}
+
     # Aggregate by leader + base group
     groups: dict = {}
     for r in rows:
@@ -462,6 +482,8 @@ def leaders_by_base(
                 'wins':             0,
                 '_match_wins':      0,
                 '_match_games':     0,
+                '_hri_sum':         0,
+                '_hri_count':       0,
                 'bases':            [],
             }
         groups[combo_key]['total_decks']  += r['total_decks']
@@ -471,11 +493,17 @@ def leaders_by_base(
         groups[combo_key]['_match_games'] += r.get('match_games') or 0
         if r['base'] not in groups[combo_key]['bases']:
             groups[combo_key]['bases'].append(r['base'])
+        hri = hri_by_pair.get((r['leader'], r['base']))
+        if hri and hri['avg_hri_rating']:
+            # Weight by rated_count so larger bases dominate the average
+            groups[combo_key]['_hri_sum']   += hri['avg_hri_rating'] * hri['rated_count']
+            groups[combo_key]['_hri_count'] += hri['rated_count']
 
     result = []
     for g in groups.values():
         t8_rate    = g['top8_count'] / g['total_decks'] if g['total_decks'] else 0
         conversion = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
+        avg_hri    = round(g['_hri_sum'] / g['_hri_count']) if g['_hri_count'] else None
         result.append({
             **{k: v for k, v in g.items() if not k.startswith('_')},
             'meta_share':     round(g['total_decks'] / total_all_decks, 4) if total_all_decks else 0,
@@ -483,6 +511,7 @@ def leaders_by_base(
             'conversion':     conversion,
             'match_win_rate': round(g['_match_wins'] / g['_match_games'], 4) if g['_match_games'] else None,
             'match_games':    g['_match_games'],
+            'avg_hri_rating': avg_hri,
         })
 
     result.sort(key=lambda x: x['total_decks'], reverse=True)
