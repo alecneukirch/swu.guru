@@ -815,6 +815,8 @@ def leader_cards(
     is_sideboard: Optional[bool] = Query(None),
     min_decks:    int             = Query(5),
     top8_only:    bool            = Query(False),
+    elo_bucket:   Optional[int]   = Query(None, description="Filter to decks where pilot ELO bucket equals this value"),
+    bucket:       int             = Query(100,  description="ELO bucket size used when elo_bucket is set"),
     format:       str             = Query("standard"),
     days:         Optional[int]   = Query(None),
 ):
@@ -831,8 +833,15 @@ def leader_cards(
     base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
     base_params = [base_names] if base_names else []
     t8_filter   = "AND s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)" if top8_only else ""
+    elo_join    = ""
+    elo_filter  = ""
+    if elo_bucket is not None:
+        elo_join   = f"""
+                JOIN player_id_map pm ON pm.melee_player_id = s.melee_player_id AND pm.status != 'rejected'
+                JOIN player_identities pi ON pi.id = pm.identity_id"""
+        elo_filter = f"AND (FLOOR(pi.hri_rating / {int(bucket)}::float) * {int(bucket)})::INT = {int(elo_bucket)}"
 
-    if date_sql or base_names or top8_only:
+    if date_sql or base_names or top8_only or elo_bucket is not None:
         rows = db.fetchall(f"""
             WITH leader_totals AS (
                 SELECT
@@ -842,9 +851,10 @@ def leader_cards(
                     )::INT                                                           AS leader_total_t8s
                 FROM {t['standings']} s
                 JOIN {t['events']} e ON e.id = s.event_id
+                {elo_join}
                 WHERE s.leader = %s
                   AND s.placement IS NOT NULL
-                  {date_sql} {base_filter} {t8_filter}
+                  {date_sql} {base_filter} {t8_filter} {elo_filter}
             ),
             card_stats AS (
                 SELECT
@@ -858,9 +868,10 @@ def leader_cards(
                 FROM {t['decklist_cards']} dc
                 JOIN {t['standings']} s ON s.id = dc.standing_id
                 JOIN {t['events']} e ON e.id = s.event_id
+                {elo_join}
                 WHERE s.leader = %s
                   AND s.placement IS NOT NULL
-                  {date_sql} {base_filter} {sb_filter} {t8_filter}
+                  {date_sql} {base_filter} {sb_filter} {t8_filter} {elo_filter}
                 GROUP BY dc.card_name, dc.is_sideboard
                 HAVING COUNT(DISTINCT s.id) >= %s
             )
