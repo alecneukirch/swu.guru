@@ -2320,6 +2320,104 @@ def event_top8(event_id: int):
     return rows
 
 
+@app.get("/api/events/{event_id}/leader-stats")
+def event_leader_stats(event_id: int, format: str = Query("standard")):
+    """Leader+base combo breakdown for a single event."""
+    t = _tnames(format)
+
+    combos = db.fetchall(f"""
+        WITH ev AS (SELECT player_count FROM {t['events']} WHERE id = %s),
+        top_n AS (SELECT GREATEST(CEIL((SELECT player_count FROM ev)::numeric * 0.08)::INT, 1) AS cutoff),
+        standings AS (
+            SELECT s.leader, s.base, s.placement, s.player_name
+            FROM {t['standings']} s
+            WHERE s.event_id = %s AND s.leader IS NOT NULL AND s.base IS NOT NULL
+        ),
+        match_stats AS (
+            SELECT leader, base,
+                   SUM(mw)::INT AS match_wins,
+                   SUM(mg)::INT AS match_games
+            FROM (
+                SELECT p1_leader AS leader, p1_base AS base,
+                       COUNT(*) FILTER (WHERE winner = 'p1') AS mw,
+                       COUNT(*) FILTER (WHERE winner IN ('p1','p2')) AS mg
+                FROM {t['matches']}
+                WHERE event_id = %s AND p1_leader IS NOT NULL AND p1_base IS NOT NULL AND winner IS NOT NULL
+                GROUP BY p1_leader, p1_base
+                UNION ALL
+                SELECT p2_leader, p2_base,
+                       COUNT(*) FILTER (WHERE winner = 'p2') AS mw,
+                       COUNT(*) FILTER (WHERE winner IN ('p1','p2')) AS mg
+                FROM {t['matches']}
+                WHERE event_id = %s AND p2_leader IS NOT NULL AND p2_base IS NOT NULL AND winner IS NOT NULL
+                GROUP BY p2_leader, p2_base
+            ) x GROUP BY leader, base
+        )
+        SELECT
+            s.leader, s.base,
+            COUNT(*)::INT AS total_decks,
+            COUNT(*) FILTER (WHERE s.placement <= (SELECT cutoff FROM top_n))::INT AS top8_count,
+            COUNT(*) FILTER (WHERE s.placement = 1)::INT AS wins,
+            MIN(s.placement) AS best_placement,
+            COALESCE(ms.match_wins,  0)::INT AS match_wins,
+            COALESCE(ms.match_games, 0)::INT AS match_games,
+            JSON_AGG(
+                JSON_BUILD_OBJECT('placement', s.placement, 'player_name', s.player_name)
+                ORDER BY s.placement NULLS LAST
+            ) AS placements
+        FROM standings s
+        LEFT JOIN match_stats ms ON ms.leader = s.leader AND ms.base = s.base
+        GROUP BY s.leader, s.base, ms.match_wins, ms.match_games
+        ORDER BY total_decks DESC, best_placement ASC NULLS LAST
+    """, [event_id, event_id, event_id, event_id])
+
+    # Attach base aspect/group info
+    all_bases = list({r['base'] for r in combos if r['base']})
+    base_meta = {}
+    if all_bases:
+        ph = ','.join(['%s'] * len(all_bases))
+        base_cards = db.fetchall(f"""
+            SELECT DISTINCT ON (name) name,
+                   COALESCE(aspects[1], 'none') AS aspect,
+                   rarity, card_text
+            FROM cards
+            WHERE is_base = true AND variant_type = 'Standard' AND name IN ({ph})
+            ORDER BY name, set_code DESC
+        """, all_bases)
+        base_meta = {r['name']: r for r in base_cards}
+
+    result = []
+    for r in combos:
+        bm = base_meta.get(r['base'], {})
+        base_aspect = bm.get('aspect', 'none')
+        base_rarity = bm.get('rarity', '')
+        card_text   = bm.get('card_text', '') or ''
+        if base_rarity == 'Legendary':
+            base_group = r['base']
+        elif 'Force' in card_text or 'force' in card_text.lower():
+            base_group = 'Force'
+        elif base_aspect in ('Villainy', 'Heroism'):
+            base_group = base_aspect
+        else:
+            base_group = r['base']
+
+        mwr = (r['match_wins'] / r['match_games']) if r['match_games'] else None
+        result.append({
+            'leader':       r['leader'],
+            'base':         r['base'],
+            'base_group':   base_group,
+            'total_decks':  r['total_decks'],
+            'top8_count':   r['top8_count'],
+            'wins':         r['wins'],
+            'best_placement': r['best_placement'],
+            'match_wins':   r['match_wins'],
+            'match_games':  r['match_games'],
+            'match_win_rate': mwr,
+            'placements':   r['placements'] or [],
+        })
+    return result
+
+
 @app.get("/api/players")
 def players(
     limit:   int = Query(100, ge=1, le=500),

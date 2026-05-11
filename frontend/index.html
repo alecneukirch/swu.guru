@@ -2298,7 +2298,25 @@ select option { background: var(--surface2); }
 .ev-table td:nth-child(2) { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
 .ev-table td:nth-child(3) { font-size: 13px; }
 .ev-table td:nth-child(5) { font-family: var(--mono); font-size: 12px; color: var(--gold); }
-.ev-table tbody tr:hover td { background: rgba(255,255,255,0.025); }
+.ev-table tbody tr.ev-clickable { cursor: pointer; }
+.ev-table tbody tr.ev-clickable:hover td { background: rgba(255,255,255,0.04); }
+.ev-table tbody tr.ev-open td { background: rgba(255,255,255,0.03); }
+.ev-table tbody tr:not(.ev-clickable):not(.ev-section-header):hover td { background: rgba(255,255,255,0.025); }
+.ev-detail-row td { padding: 0 !important; border-bottom: 2px solid var(--border2) !important; background: var(--bg) !important; }
+.ev-detail-panel { padding: 20px 16px 24px; }
+.ev-detail-title { font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 14px; }
+.ev-combo-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.ev-combo-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; min-width: 160px; max-width: 200px; flex: 1 1 160px; position: relative; overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
+.ev-combo-card:hover { border-color: var(--border); transform: translateY(-1px); }
+.ev-combo-art { position: absolute; top: 0; right: 0; width: 70px; height: 100%; object-fit: cover; object-position: center top; opacity: 0.18; border-radius: 0 8px 8px 0; pointer-events: none; }
+.ev-combo-name { font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; position: relative; }
+.ev-combo-base { font-size: 11px; color: var(--text3); margin-bottom: 8px; position: relative; }
+.ev-combo-stats { display: flex; gap: 12px; flex-wrap: wrap; position: relative; }
+.ev-combo-stat { display: flex; flex-direction: column; }
+.ev-combo-stat-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+.ev-combo-stat-val { font-family: var(--mono); font-size: 13px; color: var(--text2); }
+.ev-combo-placements { margin-top: 8px; font-size: 11px; color: var(--text3); position: relative; line-height: 1.6; }
+.ev-combo-placements span { color: var(--text2); }
 .ev-upcoming td:first-child { color: var(--gold); }
 .ev-section-header td {
   padding: 20px 12px 7px;
@@ -5118,9 +5136,10 @@ function renderEvents(rows) {
       shownPastHeader = true;
     }
     const link = e.melee_url
-      ? `<a href="${e.melee_url}" target="_blank" class="btn" style="font-size:10px;padding:3px 8px">${upcoming ? 'INFO↗' : 'MELEE↗'}</a>`
+      ? `<a href="${e.melee_url}" target="_blank" class="btn" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation()">${upcoming ? 'INFO↗' : 'MELEE↗'}</a>`
       : '';
-    html += `<tr${upcoming ? ' class="ev-upcoming"' : ''}>
+    const cls = [upcoming ? 'ev-upcoming' : '', !upcoming ? 'ev-clickable' : ''].filter(Boolean).join(' ');
+    html += `<tr class="${cls}" data-ev-id="${e.id}" data-ev-name="${(e.name||'').replace(/"/g,'&quot;')}">
   <td>${e.name || '—'}</td>
   <td>${e.date || '—'}</td>
   <td>${[e.city,e.country].filter(Boolean).join(', ') || '—'}</td>
@@ -5130,6 +5149,73 @@ function renderEvents(rows) {
 </tr>`;
   }
   tbody.innerHTML = html;
+
+  tbody.onclick = e => {
+    const row = e.target.closest('tr.ev-clickable');
+    if (!row) return;
+    const evId = row.dataset.evId;
+    const existing = tbody.querySelector(`tr.ev-detail-row[data-ev-id="${evId}"]`);
+    if (existing) {
+      existing.remove();
+      row.classList.remove('ev-open');
+      return;
+    }
+    // Close any other open panel
+    tbody.querySelectorAll('tr.ev-detail-row').forEach(r => r.remove());
+    tbody.querySelectorAll('tr.ev-open').forEach(r => r.classList.remove('ev-open'));
+    row.classList.add('ev-open');
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'ev-detail-row';
+    detailRow.dataset.evId = evId;
+    detailRow.innerHTML = `<td colspan="6"><div class="ev-detail-panel"><div class="ev-detail-title">Leader Breakdown</div><div class="ev-combo-grid" id="ev-combo-grid-${evId}"><div class="loading" style="padding:8px">loading…</div></div></div></td>`;
+    row.insertAdjacentElement('afterend', detailRow);
+    loadEventLeaderStats(evId);
+  };
+}
+
+async function loadEventLeaderStats(evId) {
+  const grid = document.getElementById(`ev-combo-grid-${evId}`);
+  if (!grid) return;
+  try {
+    const combos = await api(`/api/events/${evId}/leader-stats?format=${currentFormat}`);
+    if (!combos.length) { grid.innerHTML = '<div class="empty-state" style="padding:8px">// no leader data for this event</div>'; return; }
+    const maxDecks = Math.max(...combos.map(c => c.total_decks), 1);
+    grid.innerHTML = combos.map(c => {
+      const mwr = c.match_games > 0 ? Math.round(c.match_win_rate * 100) + '%' : '—';
+      const mwrColor = c.match_win_rate >= 0.52 ? 'var(--green)' : c.match_win_rate > 0 ? 'var(--text2)' : 'var(--text3)';
+      const t8Color = c.top8_count > 0 ? 'var(--gold)' : 'var(--text3)';
+      const topPlayers = (c.placements || []).slice(0, 3).map(p =>
+        `<div>#${p.placement} <span>${p.player_name || '?'}</span></div>`
+      ).join('');
+      return `<div class="ev-combo-card" data-leader="${c.leader.replace(/"/g,'&quot;')}" onclick="openLeader(this.dataset.leader)">
+  <div class="ev-combo-name">${shortName(c.leader)}</div>
+  <div class="ev-combo-base">${c.base_group || c.base || '—'}</div>
+  <div class="ev-combo-stats">
+    <div class="ev-combo-stat"><div class="ev-combo-stat-label">Decks</div><div class="ev-combo-stat-val">${c.total_decks}</div></div>
+    <div class="ev-combo-stat"><div class="ev-combo-stat-label">T8</div><div class="ev-combo-stat-val" style="color:${t8Color}">${c.top8_count}</div></div>
+    <div class="ev-combo-stat"><div class="ev-combo-stat-label">MWR</div><div class="ev-combo-stat-val" style="color:${mwrColor}">${mwr}</div></div>
+  </div>
+  ${topPlayers ? `<div class="ev-combo-placements">${topPlayers}</div>` : ''}
+</div>`;
+    }).join('');
+    // Lazy-load card art
+    combos.forEach(c => {
+      fetchLeaderCard(c.leader).then(d => {
+        const cards = grid.querySelectorAll(`.ev-combo-card[data-leader="${c.leader.replace(/"/g,'\\"')}"]`);
+        cards.forEach(card => {
+          if (d?.front_image_url && !card.querySelector('.ev-combo-art')) {
+            const img = document.createElement('img');
+            img.className = 'ev-combo-art';
+            img.src = d.front_image_url;
+            img.alt = '';
+            card.appendChild(img);
+          }
+        });
+      }).catch(() => {});
+    });
+  } catch(err) {
+    if (grid) grid.innerHTML = `<div class="empty-state" style="padding:8px">// ${err.message}</div>`;
+  }
 }
 
 // ══ CARD MODAL ═══════════════════════════════════════════════════════════════
