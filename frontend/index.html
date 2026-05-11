@@ -5109,7 +5109,7 @@ function renderLeaderElo(rows) {
 
   const cols = chartRows.map(r => {
     const mH   = barH(r.mwr     || 0, maxMwr);
-    const tH   = barH(r.t8_rate || 0, maxMwr);
+    const tH   = Math.min(mH, barH(r.t8_rate || 0, maxMwr));
     const mPct = r.mwr     != null ? Math.round(r.mwr     * 100) + '%' : '—';
     const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
     const t8Line = r.t8_rate > 0 ? `<span class="elo-col-t8">${tPct} T8</span>` : '';
