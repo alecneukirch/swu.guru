@@ -2325,7 +2325,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
     """Leader+base combo breakdown for a single event."""
     t = _tnames(format)
 
-    ev_meta = db.fetchone(f"SELECT player_count FROM {t['events']} WHERE id = %s", [event_id])
+    ev_meta = db.fetchone(f"SELECT name, date, player_count FROM {t['events']} WHERE id = %s", [event_id])
     player_count = ev_meta['player_count'] if ev_meta else None
 
     combos = db.fetchall(f"""
@@ -2435,7 +2435,12 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
             'rated_count':    r['rated_count'],
             'placements':     r['placements'] or [],
         })
-    return {'player_count': player_count, 'combos': result}
+    return {
+        'event_name':   ev_meta['name']   if ev_meta else None,
+        'event_date':   str(ev_meta['date']) if ev_meta and ev_meta['date'] else None,
+        'player_count': player_count,
+        'combos':       result,
+    }
 
 
 @app.get("/api/players")

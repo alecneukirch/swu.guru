@@ -4042,21 +4042,8 @@ function routeFromHash() {
   }
   if (params.event) {
     const ev = eventsData.find(e => String(e.id) === String(params.event));
-    if (ev) {
-      openEvent(params.event, ev.name, ev.date, ev.player_count);
-    } else {
-      // eventsData not loaded yet — open with placeholder then fill in header once fetched
-      openEvent(params.event, '', '', '');
-      api(`/api/events?limit=1&format=${currentFormat}`).then(() => {
-        const found = eventsData.find(e => String(e.id) === String(params.event));
-        if (found && currentEventId === params.event) {
-          document.getElementById('ep-title').textContent = found.name || '—';
-          document.getElementById('bc-event-name').textContent = found.name || 'Event';
-          const sub = [found.date, found.player_count ? found.player_count + ' players' : null].filter(Boolean).join(' · ');
-          document.getElementById('ep-sub').textContent = sub;
-        }
-      }).catch(() => {});
-    }
+    // Name/date/players filled from eventsData if loaded, otherwise _loadEventLeaderStats fills them in
+    openEvent(params.event, ev?.name || '', ev?.date || '', ev?.player_count || '');
     return true;
   }
   const page = hash.replace(/^#/, '');
@@ -5228,11 +5215,11 @@ function openEvent(evId, evName, evDate, evPlayers) {
   document.getElementById('bc-events-back').style.display = '';
   document.getElementById('bc-leader').style.display = 'none';
   document.getElementById('bc-event-name').style.display = '';
-  document.getElementById('bc-event-name').textContent = evName || 'Event';
+  document.getElementById('bc-event-name').textContent = evName || '';
   document.getElementById('bc-base-sep').style.display = 'none';
   document.getElementById('breadcrumb').classList.add('visible');
   // Header
-  document.getElementById('ep-title').textContent = evName || '—';
+  document.getElementById('ep-title').textContent = evName || '';
   const sub = [evDate, evPlayers ? evPlayers + ' players' : null].filter(Boolean).join(' · ');
   document.getElementById('ep-sub').textContent = sub || '';
   document.getElementById('event-leader-grid').innerHTML = '<div class="loading" style="padding:40px 24px">loading…</div>';
@@ -5257,6 +5244,18 @@ async function _loadEventLeaderStats(evId) {
     if (currentEventId !== evId) return;
     const playerCount = resp.player_count || 0;
     const raw = resp.combos || [];
+    // Fill in header if we opened from a direct link without event metadata
+    if (resp.event_name) {
+      const titleEl = document.getElementById('ep-title');
+      const subEl   = document.getElementById('ep-sub');
+      const bcEl    = document.getElementById('bc-event-name');
+      if (titleEl && !titleEl.textContent) titleEl.textContent = resp.event_name;
+      if (bcEl   && !bcEl.textContent)   bcEl.textContent   = resp.event_name;
+      if (subEl  && !subEl.textContent) {
+        const sub = [resp.event_date, playerCount ? playerCount + ' players' : null].filter(Boolean).join(' · ');
+        subEl.textContent = sub;
+      }
+    }
     const isLarge = playerCount > 128;
     const totalDecks = raw.reduce((s, r) => s + r.total_decks, 0);
     eventLeaderData = raw.map(r => ({
