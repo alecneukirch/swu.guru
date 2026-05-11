@@ -6671,13 +6671,12 @@ function renderPicks() {
     const asp     = aspect(deck.leader);
     const aspCls  = 'lc-aspect aspect-' + asp.toLowerCase();
 
-    const byWR = [...deck.matchups].sort((a, b) => b.win_rate - a.win_rate);
-    const good = byWR.slice(0, 2);
-    const bad  = byWR.slice(-2).reverse();
-    const muChips = [
-      ...good.map(m => `<span class="pick-mu-chip good">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
-      ...bad.map(m  => `<span class="pick-mu-chip bad">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
-    ].join('');
+    const positives = deck.matchups.filter(m => m.win_rate > 0.5).sort((a, b) => b.games - a.games);
+    const negatives = deck.matchups.filter(m => m.win_rate <= 0.5).sort((a, b) => b.games - a.games);
+    const muChipArr = [];
+    if (positives[0]) muChipArr.push(`<span class="pick-mu-chip good">${shortName(positives[0].opponent)} ${fmtEV(positives[0].win_rate)}</span>`);
+    if (negatives[0]) muChipArr.push(`<span class="pick-mu-chip bad">${shortName(negatives[0].opponent)} ${fmtEV(negatives[0].win_rate)}</span>`);
+    const muChips = muChipArr.join('');
 
     listHtml += `
     <div class="pick-row${isOpen ? ' open' : ''}" onclick="togglePickRow('${key}')">
