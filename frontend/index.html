@@ -426,8 +426,11 @@ select option { background: var(--surface2); }
 
 /* ── ELO breakdown chart ─────────────────────────────────────── */
 .elo-chart-wrap {
-  padding: 16px 24px 8px;
-  border-bottom: 1px solid var(--border);
+  padding: 16px 24px 12px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 .elo-chart-header {
   display: flex;
@@ -465,16 +468,18 @@ select option { background: var(--surface2); }
 .elo-bars-area {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: 6px;
   border-bottom: 1px solid var(--border2);
   overflow-x: auto;
+  flex: 1;
+  padding-bottom: 0;
 }
 .elo-bucket-col {
   display: flex;
   flex-direction: column;
   align-items: center;
   flex-shrink: 0;
-  width: 60px;
+  width: 52px;
 }
 .elo-bucket-bars {
   display: flex;
@@ -484,18 +489,30 @@ select option { background: var(--surface2); }
   width: 100%;
   justify-content: center;
 }
-.elo-bar {
-  width: 22px;
+/* Stacked bar: MWR is the blue base, T8 overlaid on top in gold */
+.elo-bar-stack {
+  width: 32px;
+  background: var(--blue);
   border-radius: 3px 3px 0 0;
   position: relative;
   min-height: 2px;
-  transition: opacity 0.15s;
   cursor: default;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  overflow: visible;
+  transition: opacity 0.15s;
 }
-.elo-bar:hover { opacity: 0.75; }
-.elo-bar.mwr  { background: var(--blue); }
-.elo-bar.t8r  { background: var(--gold); }
-.elo-bar.dim  { opacity: 0.3; }
+.elo-bar-stack:hover { opacity: 0.8; }
+.elo-bar-stack.dim { opacity: 0.3; }
+.elo-bar-t8-fill {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--gold);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+}
 .elo-bar-val {
   position: absolute;
   top: -17px;
@@ -506,6 +523,17 @@ select option { background: var(--surface2); }
   color: var(--text2);
   white-space: nowrap;
 }
+/* Thin deck-count bar */
+.elo-deck-bar {
+  width: 8px;
+  background: var(--border2);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  cursor: default;
+  transition: opacity 0.15s;
+}
+.elo-deck-bar:hover { opacity: 0.7; }
+.elo-deck-bar.dim { opacity: 0.3; }
 .elo-bucket-label {
   font-family: var(--mono);
   font-size: 10px;
@@ -513,30 +541,16 @@ select option { background: var(--surface2); }
   margin-top: 5px;
   white-space: nowrap;
 }
-.elo-deck-bar-wrap {
-  display: flex;
-  align-items: flex-end;
-  height: 32px;
-  margin-top: 3px;
-}
-.elo-deck-bar {
-  width: 36px;
-  background: rgba(255,255,255,0.12);
-  border-radius: 2px 2px 0 0;
-  min-height: 2px;
-  cursor: default;
-}
 .elo-bucket-n {
   font-family: var(--mono);
   font-size: 9px;
   color: var(--text3);
   opacity: 0.7;
   margin-top: 2px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .elo-insight {
-  margin-top: 10px;
-  margin-bottom: 4px;
+  margin-top: 8px;
   font-size: 11px;
   color: var(--text3);
   font-style: italic;
@@ -1498,6 +1512,23 @@ select option { background: var(--surface2); }
 }
 
 /* ── Leader detail page ───────────────────────────────────── */
+.leader-top-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.leader-top-left {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 16px;
+  border-right: 1px solid var(--border);
+}
+.leader-top-right {
+  flex: 1;
+  min-width: 0;
+}
 #leader-hero {
   padding: 24px 24px 0;
   display: flex;
@@ -1775,6 +1806,8 @@ select option { background: var(--surface2); }
 
   /* Controls wrap on mobile */
   .controls { flex-wrap: wrap; }
+  .leader-top-row { flex-direction: column; }
+  .leader-top-left { border-right: none; border-bottom: 1px solid var(--border); }
 
   /* Matrix — narrower sticky row header */
   .mx-row-hdr {
@@ -3393,19 +3426,22 @@ select option { background: var(--surface2); }
 
 <!-- ══ LEADER PAGE ══ -->
 <div class="page" id="page-leader">
-  <div id="leader-hero"></div>
 
-  <!-- Shared filters (apply to all tabs) -->
-  <div class="controls lp-shared-controls" style="padding-top:16px;padding-bottom:0">
-    <span class="ctrl-label">Base</span>
-    <select id="lp-base" onchange="onLeaderFilterChange()">
-      <option value="">All bases</option>
-    </select>
-  </div>
-
-  <!-- ELO breakdown chart — always visible -->
-  <div id="leader-elo-chart">
-    <div class="loading" style="padding:24px">loading…</div>
+  <!-- Hero + ELO chart side by side -->
+  <div class="leader-top-row">
+    <div class="leader-top-left">
+      <div id="leader-hero"></div>
+      <!-- Shared filters (apply to all tabs) -->
+      <div class="controls lp-shared-controls" style="padding-top:12px;padding-bottom:0">
+        <span class="ctrl-label">Base</span>
+        <select id="lp-base" onchange="onLeaderFilterChange()">
+          <option value="">All bases</option>
+        </select>
+      </div>
+    </div>
+    <div id="leader-elo-chart" class="leader-top-right">
+      <div class="loading" style="padding:24px">loading…</div>
+    </div>
   </div>
 
   <!-- Tab bar -->
@@ -4986,18 +5022,21 @@ function renderLeaderElo(rows) {
 
   const cols = chartRows.map(r => {
     const dim  = r.deck_count < 10 ? ' dim' : '';
+    // Stacked bar: MWR is the full bar, T8 rate overlaid on top in gold
     const mH   = barH(r.mwr      || 0, maxMwr);
-    const tH   = barH(r.t8_rate  || 0, maxT8r);
+    const tH   = barH(r.t8_rate  || 0, maxMwr); // same scale as MWR so overlay is proportional
     const dH   = deckH(r.deck_count);
     const mPct = r.mwr     != null ? Math.round(r.mwr     * 100) + '%' : '—';
     const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
     return `<div class="elo-bucket-col">
   <div class="elo-bucket-bars">
-    <div class="elo-bar mwr${dim}" style="height:${mH}px" data-tooltip="MWR ${mPct} · n=${r.deck_count}"><span class="elo-bar-val">${mPct}</span></div>
-    <div class="elo-bar t8r${dim}" style="height:${tH}px" data-tooltip="Top 8% ${tPct} · n=${r.deck_count}"><span class="elo-bar-val">${tPct}</span></div>
+    <div class="elo-bar-stack${dim}" style="height:${mH}px" data-tooltip="MWR ${mPct} · T8% ${tPct} · n=${r.deck_count}">
+      <div class="elo-bar-t8-fill" style="height:${tH}px"></div>
+      <span class="elo-bar-val">${mPct}</span>
+    </div>
+    <div class="elo-deck-bar${dim}" style="height:${dH}px" data-tooltip="${r.deck_count} decks"></div>
   </div>
   <div class="elo-bucket-label">${bucketLabel(r.elo_bucket)}</div>
-  <div class="elo-deck-bar-wrap"><div class="elo-deck-bar" style="height:${dH}px" data-tooltip="${r.deck_count} decks"></div></div>
   <div class="elo-bucket-n">${r.deck_count}</div>
 </div>`;
   }).join('');
@@ -5014,9 +5053,9 @@ function renderLeaderElo(rows) {
   <div class="elo-chart-header">
     <div class="elo-chart-title">Performance by Player ELO (HRI Premier)</div>
     <div class="elo-legend">
-      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--blue)"></div>MWR (max ${Math.round(maxMwr*100)}%)</div>
-      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--gold)"></div>Top 8% (max ${Math.round(maxT8r*100)}%)</div>
-      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:rgba(255,255,255,0.15);border:1px solid var(--border2)"></div>Deck count</div>
+      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--blue)"></div>MWR</div>
+      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--gold)"></div>Top 8% (overlay)</div>
+      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--border2);width:5px"></div>Decks</div>
     </div>
   </div>
   <div class="elo-bars-area">${cols}</div>
