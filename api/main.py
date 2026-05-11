@@ -2159,14 +2159,17 @@ def meta_call(
     base_meta_map = {r["name"]: r for r in card_info}
 
     leader_info = db.fetchall(f"""
-        SELECT DISTINCT ON (name) name,
+        SELECT DISTINCT ON (full_name) full_name,
                COALESCE(aspects[1], 'none') AS aspect
-        FROM cards
-        WHERE is_leader = true AND variant_type = 'Standard'
-          AND name IN ({ldr_ph})
-        ORDER BY name, set_code DESC
+        FROM (
+            SELECT name || ', ' || subtitle AS full_name, aspects, set_code
+            FROM cards
+            WHERE is_leader = true AND variant_type = 'Standard'
+        ) sub
+        WHERE full_name IN ({ldr_ph})
+        ORDER BY full_name, set_code DESC
     """, all_leader_names)
-    leader_aspect_map = {r["name"]: r["aspect"] for r in leader_info}
+    leader_aspect_map = {r["full_name"]: r["aspect"] for r in leader_info}
 
     groups: dict = {}
     for r in combos_raw:
