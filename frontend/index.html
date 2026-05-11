@@ -675,7 +675,7 @@ select option { background: var(--surface2); }
   padding: 0;
 }
 .mx-table .mx-row-hdr {
-  padding: 7px 32px 7px 16px;
+  padding: 7px 20px 7px 10px;
 }
 /* Corner cell */
 .mx-corner {
@@ -3606,6 +3606,12 @@ select option { background: var(--surface2); }
         style="width:140px;accent-color:var(--gold)" oninput="onMatrixEloSlide(this.value)">
       <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">No filter</span>
     </label>
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
+      Min opp. ELO
+      <input type="range" id="mx-opp-elo-slider" min="0" max="11" step="1" value="0"
+        style="width:140px;accent-color:var(--gold)" oninput="onMatrixOppEloSlide(this.value)">
+      <span id="mx-opp-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">No filter</span>
+    </label>
   </div>
   <div id="matrix-wrap" style="padding:0 24px 32px 0;overflow-x:auto;overflow-y:visible">
     <div class="loading" style="padding:24px">loading…</div>
@@ -5655,6 +5661,7 @@ let _matrixData = null;
 let matrixRows  = 20;
 let matrixCols  = 20;
 let matrixMinElo = 0;
+let matrixOppMinElo = 0;
 let _matrixEloTimer = null;
 
 // Cost filter state
@@ -5739,6 +5746,14 @@ function onMatrixEloSlide(pos) {
   clearTimeout(_matrixEloTimer);
   _matrixEloTimer = setTimeout(() => loadMatrix().then(() => filterMatrix()), 400);
 }
+function onMatrixOppEloSlide(pos) {
+  const p = parseInt(pos, 10);
+  matrixOppMinElo = p === 0 ? 0 : 1500 + (p - 1) * 50;
+  const lbl = document.getElementById('mx-opp-elo-label');
+  if (lbl) lbl.textContent = matrixOppMinElo > 0 ? `≥ ${matrixOppMinElo}` : 'No filter';
+  clearTimeout(_matrixEloTimer);
+  _matrixEloTimer = setTimeout(() => loadMatrix().then(() => filterMatrix()), 400);
+}
 
 function showMoreMatrixRows() {
   matrixRows += 10;
@@ -5761,7 +5776,8 @@ async function loadMatrix() {
   const minDecks = currentFormat === 'eternal' ? 1 : 5;
   let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}`;
   if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
-  if (matrixMinElo > 0) url += `&min_elo=${matrixMinElo}`;
+  if (matrixMinElo > 0)    url += `&min_elo=${matrixMinElo}`;
+  if (matrixOppMinElo > 0) url += `&opp_min_elo=${matrixOppMinElo}`;
   if (currentDays) url += `&days=${currentDays}`;
 
   try {

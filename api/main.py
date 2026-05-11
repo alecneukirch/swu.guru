@@ -1897,9 +1897,10 @@ def matchup_matrix_by_base(
     min_games: int            = Query(1,   description="Min H2H games for a cell to show"),
     top_n:     int            = Query(40,  description="Max combos to include"),
     top8_only: bool           = Query(False, description="Only count matches where at least one player made top 8"),
-    min_elo:   int            = Query(0,   description="Min HRI rating for both pilots (0 = no filter)"),
-    format:    str            = Query("standard"),
-    days:      Optional[int]  = Query(None),
+    min_elo:     int            = Query(0, description="Min HRI rating for the row player (0 = no filter)"),
+    opp_min_elo: int            = Query(0, description="Min HRI rating for the opponent (0 = no filter)"),
+    format:      str            = Query("standard"),
+    days:        Optional[int]  = Query(None),
 ):
     """
     Win-rate matrix of top leader+base combos vs each other.
@@ -1978,10 +1979,9 @@ def matchup_matrix_by_base(
     ldr_ph = ','.join(['%s'] * len(all_leaders))
 
     extra_join  = ""
-    extra_where = ""
-    extra_join  = ""
+    extra_join   = ""
     extra_select = ""
-    extra_where = ""
+    extra_where  = ""
     if top8_only:
         extra_join  = f"""
             LEFT JOIN {t['standings']} s1t ON s1t.id = m.p1_standing_id
@@ -1993,8 +1993,7 @@ def matchup_matrix_by_base(
                 OR
                 s2t.placement <= GREATEST(CEIL(et.player_count::numeric * 0.08)::INT, 1)
             )"""
-    elif min_elo > 0:
-        # Fetch both players' ELO; Python filters per-direction so only the row player is checked
+    elif min_elo > 0 or opp_min_elo > 0:
         extra_join  = f"""
             LEFT JOIN {t['standings']} s1e ON s1e.id = m.p1_standing_id
             LEFT JOIN player_id_map pm1e  ON pm1e.melee_player_id = s1e.melee_player_id AND pm1e.status != 'rejected'
@@ -2035,11 +2034,11 @@ def matchup_matrix_by_base(
             continue
         p1_elo = m.get("p1_elo") or 0
         p2_elo = m.get("p2_elo") or 0
-        if not min_elo or p1_elo >= min_elo:
+        if (not min_elo or p1_elo >= min_elo) and (not opp_min_elo or p2_elo >= opp_min_elo):
             pair_stats[(p1_key, p2_key)]["games"] += 1
             if m["winner"] == "p1":
                 pair_stats[(p1_key, p2_key)]["wins"] += 1
-        if not min_elo or p2_elo >= min_elo:
+        if (not min_elo or p2_elo >= min_elo) and (not opp_min_elo or p1_elo >= opp_min_elo):
             pair_stats[(p2_key, p1_key)]["games"] += 1
             if m["winner"] == "p2":
                 pair_stats[(p2_key, p1_key)]["wins"] += 1
