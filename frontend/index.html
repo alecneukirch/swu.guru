@@ -532,6 +532,7 @@ select option { background: var(--surface2); }
   pointer-events: none;
   overflow: visible;
 }
+.elo-count-svg circle { pointer-events: all; cursor: default; }
 .elo-bucket-label {
   font-family: var(--mono);
   font-size: 10px;
@@ -5045,7 +5046,7 @@ function renderLeaderElo(rows) {
   const ptY  = (n) => LINE_TOP + LINE_BAND - (n / maxDecks) * LINE_BAND;
   const polyPts = chartRows.map((r, i) => `${ptX(i)},${ptY(r.deck_count)}`).join(' ');
   const dotsSvg = chartRows.map((r, i) =>
-    `<circle cx="${ptX(i)}" cy="${ptY(r.deck_count)}" r="3" fill="rgba(255,255,255,0.75)" data-tooltip="${r.deck_count} decks"/>`
+    `<circle cx="${ptX(i)}" cy="${ptY(r.deck_count)}" r="4" fill="rgba(255,255,255,0.75)" data-tooltip="${r.deck_count} decks"><title>${r.deck_count} decks</title></circle>`
   ).join('');
   const countSvg = `<svg class="elo-count-svg" width="${svgW}" height="${CHART_H}" viewBox="0 0 ${svgW} ${CHART_H}">
   <polyline points="${polyPts}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
@@ -5651,13 +5652,13 @@ document.body.appendChild(_tt);
 
 document.addEventListener('mouseover', e => {
   if (!matchMedia('(pointer: fine)').matches) return;
-  const el = e.target.closest('[data-tooltip]');
+  const el = e.target.closest('[data-tooltip]') || (e.target.dataset?.tooltip ? e.target : null);
   if (!el) return;
   _tt.textContent = el.dataset.tooltip;
   _tt.style.display = 'block';
 });
 document.addEventListener('mouseout', e => {
-  if (!e.target.closest('[data-tooltip]')) return;
+  if (!e.target.closest('[data-tooltip]') && !e.target.dataset?.tooltip) return;
   _tt.style.display = 'none';
 });
 document.addEventListener('mousemove', e => {
