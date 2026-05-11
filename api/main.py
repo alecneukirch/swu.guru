@@ -2329,7 +2329,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         WITH ev AS (SELECT player_count FROM {t['events']} WHERE id = %s),
         top_n AS (SELECT GREATEST(CEIL((SELECT player_count FROM ev)::numeric * 0.08)::INT, 1) AS cutoff),
         standings AS (
-            SELECT s.leader, s.base, s.placement, s.player_name
+            SELECT s.leader, s.base, s.placement, s.player_name, s.melee_player_id
             FROM {t['standings']} s
             WHERE s.event_id = %s AND s.leader IS NOT NULL AND s.base IS NOT NULL
         ),
@@ -2352,6 +2352,15 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
                 WHERE event_id = %s AND p2_leader IS NOT NULL AND p2_base IS NOT NULL AND winner IS NOT NULL
                 GROUP BY p2_leader, p2_base
             ) x GROUP BY leader, base
+        ),
+        hri_stats AS (
+            SELECT s.leader, s.base,
+                   ROUND(AVG(pi.hri_rating))::INT AS avg_hri_rating,
+                   COUNT(pi.hri_rating)::INT        AS rated_count
+            FROM standings s
+            JOIN player_id_map m ON m.melee_player_id = s.melee_player_id AND m.status != 'rejected'
+            JOIN player_identities pi ON pi.id = m.identity_id AND pi.hri_rating IS NOT NULL
+            GROUP BY s.leader, s.base
         )
         SELECT
             s.leader, s.base,
@@ -2361,13 +2370,16 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
             MIN(s.placement) AS best_placement,
             COALESCE(ms.match_wins,  0)::INT AS match_wins,
             COALESCE(ms.match_games, 0)::INT AS match_games,
+            h.avg_hri_rating,
+            h.rated_count,
             JSON_AGG(
                 JSON_BUILD_OBJECT('placement', s.placement, 'player_name', s.player_name)
                 ORDER BY s.placement NULLS LAST
             ) AS placements
         FROM standings s
         LEFT JOIN match_stats ms ON ms.leader = s.leader AND ms.base = s.base
-        GROUP BY s.leader, s.base, ms.match_wins, ms.match_games
+        LEFT JOIN hri_stats h   ON h.leader  = s.leader AND h.base  = s.base
+        GROUP BY s.leader, s.base, ms.match_wins, ms.match_games, h.avg_hri_rating, h.rated_count
         ORDER BY total_decks DESC, best_placement ASC NULLS LAST
     """, [event_id, event_id, event_id, event_id])
 
@@ -2403,17 +2415,19 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
 
         mwr = (r['match_wins'] / r['match_games']) if r['match_games'] else None
         result.append({
-            'leader':       r['leader'],
-            'base':         r['base'],
-            'base_group':   base_group,
-            'total_decks':  r['total_decks'],
-            'top8_count':   r['top8_count'],
-            'wins':         r['wins'],
+            'leader':         r['leader'],
+            'base':           r['base'],
+            'base_group':     base_group,
+            'total_decks':    r['total_decks'],
+            'top8_count':     r['top8_count'],
+            'wins':           r['wins'],
             'best_placement': r['best_placement'],
-            'match_wins':   r['match_wins'],
-            'match_games':  r['match_games'],
+            'match_wins':     r['match_wins'],
+            'match_games':    r['match_games'],
             'match_win_rate': mwr,
-            'placements':   r['placements'] or [],
+            'avg_hri_rating': r['avg_hri_rating'],
+            'rated_count':    r['rated_count'],
+            'placements':     r['placements'] or [],
         })
     return result
 

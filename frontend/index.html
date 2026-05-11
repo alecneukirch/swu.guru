@@ -3353,13 +3353,12 @@ select option { background: var(--surface2); }
 <!-- NAV -->
 <nav id="nav">
   <div class="nav-logo">SWU<span>//</span>GURU</div>
-  <button class="nav-btn active" id="nav-home"      onclick="showPage('home')">Leaders</button>
-  <button class="nav-btn"        id="nav-picks"     onclick="showPage('picks')">Meta Call</button>
-  <button class="nav-btn"        id="nav-cards"     onclick="showPage('cards')">Cards</button>
-  <button class="nav-btn"        id="nav-matrix"    onclick="showPage('matrix')">Matrix</button>
-  <button class="nav-btn"        id="nav-players"   onclick="showPage('players')">Players</button>
-  <button class="nav-btn"        id="nav-decklists" onclick="showPage('decklists')">Decklists</button>
-  <button class="nav-btn"        id="nav-events"    onclick="showPage('events')">Events</button>
+  <button class="nav-btn active" id="nav-home"    onclick="showPage('home')">Leaders</button>
+  <button class="nav-btn"        id="nav-picks"   onclick="showPage('picks')">Meta Call</button>
+  <button class="nav-btn"        id="nav-cards"   onclick="showPage('cards')">Cards</button>
+  <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
+  <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
+  <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
   <div class="nav-days-wrapper">
     <select id="nav-set" onchange="setNavMeta(this.value)">
       <option value="">All metas</option>
@@ -4205,7 +4204,7 @@ async function fetchLeaderCard(leaderName) {
 }
 
 
-function mkCard(r, i, conv, maxD, pfx = 'limg') {
+function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   const asp = aspect(r.leader);
   const t8p = fmtPct(r.t8_rate);
   const mp  = fmtPct(r.meta_share);
@@ -4219,6 +4218,9 @@ function mkCard(r, i, conv, maxD, pfx = 'limg') {
   const eloBadge = r.avg_hri_rating
     ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
     : '';
+  const metaLabel = eventMode ? 'Field' : 'Meta';
+  const winsLabel = eventMode ? '1st'   : 'Wins';
+  const winsVal   = eventMode ? (r.wins > 0 ? '✓' : '—') : r.wins;
   return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
   <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
   ${eloBadge}
@@ -4230,9 +4232,9 @@ function mkCard(r, i, conv, maxD, pfx = 'limg') {
     <div class="lc-bar"><div class="lc-bar-fill" style="width:${barW}%"></div></div>
     <div class="lc-stats">
       <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">${r.total_decks}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold)">${mp}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">${metaLabel}</div><div class="lc-stat-val" style="color:var(--gold)">${mp}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:${r.t8_rate>=0.2?'var(--green)':r.t8_rate>=0.12?'var(--gold)':'var(--text2)'}">${t8p}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${r.wins}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">${winsLabel}</div><div class="lc-stat-val" style="color:${r.wins>0?'var(--gold)':'var(--text3)'}">${winsVal}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${r.match_win_rate>=0.52?'var(--green)':r.match_win_rate>0?'var(--text2)':'var(--text3)'}">${r.match_games>0?Math.round(r.match_win_rate*100)+'%':'—'}</div></div>
     </div>
   </div>
@@ -5290,7 +5292,7 @@ function renderEventGrid() {
     html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div><div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
-      html += mkCard(r, i, r._conv, maxD, 'ep');
+      html += mkCard(r, i, r._conv, maxD, 'ep', true);
       allRows.push({ r, i });
     });
     html += `</div>`;
@@ -6649,13 +6651,12 @@ function renderPicks() {
 
 <!-- Mobile bottom nav (hidden on desktop via CSS) -->
 <nav id="mobile-nav">
-  <button class="mob-nav-btn active" id="mob-home"      onclick="showPage('home')">Leaders</button>
-  <button class="mob-nav-btn"        id="mob-picks"     onclick="showPage('picks')">Meta</button>
-  <button class="mob-nav-btn"        id="mob-cards"     onclick="showPage('cards')">Cards</button>
-  <button class="mob-nav-btn"        id="mob-matrix"    onclick="showPage('matrix')">Matrix</button>
-  <button class="mob-nav-btn"        id="mob-players"   onclick="showPage('players')">Players</button>
-  <button class="mob-nav-btn"        id="mob-decklists" onclick="showPage('decklists')">Decks</button>
-  <button class="mob-nav-btn"        id="mob-events"    onclick="showPage('events')">Events</button>
+  <button class="mob-nav-btn active" id="mob-home"    onclick="showPage('home')">Leaders</button>
+  <button class="mob-nav-btn"        id="mob-picks"   onclick="showPage('picks')">Meta</button>
+  <button class="mob-nav-btn"        id="mob-cards"   onclick="showPage('cards')">Cards</button>
+  <button class="mob-nav-btn"        id="mob-matrix"  onclick="showPage('matrix')">Matrix</button>
+  <button class="mob-nav-btn"        id="mob-events"  onclick="showPage('events')">Events</button>
+  <button class="mob-nav-btn"        id="mob-players" onclick="showPage('players')">Players</button>
 </nav>
 
 <div class="days-intro-popup" id="days-intro-popup" onclick="dismissPicksIntro()">
