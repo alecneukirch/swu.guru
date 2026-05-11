@@ -3896,6 +3896,15 @@ function aspectsDisplay(aspects, iconSize = 18) {
 }
 
 
+// ── Wilson score lower bound (95% CI) ────────────────────────────────────────
+// Shrinks raw MWR toward 50% based on sample size — small samples sink naturally.
+function wilsonLow(wins, games) {
+  if (!games) return 0;
+  const p = wins / games;
+  const z = 1.96, z2 = z * z, n = games;
+  return (p + z2 / (2 * n) - z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+}
+
 // ── Tier grade ───────────────────────────────────────────────────────────────
 function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
@@ -4214,8 +4223,13 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   const top8Badge = (eventMode && r.t8_label === 'Day2' && r.literal_top8_count > 0)
     ? `<div class="lc-elo-badge lc-top8-badge" data-tooltip="Number of decks that finished in the literal Top 8"><div class="lc-elo-label">Top 8</div><div style="color:var(--gold)">${r.literal_top8_count}</div></div>`
     : '';
-  const mwrVal = r.match_games > 0 ? Math.round(r.match_win_rate * 100) + '%' : '—';
-  const mwrColor = r.match_win_rate >= 0.52 ? 'var(--green)' : r.match_win_rate > 0 ? 'var(--text2)' : 'var(--text3)';
+  const rawMwr    = r.match_games > 0 ? r.match_win_rate : null;
+  const dispMwr   = eventMode && r.wilson_mwr != null ? r.wilson_mwr : rawMwr;
+  const mwrVal    = dispMwr != null ? Math.round(dispMwr * 100) + '%' : '—';
+  const mwrColor  = (rawMwr ?? 0) >= 0.52 ? 'var(--green)' : rawMwr != null ? 'var(--text2)' : 'var(--text3)';
+  const mwrTip    = eventMode && r.match_games > 0
+    ? `data-tooltip="Wilson 95% lower bound · raw MWR ${Math.round(r.match_win_rate * 100)}% over ${r.match_games} matches"`
+    : '';
   let statsHtml;
   if (eventMode) {
     const t8Label = r.t8_label || 'T8';
@@ -4225,7 +4239,7 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
       <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">${r.total_decks}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">Field</div><div class="lc-stat-val" style="color:var(--gold)">${mp}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">${t8Label}</div><div class="lc-stat-val" style="color:${t8Color}">${t8Count}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${mwrColor}">${mwrVal}</div></div>
+      <div class="lc-stat" ${mwrTip}><div class="lc-stat-label">W-MWR</div><div class="lc-stat-val" style="color:${mwrColor}">${mwrVal}</div></div>
     </div>`;
   } else {
     statsHtml = `<div class="lc-stats">
@@ -5269,6 +5283,7 @@ async function _loadEventLeaderStats(evId) {
       t8_rate:        r.total_decks > 0 ? r.top8_count / r.total_decks : 0,
       meta_share:     totalDecks > 0    ? r.total_decks / totalDecks   : 0,
       match_win_rate: r.match_games > 0 ? r.match_wins  / r.match_games : 0,
+      wilson_mwr:     wilsonLow(r.match_wins, r.match_games),
       base_key:       r.base || '',
       bases:          [r.base || ''],
       t8_display:          isLarge ? r.day2_count : r.top8_count,
@@ -5310,15 +5325,15 @@ function renderEventGrid() {
   const TIER_ORDER_LARGE = ['S','A','B','C','D','F'];
   const TIER_ORDER   = isSmallEvent ? TIER_ORDER_SMALL : TIER_ORDER_LARGE;
   const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_TOOLTIP_SMALL = { S:'Top 20% MWR', A:'Top 40% MWR', B:'Top 60% MWR', C:'Top 80% MWR', D:'Bottom 20% MWR' };
+  const TIER_TOOLTIP_SMALL = { S:'Top 20% Wilson MWR', A:'Top 40% Wilson MWR', B:'Top 60% Wilson MWR', C:'Top 80% Wilson MWR', D:'Bottom 20% Wilson MWR' };
   const TIER_TOOLTIP_LARGE = { S:'≥ 1.3× expected', A:'≥ 1.1× expected', B:'≥ 0.9× expected', C:'≥ 0.7× expected', D:'≥ 0.5× expected', F:'< 0.5× expected' };
   const TIER_TOOLTIP = isSmallEvent ? TIER_TOOLTIP_SMALL : TIER_TOOLTIP_LARGE;
   const TIER_CLS     = { S:'tier-s', A:'tier-a', B:'tier-b', C:'tier-c', D:'tier-d', F:'tier-f' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
 
   if (isSmallEvent) {
-    // MWR quintile grouping: sort by MWR descending, split into 5 equal groups
-    const byMwr = [...rows].sort((a, b) => (b.match_win_rate ?? 0) - (a.match_win_rate ?? 0));
+    // MWR quintile grouping: sort by Wilson lower bound descending, split into 5 equal groups
+    const byMwr = [...rows].sort((a, b) => (b.wilson_mwr ?? 0) - (a.wilson_mwr ?? 0));
     const n = byMwr.length;
     byMwr.forEach((r, idx) => {
       const tier = TIER_ORDER_SMALL[Math.min(4, Math.floor(idx * 5 / n))];
