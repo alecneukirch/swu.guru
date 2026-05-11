@@ -671,23 +671,20 @@ def import_tournament(
     elim_rounds = [r for r in completed
                    if any(r["name"].lower().startswith(k) for k in elim_keywords)]
 
-    # Always check: if a Finals round exists but isn't complete, skip the event entirely.
-    # This applies regardless of whether other elim rounds are done.
-    all_elim = [r for r in standings_rounds
-                if any(r["name"].lower().startswith(k) for k in elim_keywords)]
-    finals_rounds = [r for r in all_elim if r["name"].lower().startswith("final")]
-    if finals_rounds and not finals_rounds[-1]["completed"]:
-        log.info(f"  Skipping — Finals round exists but is not yet complete")
-        return None
+    # Check if Finals exists but isn't complete — we'll use best completed elim instead.
+    all_finals = [r for r in standings_rounds if r["name"].lower().startswith("final")]
+    finals_pending = all_finals and not all_finals[-1]["completed"]
 
     if elim_rounds:
-        # Use the last elimination round (Finals > Semifinals > Quarterfinals)
+        # Use the best completed elimination round (Finals > Semifinals > Quarterfinals)
         elim_order = {"final": 3, "semifinal": 2, "quarterfinal": 1, "top ": 0}
         elim_rounds.sort(key=lambda r: max(
             (v for k, v in elim_order.items() if r["name"].lower().startswith(k)),
             default=0
         ))
         final_round = elim_rounds[-1]
+        if finals_pending:
+            log.info(f"  Finals not complete — using {final_round['name']} as fallback")
     elif completed:
         # No elimination rounds done yet — use last completed Swiss round
         final_round = completed[-1]
