@@ -5380,7 +5380,7 @@ function renderEventGrid() {
   }
 
   if (rogueMisses.length) {
-    html += `<div class="rogue-section-header"><span class="rogue-label">Also-rans</span><span class="rogue-sub">&lt; 1% of field · no ${rogueRows[0]?.t8_label || 'T8'} result</span><span class="tsh-count">${rogueMisses.length}</span></div>`;
+    html += `<div class="rogue-section-header"><span class="rogue-label">No Result</span><span class="rogue-sub">&lt; 1% of field · no ${rogueRows[0]?.t8_label || 'T8'} result</span><span class="tsh-count">${rogueMisses.length}</span></div>`;
     html += `<div class="tier-section-grid rogue-grid">`;
     rogueMisses.forEach(r => {
       const i = imgIdx++;
