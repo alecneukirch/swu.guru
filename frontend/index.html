@@ -473,6 +473,7 @@ select option { background: var(--surface2); }
   overflow-x: auto;
   flex: 1;
   padding-bottom: 0;
+  position: relative;
 }
 .elo-bucket-col {
   display: flex;
@@ -523,17 +524,14 @@ select option { background: var(--surface2); }
   color: var(--text2);
   white-space: nowrap;
 }
-/* Thin deck-count bar */
-.elo-deck-bar {
-  width: 8px;
-  background: var(--border2);
-  border-radius: 2px 2px 0 0;
-  min-height: 2px;
-  cursor: default;
-  transition: opacity 0.15s;
+/* SVG deck-count line overlay */
+.elo-count-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
 }
-.elo-deck-bar:hover { opacity: 0.7; }
-.elo-deck-bar.dim { opacity: 0.3; }
 .elo-bucket-label {
   font-family: var(--mono);
   font-size: 10px;
@@ -5020,12 +5018,11 @@ function renderLeaderElo(rows) {
 
   const bucketLabel = b => b < 1200 ? '<1200' : b + 's';
 
+  const COL_W = 52, GAP = 6;
   const cols = chartRows.map(r => {
     const dim  = r.deck_count < 10 ? ' dim' : '';
-    // Stacked bar: MWR is the full bar, T8 rate overlaid on top in gold
     const mH   = barH(r.mwr      || 0, maxMwr);
-    const tH   = barH(r.t8_rate  || 0, maxMwr); // same scale as MWR so overlay is proportional
-    const dH   = deckH(r.deck_count);
+    const tH   = barH(r.t8_rate  || 0, maxMwr);
     const mPct = r.mwr     != null ? Math.round(r.mwr     * 100) + '%' : '—';
     const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
     return `<div class="elo-bucket-col">
@@ -5034,12 +5031,26 @@ function renderLeaderElo(rows) {
       <div class="elo-bar-t8-fill" style="height:${tH}px"></div>
       <span class="elo-bar-val">${mPct}</span>
     </div>
-    <div class="elo-deck-bar${dim}" style="height:${dH}px" data-tooltip="${r.deck_count} decks"></div>
   </div>
   <div class="elo-bucket-label">${bucketLabel(r.elo_bucket)}</div>
   <div class="elo-bucket-n">${r.deck_count}</div>
 </div>`;
   }).join('');
+
+  // SVG line overlay for deck count
+  const LINE_BAND = CHART_H * 0.38; // line varies over top 38% of chart
+  const LINE_TOP  = 10;             // minimum y from top of chart
+  const svgW = chartRows.length * (COL_W + GAP);
+  const ptX  = (i) => i * (COL_W + GAP) + COL_W / 2;
+  const ptY  = (n) => LINE_TOP + LINE_BAND - (n / maxDecks) * LINE_BAND;
+  const polyPts = chartRows.map((r, i) => `${ptX(i)},${ptY(r.deck_count)}`).join(' ');
+  const dotsSvg = chartRows.map((r, i) =>
+    `<circle cx="${ptX(i)}" cy="${ptY(r.deck_count)}" r="3" fill="rgba(255,255,255,0.75)" data-tooltip="${r.deck_count} decks"/>`
+  ).join('');
+  const countSvg = `<svg class="elo-count-svg" width="${svgW}" height="${CHART_H}" viewBox="0 0 ${svgW} ${CHART_H}">
+  <polyline points="${polyPts}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+  ${dotsSvg}
+</svg>`;
 
   const first = chartRows[0], last = chartRows[chartRows.length - 1];
   let insight = '';
@@ -5054,11 +5065,11 @@ function renderLeaderElo(rows) {
     <div class="elo-chart-title">Performance by Player ELO (HRI Premier)</div>
     <div class="elo-legend">
       <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--blue)"></div>MWR</div>
-      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--gold)"></div>Top 8% (overlay)</div>
-      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--border2);width:5px"></div>Decks</div>
+      <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--gold)"></div>Top 8%</div>
+      <div class="elo-legend-item"><svg width="20" height="10" style="flex-shrink:0"><line x1="0" y1="5" x2="14" y2="5" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/><circle cx="14" cy="5" r="2.5" fill="rgba(255,255,255,0.75)"/></svg>Deck count</div>
     </div>
   </div>
-  <div class="elo-bars-area">${cols}</div>
+  <div class="elo-bars-area">${cols}${countSvg}</div>
   ${insight ? `<div class="elo-insight">${insight}</div>` : ''}
 </div>`;
 }
