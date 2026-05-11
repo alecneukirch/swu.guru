@@ -2397,7 +2397,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         base_cards = db.fetchall(f"""
             SELECT DISTINCT ON (name) name,
                    COALESCE(aspects[1], 'none') AS aspect,
-                   rarity, card_text
+                   rarity, card_text, deploy_box, epic_action
             FROM cards
             WHERE is_base = true AND variant_type = 'Standard' AND name IN ({ph})
             ORDER BY name, set_code DESC
@@ -2409,15 +2409,13 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         bm = base_meta.get(r['base'], {})
         base_aspect = bm.get('aspect', 'none')
         base_rarity = bm.get('rarity', '')
-        card_text   = bm.get('card_text', '') or ''
-        if base_rarity == 'Legendary':
-            base_group = r['base']
-        elif 'Force' in card_text or 'force' in card_text.lower():
-            base_group = 'Force'
-        elif base_aspect in ('Villainy', 'Heroism'):
-            base_group = base_aspect
-        else:
-            base_group = r['base']
+        ability     = _base_ability_type(
+            bm.get('card_text', '') or '',
+            bm.get('deploy_box') or '',
+            bm.get('epic_action') or '',
+            r['base'],
+        )
+        base_group = _base_group_label(base_aspect, ability, base_rarity, r['base'])
 
         mwr = (r['match_wins'] / r['match_games']) if r['match_games'] else None
         result.append({
