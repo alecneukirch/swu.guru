@@ -6736,8 +6736,8 @@ function renderPickDetail() {
   }
 
   panel.innerHTML = `
-    <div class="pick-row-top" style="margin-bottom:14px">
-      <div class="pick-deck">
+    <div style="display:flex;align-items:center;gap:20px;margin-bottom:14px">
+      <div class="pick-deck" style="flex:1;min-width:0">
         <div class="pick-leader">${shortName(deck.leader)}</div>
         <div class="pick-base">${deck.base_group}</div>
       </div>
