@@ -467,7 +467,7 @@ select option { background: var(--surface2); }
 }
 .elo-bars-area {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 6px;
   border-bottom: 1px solid var(--border2);
   overflow-x: auto;
@@ -481,24 +481,26 @@ select option { background: var(--surface2); }
   flex-shrink: 0;
   width: 52px;
 }
-.elo-bucket-n-top {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text2);
-  padding: 3px 0 4px;
-  text-align: center;
-  border-bottom: 1px solid var(--border2);
+/* Fixed stat header per column: count / MWR / T8 */
+.elo-col-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
   width: 100%;
-  margin-bottom: 4px;
+  padding: 4px 0 5px;
+  border-bottom: 1px solid var(--border2);
+  margin-bottom: 6px;
 }
+.elo-col-n   { font-family: var(--mono); font-size: 9px;  color: var(--text3); }
+.elo-col-mwr { font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; line-height: 1.2; }
+.elo-col-t8  { font-family: var(--mono); font-size: 10px; color: var(--gold); line-height: 1.2; }
 .elo-bucket-bars {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
-  height: 160px;
+  height: 120px;
   width: 100%;
   justify-content: center;
-  padding-top: 44px;
 }
 /* Stacked bar: MWR is the blue base, T8 overlaid on top in gold */
 .elo-bar-stack {
@@ -508,11 +510,6 @@ select option { background: var(--surface2); }
   position: relative;
   min-height: 2px;
   cursor: default;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-  overflow: visible;
   transition: opacity 0.15s;
 }
 .elo-bar-stack:hover { opacity: 0.8; }
@@ -523,33 +520,11 @@ select option { background: var(--surface2); }
   border-radius: 3px 3px 0 0;
   min-height: 2px;
 }
-.elo-bar-labels {
-  position: absolute;
-  top: -42px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  white-space: nowrap;
-}
-.elo-bar-mwr {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-}
-.elo-bar-t8pct {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--gold);
-}
 .elo-bucket-label {
   font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text3);
-  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 6px;
   white-space: nowrap;
 }
 .elo-insight {
@@ -5075,28 +5050,27 @@ function renderLeaderElo(rows) {
   const maxMwr   = Math.max(...chartRows.map(r => r.mwr      || 0));
   const maxT8r   = Math.max(...chartRows.map(r => r.t8_rate  || 0));
   const maxDecks = Math.max(...chartRows.map(r => r.deck_count));
-  const CHART_H  = 160;
-  const DECK_H   = 32; // max height for deck-count mini bars
+  const CHART_H  = 120;
 
   const barH  = (val, max) => max > 0 ? Math.max(2, Math.round((val / max) * CHART_H)) : 2;
-  const deckH = (n) => maxDecks > 0 ? Math.max(2, Math.round((n / maxDecks) * DECK_H)) : 2;
 
   const bucketLabel = b => b < 1200 ? '<1200' : b + 's';
 
   const cols = chartRows.map(r => {
-    const mH   = barH(r.mwr      || 0, maxMwr);
-    const tH   = barH(r.t8_rate  || 0, maxMwr);
+    const mH   = barH(r.mwr     || 0, maxMwr);
+    const tH   = barH(r.t8_rate || 0, maxMwr);
     const mPct = r.mwr     != null ? Math.round(r.mwr     * 100) + '%' : '—';
     const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
+    const t8Line = r.t8_rate > 0 ? `<span class="elo-col-t8">${tPct} T8</span>` : '';
     return `<div class="elo-bucket-col">
-  <div class="elo-bucket-n-top">${r.deck_count}</div>
+  <div class="elo-col-stats">
+    <span class="elo-col-n">n=${r.deck_count}</span>
+    <span class="elo-col-mwr">${mPct}</span>
+    ${t8Line}
+  </div>
   <div class="elo-bucket-bars">
     <div class="elo-bar-stack" style="height:${mH}px" data-tooltip="MWR ${mPct} · T8% ${tPct} · n=${r.deck_count}">
       <div class="elo-bar-t8-fill" style="height:${tH}px"></div>
-      <div class="elo-bar-labels">
-        <span class="elo-bar-mwr">${mPct}</span>
-        <span class="elo-bar-t8pct">${tPct}</span>
-      </div>
     </div>
   </div>
   <div class="elo-bucket-label">${bucketLabel(r.elo_bucket)}</div>
