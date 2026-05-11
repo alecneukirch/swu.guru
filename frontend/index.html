@@ -441,10 +441,10 @@ select option { background: var(--surface2); }
 }
 .elo-chart-title {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text3);
+  color: var(--text2);
   flex-shrink: 0;
 }
 .elo-legend {
@@ -469,7 +469,6 @@ select option { background: var(--surface2); }
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  border-bottom: 1px solid var(--border2);
   overflow-x: auto;
   flex: 1;
   position: relative;
@@ -499,7 +498,7 @@ select option { background: var(--surface2); }
 .elo-bucket-bars {
   display: flex;
   align-items: flex-end;
-  height: 120px;
+  height: 160px;
   width: 100%;
   justify-content: center;
 }
@@ -523,8 +522,9 @@ select option { background: var(--surface2); }
 }
 .elo-bucket-label {
   font-family: var(--mono);
-  font-size: 12px;
-  color: rgba(255,255,255,0.75);
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
   margin-top: 6px;
   white-space: nowrap;
 }
@@ -5051,7 +5051,7 @@ function renderLeaderElo(rows) {
   const maxMwr   = Math.max(...chartRows.map(r => r.mwr      || 0));
   const maxT8r   = Math.max(...chartRows.map(r => r.t8_rate  || 0));
   const maxDecks = Math.max(...chartRows.map(r => r.deck_count));
-  const CHART_H  = 120;
+  const CHART_H  = 160;
 
   const barH  = (val, max) => max > 0 ? Math.max(2, Math.round((val / max) * CHART_H)) : 2;
 
