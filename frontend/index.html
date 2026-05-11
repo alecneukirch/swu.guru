@@ -1209,7 +1209,6 @@ select option { background: var(--surface2); }
   align-items: center;
   gap: 0;
   line-height: 1.2;
-  pointer-events: none;
 }
 .lc-elo-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
 .lc-stat-label { font-size: 12px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
@@ -4060,7 +4059,7 @@ function renderLeaderGrid() {
     const safeBases = (r.bases || []).join(',').replace(/"/g,'&quot;');
     const eloColor = r.avg_hri_rating >= 1700 ? 'var(--green)' : r.avg_hri_rating >= 1550 ? 'var(--gold)' : 'var(--text2)';
     const eloBadge = r.avg_hri_rating
-      ? `<div class="lc-elo-badge" data-tooltip="Avg HRI Premier rating of players piloting this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
+      ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
       : '';
     return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
   <div class="lc-img-wrap" id="limg-wrap-${i}"></div>
