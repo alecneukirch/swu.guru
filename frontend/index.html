@@ -1342,6 +1342,7 @@ select option { background: var(--surface2); }
   line-height: 1.2;
 }
 .lc-elo-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+.lc-top8-badge { top: 52px; }
 .lc-stat-label { font-size: 12px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
 .lc-stat-val   { font-family: var(--mono); font-size: 16px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
 .ev-stats { grid-template-columns: repeat(4, 1fr); gap: 2px 4px; }
@@ -4210,6 +4211,9 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   const eloBadge = r.avg_hri_rating
     ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
     : '';
+  const top8Badge = (eventMode && r.t8_label === 'Day2' && r.literal_top8_count > 0)
+    ? `<div class="lc-elo-badge lc-top8-badge" data-tooltip="Number of decks that finished in the literal Top 8"><div class="lc-elo-label">Top 8</div><div style="color:var(--gold)">${r.literal_top8_count}</div></div>`
+    : '';
   const mwrVal = r.match_games > 0 ? Math.round(r.match_win_rate * 100) + '%' : '—';
   const mwrColor = r.match_win_rate >= 0.52 ? 'var(--green)' : r.match_win_rate > 0 ? 'var(--text2)' : 'var(--text3)';
   let statsHtml;
@@ -4234,7 +4238,7 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   }
   return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
   <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
-  ${eloBadge}
+  ${eloBadge}${top8Badge}
   <div class="lc-body">
     <div class="lc-rank" id="${pfx}-rank-${i}"></div>
     <div class="lc-name">${shortName(r.leader)}</div>
@@ -5196,9 +5200,10 @@ function renderEvents(rows) {
 }
 
 // ── Event detail page ────────────────────────────────────────────────────────
-let currentEventId  = null;
-let eventLeaderData = [];
-let eventSort       = 'total_decks';
+let currentEventId    = null;
+let eventLeaderData   = [];
+let eventSort         = 'total_decks';
+let _eventPlayerCount = 0;
 
 function openEvent(evId, evName, evDate, evPlayers) {
   currentEventId  = evId;
@@ -5243,6 +5248,7 @@ async function _loadEventLeaderStats(evId) {
     const resp = await api(`/api/events/${evId}/leader-stats?format=${currentFormat}`);
     if (currentEventId !== evId) return;
     const playerCount = resp.player_count || 0;
+    _eventPlayerCount = playerCount;
     const raw = resp.combos || [];
     // Fill in header if we opened from a direct link without event metadata
     if (resp.event_name) {
@@ -5265,9 +5271,10 @@ async function _loadEventLeaderStats(evId) {
       match_win_rate: r.match_games > 0 ? r.match_wins  / r.match_games : 0,
       base_key:       r.base || '',
       bases:          [r.base || ''],
-      t8_display:     isLarge ? r.day2_count : r.top8_count,
-      t8_conv_count:  isLarge ? r.day2_count : r.top8_count,
-      t8_label:       isLarge ? 'Day2' : 'T8',
+      t8_display:          isLarge ? r.day2_count : r.top8_count,
+      t8_conv_count:       isLarge ? r.day2_count : r.top8_count,
+      t8_label:            isLarge ? 'Day2' : 'T8',
+      literal_top8_count:  r.literal_top8_count || 0,
     }));
     renderEventGrid();
   } catch(err) {
@@ -5298,11 +5305,31 @@ function renderEventGrid() {
 
   const maxD = Math.max(...rows.map(r => r.total_decks), 1);
 
-  const TIER_ORDER   = ['S','A','B','C','D','F'];
+  const isSmallEvent = _eventPlayerCount > 0 && _eventPlayerCount <= 128;
+  const TIER_ORDER_SMALL = ['S','A','B','C','D'];
+  const TIER_ORDER_LARGE = ['S','A','B','C','D','F'];
+  const TIER_ORDER   = isSmallEvent ? TIER_ORDER_SMALL : TIER_ORDER_LARGE;
   const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_TOOLTIP = { S:'≥ 1.3× expected', A:'≥ 1.1× expected', B:'≥ 0.9× expected', C:'≥ 0.7× expected', D:'≥ 0.5× expected', F:'< 0.5× expected' };
+  const TIER_TOOLTIP_SMALL = { S:'Top 20% MWR', A:'Top 40% MWR', B:'Top 60% MWR', C:'Top 80% MWR', D:'Bottom 20% MWR' };
+  const TIER_TOOLTIP_LARGE = { S:'≥ 1.3× expected', A:'≥ 1.1× expected', B:'≥ 0.9× expected', C:'≥ 0.7× expected', D:'≥ 0.5× expected', F:'< 0.5× expected' };
+  const TIER_TOOLTIP = isSmallEvent ? TIER_TOOLTIP_SMALL : TIER_TOOLTIP_LARGE;
+  const TIER_CLS     = { S:'tier-s', A:'tier-a', B:'tier-b', C:'tier-c', D:'tier-d', F:'tier-f' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
-  rows.forEach(r => { const g = tierGrade(r._conv).grade; byTier[g in byTier ? g : 'C'].push(r); });
+
+  if (isSmallEvent) {
+    // MWR quintile grouping: sort by MWR descending, split into 5 equal groups
+    const byMwr = [...rows].sort((a, b) => (b.match_win_rate ?? 0) - (a.match_win_rate ?? 0));
+    const n = byMwr.length;
+    byMwr.forEach((r, idx) => {
+      const tier = TIER_ORDER_SMALL[Math.min(4, Math.floor(idx * 5 / n))];
+      r._tier = tier;
+      byTier[tier].push(r);
+    });
+    // Re-sort within each tier by the current sort field
+    TIER_ORDER_SMALL.forEach(t => byTier[t].sort((a, b) => (b[eventSort] ?? 0) - (a[eventSort] ?? 0)));
+  } else {
+    rows.forEach(r => { const g = tierGrade(r._conv).grade; byTier[g in byTier ? g : 'C'].push(r); });
+  }
 
   let html = '';
   let imgIdx = 0;
@@ -5311,8 +5338,9 @@ function renderEventGrid() {
   TIER_ORDER.forEach(t => {
     const group = byTier[t];
     if (!group.length) return;
-    const tier = tierGrade(group[0]._conv);
-    html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div><div class="tier-section-grid">`;
+    const tierCls = TIER_CLS[t] || 'tier-c';
+    const tooltip = TIER_TOOLTIP[t] || '';
+    html += `<div class="tier-section-header ${tierCls}"><span class="tsh-grade" data-tooltip="${tooltip}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div><div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
       html += mkCard(r, i, r._conv, maxD, 'ep', true);
