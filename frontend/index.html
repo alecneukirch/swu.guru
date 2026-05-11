@@ -2300,23 +2300,7 @@ select option { background: var(--surface2); }
 .ev-table td:nth-child(5) { font-family: var(--mono); font-size: 12px; color: var(--gold); }
 .ev-table tbody tr.ev-clickable { cursor: pointer; }
 .ev-table tbody tr.ev-clickable:hover td { background: rgba(255,255,255,0.04); }
-.ev-table tbody tr.ev-open td { background: rgba(255,255,255,0.03); }
 .ev-table tbody tr:not(.ev-clickable):not(.ev-section-header):hover td { background: rgba(255,255,255,0.025); }
-.ev-detail-row td { padding: 0 !important; border-bottom: 2px solid var(--border2) !important; background: var(--bg) !important; }
-.ev-detail-panel { padding: 20px 16px 24px; }
-.ev-detail-title { font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 14px; }
-.ev-combo-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-.ev-combo-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 14px; min-width: 160px; max-width: 200px; flex: 1 1 160px; position: relative; overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
-.ev-combo-card:hover { border-color: var(--border); transform: translateY(-1px); }
-.ev-combo-art { position: absolute; top: 0; right: 0; width: 70px; height: 100%; object-fit: cover; object-position: center top; opacity: 0.18; border-radius: 0 8px 8px 0; pointer-events: none; }
-.ev-combo-name { font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; position: relative; }
-.ev-combo-base { font-size: 11px; color: var(--text3); margin-bottom: 8px; position: relative; }
-.ev-combo-stats { display: flex; gap: 12px; flex-wrap: wrap; position: relative; }
-.ev-combo-stat { display: flex; flex-direction: column; }
-.ev-combo-stat-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
-.ev-combo-stat-val { font-family: var(--mono); font-size: 13px; color: var(--text2); }
-.ev-combo-placements { margin-top: 8px; font-size: 11px; color: var(--text3); position: relative; line-height: 1.6; }
-.ev-combo-placements span { color: var(--text2); }
 .ev-upcoming td:first-child { color: var(--gold); }
 .ev-section-header td {
   padding: 20px 12px 7px;
@@ -3398,9 +3382,11 @@ select option { background: var(--surface2); }
 
 <!-- BREADCRUMB -->
 <div id="breadcrumb">
-  <span class="bc-link" onclick="goHome()">Leaders</span>
+  <span class="bc-link" id="bc-home" onclick="goHome()">Leaders</span>
+  <span class="bc-link" id="bc-events-back" style="display:none" onclick="showPage('events')">Events</span>
   <span class="bc-sep">›</span>
   <span class="bc-cur" id="bc-leader"></span>
+  <span class="bc-cur" id="bc-event-name" style="display:none"></span>
   <span class="bc-sep" id="bc-base-sep" style="display:none">›</span>
   <span class="bc-cur" id="bc-base"></span>
 </div>
@@ -3563,6 +3549,28 @@ select option { background: var(--surface2); }
     </div>
   </div>
 
+</div>
+
+<!-- ══ EVENT PAGE ══ -->
+<div class="page" id="page-event">
+  <div class="page-header">
+    <div>
+      <div class="page-title" id="ep-title">—</div>
+      <div class="page-sub"  id="ep-sub">—</div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="sort-btn-wrap">
+      <span class="ctrl-label">Sort</span>
+      <button class="btn active" id="ep-sort-decks"  onclick="setEventSort('total_decks')">Decks</button>
+      <button class="btn"        id="ep-sort-t8rate"  onclick="setEventSort('t8_rate')">T8 Rate</button>
+      <button class="btn"        id="ep-sort-wins"    onclick="setEventSort('wins')">Wins</button>
+      <button class="btn"        id="ep-sort-mwr"     onclick="setEventSort('match_win_rate')">MWR</button>
+    </div>
+    <div class="sep"></div>
+    <input type="text" id="ep-search" placeholder="Search leader…" oninput="renderEventGrid()" style="width:160px">
+  </div>
+  <div id="event-leader-grid"></div>
 </div>
 
 <!-- ══ MATRIX PAGE ══ -->
@@ -3982,6 +3990,10 @@ function openLeader(name, autoBase = null) {
   document.getElementById('page-leader').classList.add('active');
   document.getElementById('nav-home').classList.add('active');
   document.getElementById('mob-home')?.classList.add('active');
+  document.getElementById('bc-home').style.display = '';
+  document.getElementById('bc-events-back').style.display = 'none';
+  document.getElementById('bc-leader').style.display = '';
+  document.getElementById('bc-event-name').style.display = 'none';
   document.getElementById('bc-leader').textContent = shortName(name);
   document.getElementById('bc-base-sep').style.display = 'none';
   document.getElementById('bc-base').style.display = 'none';
@@ -4022,6 +4034,11 @@ function routeFromHash() {
       if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
       setLeaderTab(params.tab);
     }
+    return true;
+  }
+  if (params.event) {
+    const ev = eventsData.find(e => String(e.id) === String(params.event));
+    openEvent(params.event, ev?.name || 'Event', ev?.date, ev?.player_count);
     return true;
   }
   const page = hash.replace(/^#/, '');
@@ -4225,7 +4242,7 @@ function renderLeaderGrid() {
   let imgIdx = 0;
   const allRows = [];
 
-  function mkCard(r, i, conv) {
+  function mkCard(r, i, conv, pfx = 'limg') {
     const asp = aspect(r.leader);
     const t8p = fmtPct(r.t8_rate);
     const mp  = fmtPct(r.meta_share);
@@ -4240,10 +4257,10 @@ function renderLeaderGrid() {
       ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
       : '';
     return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
-  <div class="lc-img-wrap" id="limg-wrap-${i}"></div>
+  <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
   ${eloBadge}
   <div class="lc-body">
-    <div class="lc-rank" id="lc-rank-${i}"></div>
+    <div class="lc-rank" id="${pfx}-rank-${i}"></div>
     <div class="lc-name">${shortName(r.leader)}</div>
     <div class="lc-base">${r.base_group || '—'}</div>
     <div class="lc-conversion ${cc}" data-tooltip="${convTooltip(conv)}">${convArrow(conv)} ${cv}</div>
@@ -4300,7 +4317,7 @@ function renderLeaderGrid() {
       if (url) { wrap.style.backgroundImage = `url(${url})`; wrap.classList.add('loaded'); }
       const leaderAsps = d.all_aspects || [];
       const baseAsp    = r.aspect && r.aspect !== 'none' ? [r.aspect] : [];
-      const rankEl     = document.getElementById('lc-rank-' + i);
+      const rankEl     = document.getElementById('limg-rank-' + i);
       if (rankEl && leaderAsps.length) {
         const allAsps = [...leaderAsps, ...baseAsp];
         rankEl.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center">${aspectIcons(allAsps, 20)}</span>`;
@@ -5139,7 +5156,7 @@ function renderEvents(rows) {
       ? `<a href="${e.melee_url}" target="_blank" class="btn" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation()">${upcoming ? 'INFO↗' : 'MELEE↗'}</a>`
       : '';
     const cls = [upcoming ? 'ev-upcoming' : '', !upcoming ? 'ev-clickable' : ''].filter(Boolean).join(' ');
-    html += `<tr class="${cls}" data-ev-id="${e.id}" data-ev-name="${(e.name||'').replace(/"/g,'&quot;')}">
+    html += `<tr class="${cls}" data-ev-id="${e.id}" data-ev-name="${(e.name||'').replace(/"/g,'&quot;')}" data-ev-date="${e.date||''}" data-ev-players="${e.player_count||''}">
   <td>${e.name || '—'}</td>
   <td>${e.date || '—'}</td>
   <td>${[e.city,e.country].filter(Boolean).join(', ') || '—'}</td>
@@ -5153,69 +5170,146 @@ function renderEvents(rows) {
   tbody.onclick = e => {
     const row = e.target.closest('tr.ev-clickable');
     if (!row) return;
-    const evId = row.dataset.evId;
-    const existing = tbody.querySelector(`tr.ev-detail-row[data-ev-id="${evId}"]`);
-    if (existing) {
-      existing.remove();
-      row.classList.remove('ev-open');
-      return;
-    }
-    // Close any other open panel
-    tbody.querySelectorAll('tr.ev-detail-row').forEach(r => r.remove());
-    tbody.querySelectorAll('tr.ev-open').forEach(r => r.classList.remove('ev-open'));
-    row.classList.add('ev-open');
-    const detailRow = document.createElement('tr');
-    detailRow.className = 'ev-detail-row';
-    detailRow.dataset.evId = evId;
-    detailRow.innerHTML = `<td colspan="6"><div class="ev-detail-panel"><div class="ev-detail-title">Leader Breakdown</div><div class="ev-combo-grid" id="ev-combo-grid-${evId}"><div class="loading" style="padding:8px">loading…</div></div></div></td>`;
-    row.insertAdjacentElement('afterend', detailRow);
-    loadEventLeaderStats(evId);
+    openEvent(row.dataset.evId, row.dataset.evName, row.dataset.evDate, row.dataset.evPlayers);
   };
 }
 
-async function loadEventLeaderStats(evId) {
-  const grid = document.getElementById(`ev-combo-grid-${evId}`);
-  if (!grid) return;
+// ── Event detail page ────────────────────────────────────────────────────────
+let currentEventId  = null;
+let eventLeaderData = [];
+let eventSort       = 'total_decks';
+
+function openEvent(evId, evName, evDate, evPlayers) {
+  currentEventId  = evId;
+  eventLeaderData = [];
+  history.pushState(null, '', '#event=' + evId);
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-event').classList.add('active');
+  document.getElementById('nav-events').classList.add('active');
+  document.getElementById('mob-events')?.classList.add('active');
+  // Breadcrumb
+  document.getElementById('bc-home').style.display = 'none';
+  document.getElementById('bc-events-back').style.display = '';
+  document.getElementById('bc-leader').style.display = 'none';
+  document.getElementById('bc-event-name').style.display = '';
+  document.getElementById('bc-event-name').textContent = evName || 'Event';
+  document.getElementById('bc-base-sep').style.display = 'none';
+  document.getElementById('breadcrumb').classList.add('visible');
+  // Header
+  document.getElementById('ep-title').textContent = evName || '—';
+  const sub = [evDate, evPlayers ? evPlayers + ' players' : null].filter(Boolean).join(' · ');
+  document.getElementById('ep-sub').textContent = sub || '';
+  document.getElementById('event-leader-grid').innerHTML = '<div class="loading" style="padding:40px 24px">loading…</div>';
+  // Reset sort UI
+  eventSort = 'total_decks';
+  ['decks','t8rate','wins','mwr'].forEach(k => document.getElementById('ep-sort-'+k)?.classList.remove('active'));
+  document.getElementById('ep-sort-decks')?.classList.add('active');
+  if (document.getElementById('ep-search')) document.getElementById('ep-search').value = '';
+  _loadEventLeaderStats(evId);
+}
+
+function setEventSort(field) {
+  eventSort = field;
+  const map = { total_decks:'decks', t8_rate:'t8rate', wins:'wins', match_win_rate:'mwr' };
+  Object.entries(map).forEach(([f, k]) => document.getElementById('ep-sort-'+k)?.classList.toggle('active', f === field));
+  renderEventGrid();
+}
+
+async function _loadEventLeaderStats(evId) {
   try {
-    const combos = await api(`/api/events/${evId}/leader-stats?format=${currentFormat}`);
-    if (!combos.length) { grid.innerHTML = '<div class="empty-state" style="padding:8px">// no leader data for this event</div>'; return; }
-    const maxDecks = Math.max(...combos.map(c => c.total_decks), 1);
-    grid.innerHTML = combos.map(c => {
-      const mwr = c.match_games > 0 ? Math.round(c.match_win_rate * 100) + '%' : '—';
-      const mwrColor = c.match_win_rate >= 0.52 ? 'var(--green)' : c.match_win_rate > 0 ? 'var(--text2)' : 'var(--text3)';
-      const t8Color = c.top8_count > 0 ? 'var(--gold)' : 'var(--text3)';
-      const topPlayers = (c.placements || []).slice(0, 3).map(p =>
-        `<div>#${p.placement} <span>${p.player_name || '?'}</span></div>`
-      ).join('');
-      return `<div class="ev-combo-card" data-leader="${c.leader.replace(/"/g,'&quot;')}" onclick="openLeader(this.dataset.leader)">
-  <div class="ev-combo-name">${shortName(c.leader)}</div>
-  <div class="ev-combo-base">${c.base_group || c.base || '—'}</div>
-  <div class="ev-combo-stats">
-    <div class="ev-combo-stat"><div class="ev-combo-stat-label">Decks</div><div class="ev-combo-stat-val">${c.total_decks}</div></div>
-    <div class="ev-combo-stat"><div class="ev-combo-stat-label">T8</div><div class="ev-combo-stat-val" style="color:${t8Color}">${c.top8_count}</div></div>
-    <div class="ev-combo-stat"><div class="ev-combo-stat-label">MWR</div><div class="ev-combo-stat-val" style="color:${mwrColor}">${mwr}</div></div>
-  </div>
-  ${topPlayers ? `<div class="ev-combo-placements">${topPlayers}</div>` : ''}
-</div>`;
-    }).join('');
-    // Lazy-load card art
-    combos.forEach(c => {
-      fetchLeaderCard(c.leader).then(d => {
-        const cards = grid.querySelectorAll(`.ev-combo-card[data-leader="${c.leader.replace(/"/g,'\\"')}"]`);
-        cards.forEach(card => {
-          if (d?.front_image_url && !card.querySelector('.ev-combo-art')) {
-            const img = document.createElement('img');
-            img.className = 'ev-combo-art';
-            img.src = d.front_image_url;
-            img.alt = '';
-            card.appendChild(img);
-          }
-        });
-      }).catch(() => {});
-    });
+    const raw = await api(`/api/events/${evId}/leader-stats?format=${currentFormat}`);
+    if (currentEventId !== evId) return; // navigated away
+    const totalDecks = raw.reduce((s, r) => s + r.total_decks, 0);
+    eventLeaderData = raw.map(r => ({
+      ...r,
+      t8_rate:        r.total_decks > 0 ? r.top8_count / r.total_decks : 0,
+      meta_share:     totalDecks > 0    ? r.total_decks / totalDecks   : 0,
+      match_win_rate: r.match_games > 0 ? r.match_wins  / r.match_games : 0,
+      base_key:       r.base || '',
+      bases:          [r.base || ''],
+    }));
+    renderEventGrid();
   } catch(err) {
-    if (grid) grid.innerHTML = `<div class="empty-state" style="padding:8px">// ${err.message}</div>`;
+    document.getElementById('event-leader-grid').innerHTML =
+      `<div class="empty-state" style="padding:40px 24px">// ${err.message}</div>`;
   }
+}
+
+function renderEventGrid() {
+  const grid = document.getElementById('event-leader-grid');
+  if (!grid) return;
+  const search = (document.getElementById('ep-search')?.value || '').toLowerCase();
+  let rows = [...eventLeaderData];
+  if (search) rows = rows.filter(r => r.leader?.toLowerCase().includes(search) || r.base_group?.toLowerCase().includes(search));
+  if (!rows.length) { grid.innerHTML = '<div class="empty-state" style="padding:40px">// no data</div>'; return; }
+
+  // Event-wide baseline T8 rate for conversion
+  const evTotalDecks = rows.reduce((s, r) => s + r.total_decks, 0);
+  const evTotalT8s   = rows.reduce((s, r) => s + r.top8_count,  0);
+  const baseT8Rate   = evTotalDecks > 0 ? evTotalT8s / evTotalDecks : 0.08;
+
+  rows.forEach(r => {
+    r._conv = (baseT8Rate && r.total_decks)
+      ? Math.round((r.top8_count / r.total_decks / baseT8Rate) * 1000) / 1000
+      : 0;
+  });
+  rows.sort((a, b) => (b[eventSort] ?? 0) - (a[eventSort] ?? 0));
+
+  const maxD = Math.max(...rows.map(r => r.total_decks), 1);
+
+  const TIER_ORDER   = ['S','A','B','C','D','F'];
+  const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
+  const TIER_TOOLTIP = { S:'≥ 1.3× expected', A:'≥ 1.1× expected', B:'≥ 0.9× expected', C:'≥ 0.7× expected', D:'≥ 0.5× expected', F:'< 0.5× expected' };
+  const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
+  rows.forEach(r => { const g = tierGrade(r._conv).grade; byTier[g in byTier ? g : 'C'].push(r); });
+
+  let html = '';
+  let imgIdx = 0;
+  const allRows = [];
+
+  TIER_ORDER.forEach(t => {
+    const group = byTier[t];
+    if (!group.length) return;
+    const tier = tierGrade(group[0]._conv);
+    html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div><div class="tier-section-grid">`;
+    group.forEach(r => {
+      const i = imgIdx++;
+      html += mkCard(r, i, r._conv, 'ep');
+      allRows.push({ r, i });
+    });
+    html += `</div>`;
+  });
+
+  grid.innerHTML = html;
+  grid.classList.add('tier-grouped');
+
+  grid.onclick = e => {
+    const card = e.target.closest('.leader-card[data-leader]');
+    if (card) openLeader(card.dataset.leader, card.dataset.bases || null);
+  };
+
+  allRows.forEach(({ r, i }) => {
+    fetchLeaderCard(r.leader).then(d => {
+      const wrap = document.getElementById('ep-wrap-' + i);
+      if (!wrap) return;
+      const url = d?.back_art_url || d?.front_art_url;
+      if (url) { wrap.style.backgroundImage = `url(${url})`; wrap.classList.add('loaded'); }
+      const leaderAsps = d.all_aspects || [];
+      const baseAsp    = r.aspect && r.aspect !== 'none' ? [r.aspect] : [];
+      const rankEl     = document.getElementById('ep-rank-' + i);
+      if (rankEl && leaderAsps.length) {
+        const allAsps = [...leaderAsps, ...baseAsp];
+        rankEl.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center">${aspectIcons(allAsps, 20)}</span>`;
+        const primaryAsp = aspectFromArray(leaderAsps);
+        const cardEl = wrap?.closest('.leader-card');
+        if (cardEl && primaryAsp !== 'Unknown') {
+          cardEl.className = cardEl.className.replace(/asp-\S+/, 'asp-' + primaryAsp);
+        }
+      }
+    }).catch(() => {});
+  });
 }
 
 // ══ CARD MODAL ═══════════════════════════════════════════════════════════════
