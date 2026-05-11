@@ -2317,12 +2317,48 @@ select option { background: var(--surface2); }
 
 /* ── Picks page ───────────────────────────────────────────── */
 
+.picks-wrap-inner {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+}
 .picks-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 900px;
+  flex: 0 0 auto;
+  width: 520px;
 }
+.picks-detail-panel {
+  flex: 1;
+  min-width: 0;
+  border-left: 1px solid var(--border2);
+  margin-left: 24px;
+  padding-left: 24px;
+  min-height: 200px;
+}
+.picks-detail-header {
+  margin-bottom: 16px;
+}
+.picks-detail-leader {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.picks-detail-base {
+  font-size: 13px;
+  color: var(--text3);
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+.picks-detail-stats {
+  display: flex;
+  gap: 24px;
+  margin: 12px 0 16px;
+}
+.picks-detail-stat { text-align: center; }
+.picks-detail-stat-val { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+.picks-detail-stat-label { font-size: 10px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; }
 .pick-row {
   display: grid;
   grid-template-columns: 36px 1fr 80px 120px 1fr;
@@ -2336,6 +2372,7 @@ select option { background: var(--surface2); }
   transition: border-color 0.15s;
 }
 .pick-row:hover { border-color: var(--gold); }
+.pick-row.open  { border-color: var(--gold); background: rgba(240,180,41,0.05); }
 .pick-rank {
   font-family: var(--mono);
   font-size: 13px;
@@ -6559,21 +6596,21 @@ function renderGlobalCards(rows) {
 
 // ══ PICKS PAGE ══════════════════════════════════════════════════════════════
 
-let _picksData     = [];
-let _picksOpenKeys = new Set();   // tracks which expanded rows are open
-let _picksMuSort   = 'games';  // column to sort matchup detail by
-let _picksMuDir    = -1;       // -1 = desc, 1 = asc
+let _picksData        = [];
+let _picksSelectedKey = null;
+let _picksMuSort      = 'games';
+let _picksMuDir       = -1;
 
 function togglePickRow(key) {
-  if (_picksOpenKeys.has(key)) _picksOpenKeys.delete(key);
-  else _picksOpenKeys.add(key);
+  _picksSelectedKey = _picksSelectedKey === key ? null : key;
   renderPicks();
+  renderPickDetail();
 }
 
 function setPicksMuSort(col) {
   if (_picksMuSort === col) _picksMuDir *= -1;
   else { _picksMuSort = col; _picksMuDir = -1; }
-  renderPicks();
+  renderPickDetail();
 }
 
 async function loadPicks() {
@@ -6615,63 +6652,30 @@ function renderPicks() {
   const fmtShare = v => (v * 100).toFixed(1) + '%';
   const evClass  = v => v == null ? 'neu' : v >= 0.515 ? 'pos' : v <= 0.485 ? 'neg' : 'neu';
 
-  const sortedMatchups = (matchups) => {
-    const col = _picksMuSort;
-    return [...matchups].sort((a, b) => _picksMuDir * (a[col] - b[col]));
-  };
+  // Auto-select first if nothing selected
+  if (!_picksSelectedKey && _picksData.length) {
+    _picksSelectedKey = `${_picksData[0].leader}|||${_picksData[0].base_key}`;
+  }
 
-  const sortArrow = col => {
-    if (_picksMuSort !== col) return '<span style="opacity:0.3">↕</span>';
-    return _picksMuDir === -1 ? '↓' : '↑';
-  };
-
-  let html = '<div class="picks-list">';
+  let listHtml = '<div class="picks-list">';
   _picksData.forEach((deck, i) => {
-    const key      = `${deck.leader}|||${deck.base_key}`;
-    const isOpen   = _picksOpenKeys.has(key);
-    const rank     = i + 1;
-    const rankCls  = rank <= 3 ? 'top3' : '';
-    const name     = shortName(deck.leader);
-    const asp      = aspect(deck.leader);
-    const aspCls   = 'lc-aspect aspect-' + asp.toLowerCase();
+    const key     = `${deck.leader}|||${deck.base_key}`;
+    const isOpen  = _picksSelectedKey === key;
+    const rank    = i + 1;
+    const rankCls = rank <= 3 ? 'top3' : '';
+    const name    = shortName(deck.leader);
+    const asp     = aspect(deck.leader);
+    const aspCls  = 'lc-aspect aspect-' + asp.toLowerCase();
 
-    // Chips: always by win rate (best 2 + worst 2 of original order)
-    const byWR  = [...deck.matchups].sort((a, b) => b.win_rate - a.win_rate);
-    const good  = byWR.slice(0, 2);
-    const bad   = byWR.slice(-2).reverse();
+    const byWR = [...deck.matchups].sort((a, b) => b.win_rate - a.win_rate);
+    const good = byWR.slice(0, 2);
+    const bad  = byWR.slice(-2).reverse();
     const muChips = [
-      ...good.map(m => `<span class="pick-mu-chip good" title="${m.games} games">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
-      ...bad.map(m =>  `<span class="pick-mu-chip bad"  title="${m.games} games">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
+      ...good.map(m => `<span class="pick-mu-chip good">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
+      ...bad.map(m  => `<span class="pick-mu-chip bad">${shortName(m.opponent)} ${fmtEV(m.win_rate)}</span>`),
     ].join('');
 
-    let detailRows = '';
-    for (const m of sortedMatchups(deck.matchups)) {
-      const wr  = m.win_rate;
-      const col = wr >= 0.52 ? 'var(--green)' : wr <= 0.48 ? 'var(--red2)' : 'var(--text2)';
-      detailRows += `<tr>
-        <td style="color:var(--text)">${shortName(m.opponent)}</td>
-        <td style="color:var(--text3);font-size:12px">${m.opponent_base_group}</td>
-        <td style="color:${col};font-weight:600">${fmtEV(wr)}</td>
-        <td style="color:var(--text3)">${fmtShare(m.opponent_share)}</td>
-        <td style="color:var(--text3)">${m.games}</td>
-      </tr>`;
-    }
-    const thStyle = 'cursor:pointer;user-select:none';
-    const detail = detailRows ? `
-      <div class="pick-detail" style="display:${isOpen ? 'block' : 'none'}">
-        <table class="pick-mu-table">
-          <thead><tr>
-            <th>Opponent</th>
-            <th>Base</th>
-            <th style="${thStyle}" onclick="event.stopPropagation();setPicksMuSort('win_rate')">Win Rate ${sortArrow('win_rate')}</th>
-            <th style="${thStyle}" onclick="event.stopPropagation();setPicksMuSort('opponent_share')">Meta % ${sortArrow('opponent_share')}</th>
-            <th style="${thStyle}" onclick="event.stopPropagation();setPicksMuSort('games')">Games ${sortArrow('games')}</th>
-          </tr></thead>
-          <tbody>${detailRows}</tbody>
-        </table>
-      </div>` : '';
-
-    html += `
+    listHtml += `
     <div class="pick-row${isOpen ? ' open' : ''}" onclick="togglePickRow('${key}')">
       <div class="pick-rank ${rankCls}">#${rank}</div>
       <div class="pick-deck">
@@ -6690,11 +6694,66 @@ function renderPicks() {
         <div class="pick-ev-label">FIELD EV</div>
       </div>
       <div class="pick-matchups">${muChips}</div>
-      ${detail}
     </div>`;
   });
-  html += '</div>';
-  wrap.innerHTML = html;
+  listHtml += '</div>';
+
+  wrap.innerHTML = `<div class="picks-wrap-inner">${listHtml}<div class="picks-detail-panel" id="picks-detail-panel"></div></div>`;
+  renderPickDetail();
+}
+
+function renderPickDetail() {
+  const panel = document.getElementById('picks-detail-panel');
+  if (!panel) return;
+
+  const deck = _picksData.find(d => `${d.leader}|||${d.base_key}` === _picksSelectedKey);
+  if (!deck) { panel.innerHTML = '<div style="color:var(--text3);padding:24px 0;font-family:var(--mono);font-size:13px">Select a deck to see matchup detail</div>'; return; }
+
+  const fmtEV    = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
+  const fmtShare = v => (v * 100).toFixed(1) + '%';
+  const evClass  = v => v == null ? 'neu' : v >= 0.515 ? 'pos' : v <= 0.485 ? 'neg' : 'neu';
+  const sortArrow = col => _picksMuSort !== col ? '<span style="opacity:0.3">↕</span>' : (_picksMuDir === -1 ? '↓' : '↑');
+  const thStyle  = 'cursor:pointer;user-select:none';
+
+  const sorted = [...deck.matchups].sort((a, b) => _picksMuDir * (a[_picksMuSort] - b[_picksMuSort]));
+  let rows = '';
+  for (const m of sorted) {
+    const wr  = m.win_rate;
+    const col = wr >= 0.52 ? 'var(--green)' : wr <= 0.48 ? 'var(--red2)' : 'var(--text2)';
+    rows += `<tr>
+      <td style="color:var(--text)">${shortName(m.opponent)}</td>
+      <td style="color:var(--text3);font-size:12px">${m.opponent_base_group}</td>
+      <td style="color:${col};font-weight:600">${fmtEV(wr)}</td>
+      <td style="color:var(--text3)">${fmtShare(m.opponent_share)}</td>
+      <td style="color:var(--text3)">${m.games}</td>
+    </tr>`;
+  }
+
+  panel.innerHTML = `
+    <div class="picks-detail-header">
+      <div class="picks-detail-leader">${shortName(deck.leader)}</div>
+      <div class="picks-detail-base">${deck.base_group}</div>
+      <div class="picks-detail-stats">
+        <div class="picks-detail-stat">
+          <div class="picks-detail-stat-val ${evClass(deck.field_ev)}">${fmtEV(deck.field_ev)}</div>
+          <div class="picks-detail-stat-label">Field EV</div>
+        </div>
+        <div class="picks-detail-stat">
+          <div class="picks-detail-stat-val">${fmtShare(deck.meta_share)}</div>
+          <div class="picks-detail-stat-label">Meta Share</div>
+        </div>
+      </div>
+    </div>
+    <table class="pick-mu-table">
+      <thead><tr>
+        <th>Opponent</th>
+        <th>Base</th>
+        <th style="${thStyle}" onclick="setPicksMuSort('win_rate')">Win Rate ${sortArrow('win_rate')}</th>
+        <th style="${thStyle}" onclick="setPicksMuSort('opponent_share')">Meta % ${sortArrow('opponent_share')}</th>
+        <th style="${thStyle}" onclick="setPicksMuSort('games')">Games ${sortArrow('games')}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 </script>
 
