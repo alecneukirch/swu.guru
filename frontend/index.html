@@ -3611,16 +3611,16 @@ select option { background: var(--surface2); }
   </div>
   <div class="controls">
     <div class="sep"></div>
-    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
-      Min pilot ELO
-      <input type="range" id="mx-elo-slider" min="0" max="2000" step="50" value="1500"
-        style="width:140px;accent-color:var(--gold)" oninput="onMatrixEloSlide(this.value)">
-      <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">≥ 1500</span>
-    </label>
   </div>
-  <div style="padding:0 24px 8px">
+  <div style="padding:0 24px 8px;display:flex;align-items:center;gap:24px">
     <input type="text" id="mx-search" placeholder="Filter leaders…" oninput="filterMatrix()"
       style="width:200px;padding:5px 12px;font-size:13px">
+    <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
+      Min pilot ELO
+      <input type="range" id="mx-elo-slider" min="0" max="11" step="1" value="0"
+        style="width:140px;accent-color:var(--gold)" oninput="onMatrixEloSlide(this.value)">
+      <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">No filter</span>
+    </label>
   </div>
   <div id="matrix-wrap" style="padding:0 24px 32px;overflow-x:auto;overflow-y:visible">
     <div class="loading" style="padding:24px">loading…</div>
@@ -5669,7 +5669,7 @@ let _matrixData = null;
 
 let matrixRows  = 20;
 let matrixCols  = 20;
-let matrixMinElo = 1500;
+let matrixMinElo = 0;
 let _matrixEloTimer = null;
 
 // Cost filter state
@@ -5746,8 +5746,9 @@ function filterMatrix() {
   });
 }
 
-function onMatrixEloSlide(val) {
-  matrixMinElo = parseInt(val, 10);
+function onMatrixEloSlide(pos) {
+  const p = parseInt(pos, 10);
+  matrixMinElo = p === 0 ? 0 : 1500 + (p - 1) * 50;
   const lbl = document.getElementById('mx-elo-label');
   if (lbl) lbl.textContent = matrixMinElo > 0 ? `≥ ${matrixMinElo}` : 'No filter';
   clearTimeout(_matrixEloTimer);
