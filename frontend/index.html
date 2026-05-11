@@ -493,7 +493,7 @@ select option { background: var(--surface2); }
   border-bottom: 1px solid var(--border2);
   margin-bottom: 6px;
 }
-.elo-col-n   { font-family: var(--mono); font-size: 9px;  color: var(--text3); }
+.elo-col-n   { font-family: var(--mono); font-size: 9px;  font-weight: 700; color: var(--text2); }
 .elo-col-mwr { font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; line-height: 1.2; }
 .elo-col-t8  { font-family: var(--mono); font-size: 10px; color: var(--gold); line-height: 1.2; }
 .elo-bucket-bars {
@@ -5078,14 +5078,6 @@ function renderLeaderElo(rows) {
 </div>`;
   }).join('');
 
-  const first = chartRows[0], last = chartRows[chartRows.length - 1];
-  let insight = '';
-  if (first && last && chartRows.length >= 3) {
-    const mwrDelta = Math.round(((last.mwr || 0) - (first.mwr || 0)) * 100);
-    const t8Delta  = Math.round(((last.t8_rate || 0) - (first.t8_rate || 0)) * 100);
-    insight = `${bucketLabel(first.elo_bucket)} → ${bucketLabel(last.elo_bucket)}: MWR ${mwrDelta >= 0 ? '+' : ''}${mwrDelta}pp · Top 8% ${t8Delta >= 0 ? '+' : ''}${t8Delta}pp`;
-  }
-
   wrap.innerHTML = `<div class="elo-chart-wrap">
   <div class="elo-chart-header">
     <div class="elo-chart-title">Performance by Player ELO (HRI Premier)</div>
@@ -5095,7 +5087,6 @@ function renderLeaderElo(rows) {
     </div>
   </div>
   <div class="elo-bars-area">${cols}</div>
-  ${insight ? `<div class="elo-insight">${insight}</div>` : ''}
 </div>`;
 }
 
