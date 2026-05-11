@@ -676,8 +676,8 @@ select option { background: var(--surface2); }
 }
 /* Corner cell */
 .mx-corner {
-  width: 220px;
-  min-width: 220px;
+  width: 260px;
+  min-width: 260px;
   position: sticky;
   left: 0;
   background: var(--bg);
@@ -685,16 +685,16 @@ select option { background: var(--surface2); }
 }
 /* Row header */
 .mx-row-hdr {
-  text-align: right;
-  padding: 7px 28px 7px 14px;
+  text-align: left;
+  padding: 7px 32px 7px 0;
   color: var(--text2);
   font-family: var(--display);
   font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
-  width: 220px;
-  min-width: 220px;
-  max-width: 220px;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
   overflow: hidden;
   cursor: default;
   border-right: 2px solid var(--border2);
@@ -706,7 +706,7 @@ select option { background: var(--surface2); }
 .mx-row-hdr-inner {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 1px;
   min-width: 0;
   width: 100%;
@@ -720,7 +720,7 @@ select option { background: var(--surface2); }
   overflow: hidden;
   text-overflow: ellipsis;
   align-self: stretch;
-  text-align: right;
+  text-align: left;
 }
 .mx-row-base-name {
   font-family: var(--mono);
@@ -730,7 +730,7 @@ select option { background: var(--surface2); }
   overflow: hidden;
   text-overflow: ellipsis;
   align-self: stretch;
-  text-align: right;
+  text-align: left;
 }
 .mx-row-num {
   font-family: var(--mono);
@@ -1801,7 +1801,7 @@ select option { background: var(--surface2); }
     width: 150px;
     min-width: 150px;
     max-width: 150px;
-    padding: 5px 10px 5px 6px;
+    padding: 5px 16px 5px 0;
     font-size: 12px;
   }
   .mx-row-leader-name { font-size: 12px; }
@@ -3622,7 +3622,7 @@ select option { background: var(--surface2); }
       <span id="mx-elo-label" style="min-width:70px;font-weight:600;color:var(--gold)">No filter</span>
     </label>
   </div>
-  <div id="matrix-wrap" style="padding:0 24px 32px;overflow-x:auto;overflow-y:visible">
+  <div id="matrix-wrap" style="padding:0 24px 32px 0;overflow-x:auto;overflow-y:visible">
     <div class="loading" style="padding:24px">loading…</div>
   </div>
 </div>
