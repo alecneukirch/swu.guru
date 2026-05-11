@@ -5364,10 +5364,25 @@ function renderEventGrid() {
     html += `</div>`;
   });
 
-  if (rogueRows.length) {
-    html += `<div class="rogue-section-header"><span class="rogue-label">Rogue</span><span class="rogue-sub">&lt; 1% of field · excluded from tier grades</span><span class="tsh-count">${rogueRows.length}</span></div>`;
+  const rogueHits   = rogueRows.filter(r => (r.t8_display ?? 0) > 0);
+  const rogueMisses = rogueRows.filter(r => (r.t8_display ?? 0) === 0);
+
+  if (rogueHits.length) {
+    const t8Label = rogueHits[0]?.t8_label || 'T8';
+    html += `<div class="rogue-section-header"><span class="rogue-label">Rogue</span><span class="rogue-sub">&lt; 1% of field · had ${t8Label} result</span><span class="tsh-count">${rogueHits.length}</span></div>`;
     html += `<div class="tier-section-grid rogue-grid">`;
-    rogueRows.forEach(r => {
+    rogueHits.forEach(r => {
+      const i = imgIdx++;
+      html += mkCard(r, i, r._conv, maxD, 'ep', true);
+      allRows.push({ r, i });
+    });
+    html += `</div>`;
+  }
+
+  if (rogueMisses.length) {
+    html += `<div class="rogue-section-header"><span class="rogue-label">Also-rans</span><span class="rogue-sub">&lt; 1% of field · no ${rogueRows[0]?.t8_label || 'T8'} result</span><span class="tsh-count">${rogueMisses.length}</span></div>`;
+    html += `<div class="tier-section-grid rogue-grid">`;
+    rogueMisses.forEach(r => {
       const i = imgIdx++;
       html += mkCard(r, i, r._conv, maxD, 'ep', true);
       allRows.push({ r, i });
