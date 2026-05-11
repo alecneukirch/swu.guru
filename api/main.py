@@ -1979,6 +1979,9 @@ def matchup_matrix_by_base(
 
     extra_join  = ""
     extra_where = ""
+    extra_join  = ""
+    extra_select = ""
+    extra_where = ""
     if top8_only:
         extra_join  = f"""
             LEFT JOIN {t['standings']} s1t ON s1t.id = m.p1_standing_id
@@ -1991,6 +1994,7 @@ def matchup_matrix_by_base(
                 s2t.placement <= GREATEST(CEIL(et.player_count::numeric * 0.08)::INT, 1)
             )"""
     elif min_elo > 0:
+        # Fetch both players' ELO; Python filters per-direction so only the row player is checked
         extra_join  = f"""
             LEFT JOIN {t['standings']} s1e ON s1e.id = m.p1_standing_id
             LEFT JOIN player_id_map pm1e  ON pm1e.melee_player_id = s1e.melee_player_id AND pm1e.status != 'rejected'
@@ -1998,10 +2002,10 @@ def matchup_matrix_by_base(
             LEFT JOIN {t['standings']} s2e ON s2e.id = m.p2_standing_id
             LEFT JOIN player_id_map pm2e  ON pm2e.melee_player_id = s2e.melee_player_id AND pm2e.status != 'rejected'
             LEFT JOIN player_identities pi2e ON pi2e.id = pm2e.identity_id"""
-        extra_where = f"AND pi1e.hri_rating >= {int(min_elo)} AND pi2e.hri_rating >= {int(min_elo)}"
+        extra_select = ", pi1e.hri_rating AS p1_elo, pi2e.hri_rating AS p2_elo"
 
     matches = db.fetchall(f"""
-        SELECT m.p1_leader, m.p1_base, m.p2_leader, m.p2_base, m.winner
+        SELECT m.p1_leader, m.p1_base, m.p2_leader, m.p2_base, m.winner{extra_select}
         FROM {t['matches']} m
         JOIN {t['events']} e ON e.id = m.event_id
         {extra_join}
@@ -2020,9 +2024,7 @@ def matchup_matrix_by_base(
             base_to_combo[f"{c['leader']}||{b}"] = f"{c['leader']}|||{c['base_key']}"
 
     # Accumulate W/L per ordered combo pair.
-    # Games are stored symmetrically: both (A,B) and (B,A) get the game count,
-    # but wins are directional — only the winner's key gets the win increment.
-    # This lets matrix[row][col] = pair_stats[(row_key, col_key)] directly.
+    # When min_elo is set, only record a direction if the row player meets the threshold.
     from collections import defaultdict
     pair_stats: dict = defaultdict(lambda: {"wins": 0, "games": 0})
 
@@ -2031,12 +2033,16 @@ def matchup_matrix_by_base(
         p2_key = base_to_combo.get(f"{m['p2_leader']}||{m['p2_base']}")
         if not p1_key or not p2_key or p1_key == p2_key:
             continue
-        pair_stats[(p1_key, p2_key)]["games"] += 1
-        pair_stats[(p2_key, p1_key)]["games"] += 1
-        if m["winner"] == "p1":
-            pair_stats[(p1_key, p2_key)]["wins"] += 1
-        else:
-            pair_stats[(p2_key, p1_key)]["wins"] += 1
+        p1_elo = m.get("p1_elo") or 0
+        p2_elo = m.get("p2_elo") or 0
+        if not min_elo or p1_elo >= min_elo:
+            pair_stats[(p1_key, p2_key)]["games"] += 1
+            if m["winner"] == "p1":
+                pair_stats[(p1_key, p2_key)]["wins"] += 1
+        if not min_elo or p2_elo >= min_elo:
+            pair_stats[(p2_key, p1_key)]["games"] += 1
+            if m["winner"] == "p2":
+                pair_stats[(p2_key, p1_key)]["wins"] += 1
 
     combo_keys = [f"{c['leader']}|||{c['base_key']}" for c in combos]
 
