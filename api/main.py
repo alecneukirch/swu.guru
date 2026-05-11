@@ -1827,6 +1827,66 @@ def leader_weaknesses(
 
 
 # =============================================================================
+#  LEADER ELO BREAKDOWN
+# =============================================================================
+
+@app.get("/api/leader/{leader}/elo-breakdown")
+def leader_elo_breakdown(
+    leader:     str,
+    format:     str           = Query("standard"),
+    meta_id:    Optional[str] = Query(None),
+    days:       Optional[int] = Query(None),
+    base_group: Optional[str] = Query(None),
+    bucket:     int           = Query(100, ge=50, le=200),
+):
+    """Performance stats bucketed by player HRI Premier rating."""
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days)
+
+    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_sql   = "AND s.base = ANY(%s::text[])" if base_names else ""
+    base_param = [base_names] if base_names else []
+
+    rows = db.fetchall(f"""
+        SELECT
+            (FLOOR(pi.hri_rating / %s::float) * %s)::INT AS elo_bucket,
+            COUNT(DISTINCT s.id)::INT                     AS deck_count,
+            COUNT(DISTINCT s.id) FILTER (
+                WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+            )::INT                                        AS top8_count,
+            SUM(s.match_wins)::INT                        AS match_wins,
+            (SUM(s.match_wins) + SUM(s.match_losses))::INT AS match_games
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map pm ON pm.melee_player_id = s.melee_player_id
+            AND pm.status != 'rejected'
+        JOIN player_identities pi ON pi.id = pm.identity_id
+        WHERE s.leader = %s
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          {date_sql}
+          {base_sql}
+        GROUP BY elo_bucket
+        ORDER BY elo_bucket
+    """, [bucket, bucket, leader] + date_params + base_param)
+
+    result = []
+    for r in rows:
+        mwr = round(r['match_wins'] / r['match_games'], 4) if r['match_games'] else None
+        t8r = round(r['top8_count'] / r['deck_count'], 4) if r['deck_count'] else None
+        result.append({
+            'elo_bucket':  r['elo_bucket'],
+            'deck_count':  r['deck_count'],
+            'top8_count':  r['top8_count'],
+            'match_wins':  r['match_wins'],
+            'match_games': r['match_games'],
+            'mwr':         mwr,
+            't8_rate':     t8r,
+        })
+    return result
+
+
+# =============================================================================
 #  LEADER+BASE MATCHUP MATRIX
 # =============================================================================
 

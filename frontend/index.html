@@ -424,6 +424,133 @@ select option { background: var(--surface2); }
   box-shadow: 0 0 12px rgba(240,180,41,0.1), inset 0 1px 0 rgba(240,180,41,0.1);
 }
 
+/* ── ELO breakdown chart ─────────────────────────────────────── */
+.elo-chart-wrap {
+  padding: 24px 24px 32px;
+}
+.elo-chart-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 20px;
+}
+.elo-legend {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.elo-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.elo-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.elo-bars-area {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 200px;
+  border-bottom: 1px solid var(--border2);
+  padding-bottom: 0;
+  overflow-x: auto;
+  padding-right: 4px;
+}
+.elo-bucket-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  width: 64px;
+}
+.elo-bucket-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 200px;
+  width: 100%;
+  justify-content: center;
+}
+.elo-bar {
+  width: 24px;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  min-height: 2px;
+  transition: opacity 0.15s;
+  cursor: default;
+}
+.elo-bar:hover { opacity: 0.8; }
+.elo-bar.mwr  { background: var(--blue); }
+.elo-bar.t8r  { background: var(--gold); }
+.elo-bar.dim  { opacity: 0.35; }
+.elo-bar-val {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.elo-bucket-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 6px;
+  white-space: nowrap;
+}
+.elo-bucket-n {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  opacity: 0.6;
+  margin-top: 2px;
+}
+.elo-ref-line {
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 1px dashed rgba(255,255,255,0.15);
+  pointer-events: none;
+}
+.elo-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 200px;
+  padding-bottom: 0;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.elo-yaxis-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  text-align: right;
+  line-height: 1;
+}
+.elo-chart-row {
+  display: flex;
+  align-items: flex-end;
+}
+.elo-insight {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+  padding: 0 2px;
+}
+
 /* ── Matchup table ────────────────────────────────────────────── */
 .matchup-grid {
   display: grid;
@@ -3288,8 +3415,9 @@ select option { background: var(--surface2); }
   <!-- Tab bar -->
   <div class="lp-tabs">
     <button class="lp-tab active" id="lp-tab-cards"      onclick="setLeaderTab('cards')">Cards</button>
-    <button class="lp-tab"        id="lp-tab-matchups"  onclick="setLeaderTab('matchups')">Matchups</button>
+    <button class="lp-tab"        id="lp-tab-matchups"   onclick="setLeaderTab('matchups')">Matchups</button>
     <button class="lp-tab"        id="lp-tab-weaknesses" onclick="setLeaderTab('weaknesses')">Weaknesses</button>
+    <button class="lp-tab"        id="lp-tab-elo"        onclick="setLeaderTab('elo')">ELO</button>
   </div>
 
   <!-- Cards tab -->
@@ -3384,6 +3512,13 @@ select option { background: var(--surface2); }
     </div>
     <div class="card-grid" id="leader-weaknesses-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
+    </div>
+  </div>
+
+  <!-- ELO tab -->
+  <div id="lp-panel-elo" style="display:none">
+    <div id="leader-elo-chart" style="padding:24px 0">
+      <div class="loading" style="padding:24px">loading…</div>
     </div>
   </div>
 </div>
@@ -4244,6 +4379,7 @@ function onLeaderFilterChange() {
     if (!muOpen) loadLeaderMatchups();
   }
   else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
+  else if (leaderTab === 'elo')        loadLeaderElo();
 }
 
 function shareLeader(btn) {
@@ -4512,13 +4648,14 @@ let leaderTab = 'cards';
 
 function setLeaderTab(tab) {
   leaderTab = tab;
-  ['cards','matchups','weaknesses'].forEach(t => {
+  ['cards','matchups','weaknesses','elo'].forEach(t => {
     document.getElementById('lp-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('lp-panel-' + t).style.display = t === tab ? '' : 'none';
   });
   if (currentLeader) history.replaceState(null, '', buildLeaderHash());
   if (tab === 'matchups'   && currentLeader) loadLeaderMatchups();
   if (tab === 'weaknesses' && currentLeader) loadLeaderWeaknesses();
+  if (tab === 'elo'        && currentLeader) loadLeaderElo();
 }
 
 // ══ MATCHUPS ════════════════════════════════════════════════════════════════
@@ -4813,6 +4950,94 @@ function renderWeaknesses() {
   };
 
   artQueue.forEach(({ name, id }) => loadCardArt(name, id, 'loaded'));
+}
+
+// ══ ELO BREAKDOWN ═══════════════════════════════════════════════════════════
+
+async function loadLeaderElo() {
+  const wrap = document.getElementById('leader-elo-chart');
+  if (!currentLeader) return;
+  wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
+
+  const base = document.getElementById('lp-base').value;
+  let url = '/api/leader/' + encodeURIComponent(currentLeader)
+    + '/elo-breakdown?format=' + currentFormat;
+  if (currentMeta) url += '&meta_id=' + encodeURIComponent(currentMeta);
+  if (base)        url += '&base_group=' + encodeURIComponent(base);
+  url += daysQS();
+
+  try {
+    const rows = await api(url);
+    renderLeaderElo(rows);
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state" style="padding:24px">// ${e.message}</div>`;
+  }
+}
+
+function renderLeaderElo(rows) {
+  const wrap = document.getElementById('leader-elo-chart');
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty-state" style="padding:24px">// not enough HRI-rated players in this dataset yet</div>';
+    return;
+  }
+
+  // Filter out tiny buckets (< 3 decks) for the chart but keep them in the table
+  const CHART_MIN = 3;
+  const chartRows = rows.filter(r => r.deck_count >= CHART_MIN);
+
+  const maxMwr = Math.max(...chartRows.map(r => r.mwr || 0));
+  const maxT8r = Math.max(...chartRows.map(r => r.t8_rate || 0));
+  // Scale each metric to its own max so both are readable
+  const CHART_H = 180; // px
+
+  const barH = (val, max) => max > 0 ? Math.max(2, Math.round((val / max) * CHART_H)) : 2;
+
+  const bucketLabel = b => {
+    if (b < 1200) return '<1200';
+    return b + 's';
+  };
+
+  const cols = chartRows.map(r => {
+    const dim = r.deck_count < 10 ? ' dim' : '';
+    const mH  = barH(r.mwr    || 0, maxMwr);
+    const tH  = barH(r.t8_rate || 0, maxT8r);
+    const mPct = r.mwr    != null ? Math.round(r.mwr    * 100) + '%' : '—';
+    const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
+    return `<div class="elo-bucket-col">
+  <div class="elo-bucket-bars">
+    <div class="elo-bar mwr${dim}" style="height:${mH}px" data-tooltip="MWR ${mPct} (n=${r.deck_count})">
+      <span class="elo-bar-val">${mPct}</span>
+    </div>
+    <div class="elo-bar t8r${dim}" style="height:${tH}px" data-tooltip="Top 8% ${tPct} (n=${r.deck_count})">
+      <span class="elo-bar-val">${tPct}</span>
+    </div>
+  </div>
+  <div class="elo-bucket-label">${bucketLabel(r.elo_bucket)}</div>
+  <div class="elo-bucket-n">n=${r.deck_count}</div>
+</div>`;
+  }).join('');
+
+  // Summary insight
+  const first = chartRows[0], last = chartRows[chartRows.length - 1];
+  let insight = '';
+  if (first && last && chartRows.length >= 3) {
+    const mwrDelta = Math.round(((last.mwr || 0) - (first.mwr || 0)) * 100);
+    const t8Delta  = Math.round(((last.t8_rate || 0) - (first.t8_rate || 0)) * 100);
+    insight = `From the ${bucketLabel(first.elo_bucket)} to ${bucketLabel(last.elo_bucket)} bracket: MWR ${mwrDelta >= 0 ? '+' : ''}${mwrDelta}pp, Top 8% ${t8Delta >= 0 ? '+' : ''}${t8Delta}pp`;
+  }
+
+  wrap.innerHTML = `<div class="elo-chart-wrap">
+  <div class="elo-chart-title">Performance by Player ELO Range (HRI Premier · 100-pt buckets)</div>
+  <div class="elo-legend">
+    <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--blue)"></div>Match Win Rate (scaled to max ${Math.round(maxMwr*100)}%)</div>
+    <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--gold)"></div>Top 8% Rate (scaled to max ${Math.round(maxT8r*100)}%)</div>
+    <div class="elo-legend-item" style="color:var(--text3)">Faded = &lt;10 decks</div>
+  </div>
+  <div class="elo-chart-row">
+    <div class="elo-bars-area">${cols}</div>
+  </div>
+  ${insight ? `<div class="elo-insight">${insight}</div>` : ''}
+</div>`;
 }
 
 // ══ EVENTS ══════════════════════════════════════════════════════════════════
