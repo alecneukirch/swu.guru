@@ -34,7 +34,7 @@ DELAY    = 0.5   # seconds between requests
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
 def _fetch_player(username: str) -> httpx.Response:
-    url = f"{HRI_BASE}/players/{username}"
+    url = f"{HRI_BASE}/players/{username}?fmt=premier"
     r = httpx.get(url, headers=HEADERS, timeout=15, follow_redirects=True)
     if r.status_code != 404:
         r.raise_for_status()
@@ -42,27 +42,27 @@ def _fetch_player(username: str) -> httpx.Response:
 
 
 def _parse_rating(soup: BeautifulSoup) -> tuple[int | None, int | None]:
-    """Return (rating, rd) from a player profile page, or (None, None)."""
-    number_el = soup.select_one("span.profile-hero__number")
-    rd_el     = soup.select_one("span.profile-hero__ci")
-    if not number_el:
-        return None, None
-
-    rating_str = number_el.get_text(strip=True).replace(",", "")
-    try:
-        rating = int(rating_str)
-    except ValueError:
-        return None, None
-
-    rd = None
-    if rd_el:
-        rd_str = re.sub(r"[^\d]", "", rd_el.get_text(strip=True))
-        try:
-            rd = int(rd_str)
-        except ValueError:
-            pass
-
-    return rating, rd
+    """Return premier (rating, rd) from a player profile page, or (None, None)."""
+    for stat in soup.select(".profile-hero__stats .hero-stat"):
+        label = stat.select_one(".hero-stat__label")
+        if label and label.get_text(strip=True) == "Premier":
+            value = stat.select_one(".hero-stat__value")
+            note  = stat.select_one(".hero-stat__note")
+            if not value:
+                return None, None
+            try:
+                rating = int(value.get_text(strip=True).replace(",", ""))
+            except ValueError:
+                return None, None
+            rd = None
+            if note:
+                rd_str = re.sub(r"[^\d]", "", note.get_text(strip=True))
+                try:
+                    rd = int(rd_str)
+                except ValueError:
+                    pass
+            return rating, rd
+    return None, None
 
 
 def sync(force: bool = False, limit: int | None = None):
