@@ -467,12 +467,11 @@ select option { background: var(--surface2); }
 }
 .elo-bars-area {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 6px;
   border-bottom: 1px solid var(--border2);
   overflow-x: auto;
   flex: 1;
-  padding-bottom: 0;
   position: relative;
 }
 .elo-bucket-col {
@@ -482,6 +481,16 @@ select option { background: var(--surface2); }
   flex-shrink: 0;
   width: 52px;
 }
+.elo-bucket-n-top {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+  padding: 3px 0 4px;
+  text-align: center;
+  border-bottom: 1px solid var(--border2);
+  width: 100%;
+  margin-bottom: 4px;
+}
 .elo-bucket-bars {
   display: flex;
   align-items: flex-end;
@@ -489,6 +498,7 @@ select option { background: var(--surface2); }
   height: 160px;
   width: 100%;
   justify-content: center;
+  padding-top: 44px;
 }
 /* Stacked bar: MWR is the blue base, T8 overlaid on top in gold */
 .elo-bar-stack {
@@ -506,7 +516,6 @@ select option { background: var(--surface2); }
   transition: opacity 0.15s;
 }
 .elo-bar-stack:hover { opacity: 0.8; }
-.elo-bar-stack.dim { opacity: 0.3; }
 .elo-bar-t8-fill {
   position: absolute;
   bottom: 0; left: 0; right: 0;
@@ -514,39 +523,34 @@ select option { background: var(--surface2); }
   border-radius: 3px 3px 0 0;
   min-height: 2px;
 }
-.elo-bar-val {
+.elo-bar-labels {
   position: absolute;
-  top: -17px;
+  top: -42px;
   left: 50%;
   transform: translateX(-50%);
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--text2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   white-space: nowrap;
 }
-/* SVG deck-count line overlay */
-.elo-count-svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  overflow: visible;
+.elo-bar-mwr {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
 }
-.elo-count-svg circle { pointer-events: all; cursor: default; }
+.elo-bar-t8pct {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--gold);
+}
 .elo-bucket-label {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--text3);
   margin-top: 5px;
   white-space: nowrap;
-}
-.elo-bucket-n {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--text3);
-  opacity: 0.7;
-  margin-top: 2px;
-  margin-bottom: 4px;
 }
 .elo-insight {
   margin-top: 8px;
@@ -5079,39 +5083,25 @@ function renderLeaderElo(rows) {
 
   const bucketLabel = b => b < 1200 ? '<1200' : b + 's';
 
-  const COL_W = 52, GAP = 6;
   const cols = chartRows.map(r => {
-    const dim  = '';
     const mH   = barH(r.mwr      || 0, maxMwr);
     const tH   = barH(r.t8_rate  || 0, maxMwr);
     const mPct = r.mwr     != null ? Math.round(r.mwr     * 100) + '%' : '—';
     const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
     return `<div class="elo-bucket-col">
+  <div class="elo-bucket-n-top">${r.deck_count}</div>
   <div class="elo-bucket-bars">
-    <div class="elo-bar-stack${dim}" style="height:${mH}px" data-tooltip="MWR ${mPct} · T8% ${tPct} · n=${r.deck_count}">
+    <div class="elo-bar-stack" style="height:${mH}px" data-tooltip="MWR ${mPct} · T8% ${tPct} · n=${r.deck_count}">
       <div class="elo-bar-t8-fill" style="height:${tH}px"></div>
-      <span class="elo-bar-val">${mPct}</span>
+      <div class="elo-bar-labels">
+        <span class="elo-bar-mwr">${mPct}</span>
+        <span class="elo-bar-t8pct">${tPct}</span>
+      </div>
     </div>
   </div>
   <div class="elo-bucket-label">${bucketLabel(r.elo_bucket)}</div>
-  <div class="elo-bucket-n">${r.deck_count}</div>
 </div>`;
   }).join('');
-
-  // SVG line overlay for deck count
-  const LINE_BAND = CHART_H * 0.38; // line varies over top 38% of chart
-  const LINE_TOP  = 10;             // minimum y from top of chart
-  const svgW = chartRows.length * (COL_W + GAP);
-  const ptX  = (i) => i * (COL_W + GAP) + COL_W / 2;
-  const ptY  = (n) => LINE_TOP + LINE_BAND - (n / maxDecks) * LINE_BAND;
-  const polyPts = chartRows.map((r, i) => `${ptX(i)},${ptY(r.deck_count)}`).join(' ');
-  const dotsSvg = chartRows.map((r, i) =>
-    `<circle cx="${ptX(i)}" cy="${ptY(r.deck_count)}" r="4" fill="rgba(255,255,255,0.75)" data-tooltip="${r.deck_count} decks"><title>${r.deck_count} decks</title></circle>`
-  ).join('');
-  const countSvg = `<svg class="elo-count-svg" width="${svgW}" height="${CHART_H}" viewBox="0 0 ${svgW} ${CHART_H}">
-  <polyline points="${polyPts}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-  ${dotsSvg}
-</svg>`;
 
   const first = chartRows[0], last = chartRows[chartRows.length - 1];
   let insight = '';
@@ -5127,10 +5117,9 @@ function renderLeaderElo(rows) {
     <div class="elo-legend">
       <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--blue)"></div>MWR</div>
       <div class="elo-legend-item"><div class="elo-legend-dot" style="background:var(--gold)"></div>Top 8%</div>
-      <div class="elo-legend-item"><svg width="20" height="10" style="flex-shrink:0"><line x1="0" y1="5" x2="14" y2="5" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/><circle cx="14" cy="5" r="2.5" fill="rgba(255,255,255,0.75)"/></svg>Deck count</div>
     </div>
   </div>
-  <div class="elo-bars-area">${cols}${countSvg}</div>
+  <div class="elo-bars-area">${cols}</div>
   ${insight ? `<div class="elo-insight">${insight}</div>` : ''}
 </div>`;
 }
