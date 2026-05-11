@@ -2143,8 +2143,10 @@ def meta_call(
     if not combos_raw:
         return {"decks": [], "total_decks": 0}
 
-    all_base_names = list({r["base"] for r in combos_raw})
-    ph = ','.join(['%s'] * len(all_base_names))
+    all_base_names   = list({r["base"]   for r in combos_raw})
+    all_leader_names = list({r["leader"] for r in combos_raw})
+    ph     = ','.join(['%s'] * len(all_base_names))
+    ldr_ph = ','.join(['%s'] * len(all_leader_names))
     card_info = db.fetchall(f"""
         SELECT DISTINCT ON (name) name,
                COALESCE(aspects[1], 'none') AS aspect,
@@ -2155,6 +2157,16 @@ def meta_call(
         ORDER BY name, set_code DESC
     """, all_base_names)
     base_meta_map = {r["name"]: r for r in card_info}
+
+    leader_info = db.fetchall(f"""
+        SELECT DISTINCT ON (name) name,
+               COALESCE(aspects[1], 'none') AS aspect
+        FROM cards
+        WHERE is_leader = true AND variant_type = 'Standard'
+          AND name IN ({ldr_ph})
+        ORDER BY name, set_code DESC
+    """, all_leader_names)
+    leader_aspect_map = {r["name"]: r["aspect"] for r in leader_info}
 
     groups: dict = {}
     for r in combos_raw:
@@ -2171,6 +2183,7 @@ def meta_call(
         if combo not in groups:
             groups[combo] = {"leader": r["leader"], "base_group": grp_lbl,
                              "base_key": grp_key, "base_aspect": aspect,
+                             "leader_aspect": leader_aspect_map.get(r["leader"], "none"),
                              "bases": [], "decks": 0}
         groups[combo]["decks"] += r["decks"]
         if r["base"] not in groups[combo]["bases"]:
@@ -2247,11 +2260,12 @@ def meta_call(
         matchups.sort(key=lambda x: -x["win_rate"])
 
         result.append({
-            "leader":       deck["leader"],
-            "base_group":   deck["base_group"],
-            "base_key":     deck["base_key"],
-            "base_aspect":  deck["base_aspect"],
-            "bases":        deck["bases"],
+            "leader":        deck["leader"],
+            "base_group":    deck["base_group"],
+            "base_key":      deck["base_key"],
+            "base_aspect":   deck["base_aspect"],
+            "leader_aspect": deck["leader_aspect"],
+            "bases":         deck["bases"],
             "decks":      deck["decks"],
             "meta_share": round(deck_share, 4),
             "field_ev":   field_ev,
