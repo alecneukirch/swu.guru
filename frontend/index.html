@@ -6736,18 +6736,18 @@ function renderPickDetail() {
   }
 
   panel.innerHTML = `
-    <div class="picks-detail-header">
-      <div class="picks-detail-leader">${shortName(deck.leader)}</div>
-      <div class="picks-detail-base">${deck.base_group}</div>
-      <div class="picks-detail-stats">
-        <div class="picks-detail-stat">
-          <div class="picks-detail-stat-val ${evClass(deck.field_ev)}">${fmtEV(deck.field_ev)}</div>
-          <div class="picks-detail-stat-label">Field EV</div>
-        </div>
-        <div class="picks-detail-stat">
-          <div class="picks-detail-stat-val">${fmtShare(deck.meta_share)}</div>
-          <div class="picks-detail-stat-label">Meta Share</div>
-        </div>
+    <div class="pick-row-top" style="margin-bottom:14px">
+      <div class="pick-deck">
+        <div class="pick-leader">${shortName(deck.leader)}</div>
+        <div class="pick-base">${deck.base_group}</div>
+      </div>
+      <div class="pick-share">
+        <div>${fmtShare(deck.meta_share)}</div>
+        <div class="pick-share-label">META</div>
+      </div>
+      <div class="pick-ev-col">
+        <div class="pick-ev-val ${evClass(deck.field_ev)}">${fmtEV(deck.field_ev)}</div>
+        <div class="pick-ev-label">FIELD EV</div>
       </div>
     </div>
     <table class="pick-mu-table">
