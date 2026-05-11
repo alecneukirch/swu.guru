@@ -268,6 +268,24 @@ def leaders(
     """, date_params + [min_decks])
     pct_by_leader = {r['leader']: r for r in pct_rows}
 
+    # Average HRI Premier rating of players who piloted each leader
+    hri_rows = db.fetchall(f"""
+        SELECT
+            s.leader,
+            ROUND(AVG(pi.hri_rating))::INT AS avg_hri_rating
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map m ON m.melee_player_id = s.melee_player_id
+            AND m.status != 'rejected'
+        JOIN player_identities pi ON pi.id = m.identity_id
+        WHERE s.leader IS NOT NULL
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          {date_sql}
+        GROUP BY s.leader
+    """, date_params)
+    hri_by_leader = {r['leader']: r['avg_hri_rating'] for r in hri_rows}
+
     result = []
     for r in rows:
         t8_rate    = r["top8_count"] / r["total_decks"] if r["total_decks"] else 0
@@ -275,13 +293,14 @@ def leaders(
         pct = pct_by_leader.get(r['leader'], {})
         result.append({
             **r,
-            "meta_share":  round(r["total_decks"] / total_all_decks, 4) if total_all_decks else 0,
-            "t8_rate":     round(t8_rate, 4),
-            "conversion":  conversion,
-            "t50_conv":    float(pct['t50_conv']) if pct.get('t50_conv') is not None else None,
-            "t25_conv":    float(pct['t25_conv']) if pct.get('t25_conv') is not None else None,
-            "t10_conv":    float(pct['t10_conv']) if pct.get('t10_conv') is not None else None,
-            "t1_conv":     float(pct['t1_conv'])  if pct.get('t1_conv')  is not None else None,
+            "meta_share":     round(r["total_decks"] / total_all_decks, 4) if total_all_decks else 0,
+            "t8_rate":        round(t8_rate, 4),
+            "conversion":     conversion,
+            "t50_conv":       float(pct['t50_conv']) if pct.get('t50_conv') is not None else None,
+            "t25_conv":       float(pct['t25_conv']) if pct.get('t25_conv') is not None else None,
+            "t10_conv":       float(pct['t10_conv']) if pct.get('t10_conv') is not None else None,
+            "t1_conv":        float(pct['t1_conv'])  if pct.get('t1_conv')  is not None else None,
+            "avg_hri_rating": hri_by_leader.get(r['leader']),
         })
 
     result.sort(key=lambda x: x["total_decks"], reverse=True)

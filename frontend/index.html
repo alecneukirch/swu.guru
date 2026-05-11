@@ -4050,6 +4050,7 @@ function renderLeaderGrid() {
       <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:${r.t8_rate>=0.2?'var(--green)':r.t8_rate>=0.12?'var(--gold)':'var(--text2)'}">${t8p}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${r.wins}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${r.match_win_rate>=0.52?'var(--green)':r.match_win_rate>0?'var(--text2)':'var(--text3)'}">${r.match_games>0?Math.round(r.match_win_rate*100)+'%':'—'}</div></div>
+      <div class="lc-stat" data-tooltip="Avg HRI Premier rating of players who piloted this leader"><div class="lc-stat-label">Avg ELO</div><div class="lc-stat-val" style="color:${r.avg_hri_rating>=1700?'var(--green)':r.avg_hri_rating>=1550?'var(--gold)':r.avg_hri_rating?'var(--text2)':'var(--text3)'}">${r.avg_hri_rating||'—'}</div></div>
     </div>
   </div>
 </div>`;
