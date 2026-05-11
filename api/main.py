@@ -2373,7 +2373,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         WITH ev AS (SELECT player_count FROM {t['events']} WHERE id = %s),
         top_n  AS (SELECT GREATEST(CEIL((SELECT player_count FROM ev)::numeric * 0.08)::INT, 1) AS cutoff),
         standings AS (
-            SELECT s.leader, s.base, s.placement, s.player_name, s.melee_player_id
+            SELECT s.leader, s.base, s.placement, s.player_name, s.melee_player_id, s.points
             FROM {t['standings']} s
             WHERE s.event_id = %s AND s.leader IS NOT NULL AND s.base IS NOT NULL
         ),
