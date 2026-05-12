@@ -335,6 +335,9 @@ def leaders_by_base(
     if date_sql:
         rows = db.fetchall(f"""
             SELECT s.leader, s.base,
+                   br.label      AS base_group,
+                   br.group_key  AS base_key,
+                   br.aspect     AS base_aspect,
                    COUNT(DISTINCT s.id)::INT AS total_decks,
                    COUNT(DISTINCT s.id) FILTER (
                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
@@ -344,6 +347,7 @@ def leaders_by_base(
                    COALESCE(MAX(ms.match_games), 0)::INT AS match_games
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
             LEFT JOIN (
                 SELECT leader, base,
                        SUM(mw)::INT AS match_wins,
@@ -367,12 +371,15 @@ def leaders_by_base(
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               {date_sql}
-            GROUP BY s.leader, s.base
+            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
         """, date_params + [min_decks])
     else:
         rows = db.fetchall(f"""
             SELECT v.leader, v.base,
+                   br.label      AS base_group,
+                   br.group_key  AS base_key,
+                   br.aspect     AS base_aspect,
                    v.total_decks, v.top8_count, v.wins,
                    COALESCE(ms.match_wins,  0)::INT AS match_wins,
                    COALESCE(ms.match_games, 0)::INT AS match_games
@@ -386,6 +393,7 @@ def leaders_by_base(
                 GROUP BY leader, base
                 HAVING SUM(total_decks) >= %s {t8_having_mv}
             ) v
+            LEFT JOIN base_reference br ON br.name = v.base
             LEFT JOIN (
                 SELECT leader, base,
                        SUM(mw)::INT AS match_wins,
@@ -410,23 +418,6 @@ def leaders_by_base(
 
     if not rows:
         return []
-
-    # Look up base group info for all bases seen
-    all_bases = list({r['base'] for r in rows if r['base']})
-    if all_bases:
-        ph = ','.join(['%s'] * len(all_bases))
-        base_cards = db.fetchall(f"""
-            SELECT DISTINCT ON (name) name,
-                   COALESCE(aspects[1], 'none') AS aspect,
-                   rarity, card_text
-            FROM cards
-            WHERE is_base = true AND variant_type = 'Standard'
-              AND name IN ({ph})
-            ORDER BY name, set_code DESC
-        """, all_bases)
-        base_meta = {r['name']: r for r in base_cards}
-    else:
-        base_meta = {}
 
     # Compute meta-wide T8 rate for conversion denominator
     total_all_decks = sum(r['total_decks'] for r in rows)
@@ -456,17 +447,9 @@ def leaders_by_base(
     # Aggregate by leader + base group
     groups: dict = {}
     for r in rows:
-        meta    = base_meta.get(r['base'], {})
-        aspect  = meta.get('aspect', 'none') or 'none'
-        rarity  = meta.get('rarity', 'Common') or 'Common'
-        ability = _base_ability_type(
-            meta.get('card_text') or '',
-            meta.get('deploy_box') or '',
-            meta.get('epic_action') or '',
-            r['base']
-        )
-        grp_key = _base_group_key(aspect, ability, rarity, r['base'])
-        grp_lbl = _base_group_label(aspect, ability, rarity, r['base'])
+        grp_key   = r['base_key']   or r['base']
+        grp_lbl   = r['base_group'] or r['base']
+        aspect    = r['base_aspect'] or 'none'
 
         combo_key = f"{r['leader']}|||{grp_key}"
         if combo_key not in groups:
@@ -475,8 +458,6 @@ def leaders_by_base(
                 'base_group':       grp_lbl,
                 'base_key':         grp_key,
                 'aspect':           aspect,
-                'ability':          ability,
-                'rarity':           rarity,
                 'total_decks':      0,
                 'top8_count':       0,
                 'wins':             0,
@@ -629,68 +610,6 @@ def leader_stats(
     }
 
 
-# Cache for base_reference lookups to avoid repeated DB hits
-_base_ref_cache: dict = {}
-
-def _load_base_ref():
-    """Load the base_reference table into memory on first use."""
-    global _base_ref_cache
-    if _base_ref_cache:
-        return
-    try:
-        rows = db.fetchall("SELECT name, aspect, ability, label, rarity FROM base_reference")
-        _base_ref_cache = {r["name"].lower(): r for r in rows}
-    except Exception:
-        _base_ref_cache = {}
-
-
-def _base_ref(base_name: str) -> Optional[dict]:
-    """Look up a base by name, case-insensitive."""
-    _load_base_ref()
-    return _base_ref_cache.get((base_name or '').lower().strip())
-
-
-def _base_ability_type(card_text: str = '', deploy_box: str = None,
-                       epic_action: str = None, base_name: str = '') -> str:
-    """
-    Classify a base's ability type: 'force', 'splash', or 'plain'.
-    Uses base_reference table first (most reliable), then falls back to
-    text-based keyword scanning.
-    """
-    ref = _base_ref(base_name)
-    if ref:
-        return ref["ability"]
-
-    combined = ' '.join(filter(None, [card_text, deploy_box, epic_action])).lower()
-    if not combined.strip():
-        return 'plain'
-    if 'force' in combined:
-        return 'force'
-    if any(kw in combined for kw in ['resource', 'aspect', 'penalty', 'deploy', 'pay', 'produce']):
-        return 'splash'
-    return 'splash'
-
-
-
-def _base_group_label(aspect: str, ability: str, rarity: str, base_name: str = '') -> str:
-    """Human-readable label for a base group."""
-    if rarity != 'Common':
-        return base_name or f"Rare ({aspect})"
-    aspect_name = aspect if aspect and aspect != 'none' else 'No Aspect'
-    # Plain is the default/expected for common bases — no need to label it
-    if ability == 'plain':
-        return aspect_name
-    ability_tag = {'force': 'Force', 'splash': 'Splash'}.get(ability, ability.title())
-    return f"{aspect_name} — {ability_tag}"
-
-
-def _base_group_key(aspect: str, ability: str, rarity: str, base_name: str = '') -> str:
-    """Stable key for a base group used as the filter value."""
-    if rarity != 'Common':
-        # Rare bases each get their own group keyed by name
-        return f"rare__{base_name.lower().replace(' ', '_')}"
-    a = (aspect or 'none').lower()
-    return f"{a}__{ability}"
 
 
 _bases_cache: dict = {}  # key: (leader, meta_id) → list
@@ -716,54 +635,41 @@ def leader_bases(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    # Get individual base counts from standings
+    # Get individual base counts from standings, with group info from base_reference
     if date_sql:
         rows = db.fetchall(f"""
             SELECT s.base,
+                   br.label     AS base_group,
+                   br.group_key AS base_key,
+                   br.aspect    AS base_aspect,
                    COUNT(DISTINCT s.id)::INT AS decks,
                    COUNT(DISTINCT s.id) FILTER (
                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
                    )::INT AS top8_count
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
             WHERE s.leader = %s AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               {date_sql}
-            GROUP BY s.base
+            GROUP BY s.base, br.label, br.group_key, br.aspect
         """, [leader] + date_params)
     else:
         rows = db.fetchall(f"""
-            SELECT base,
-                   SUM(total_decks)::INT AS decks,
-                   SUM(top8_count)::INT  AS top8_count
-            FROM {t['mv_leader_stats']}
-            WHERE leader = %s AND base IS NOT NULL
-            GROUP BY base
+            SELECT v.base,
+                   br.label     AS base_group,
+                   br.group_key AS base_key,
+                   br.aspect    AS base_aspect,
+                   SUM(v.total_decks)::INT AS decks,
+                   SUM(v.top8_count)::INT  AS top8_count
+            FROM {t['mv_leader_stats']} v
+            LEFT JOIN base_reference br ON br.name = v.base
+            WHERE v.leader = %s AND v.base IS NOT NULL
+            GROUP BY v.base, br.label, br.group_key, br.aspect
         """, [leader])
 
     if not rows:
         return []
-
-    # Look up each base's aspect/rarity/ability from the cards table
-    base_names = [r['base'] for r in rows if r.get('base')]
-    if not base_names:
-        return []
-
-    # Look up card_text for ability classification
-    ph = ','.join(['%s'] * len(base_names))
-    card_info_full = db.fetchall(f"""
-        SELECT DISTINCT ON (name) name,
-               COALESCE(aspects[1], 'none') AS aspect,
-               rarity, card_text, deploy_box, epic_action
-        FROM cards
-        WHERE is_base = true
-          AND variant_type = 'Standard'
-          AND name IN ({ph})
-        ORDER BY name, set_code DESC
-    """, base_names)
-
-    # Build lookup: base_name -> {aspect, rarity, card_text, ...}
-    base_meta = {r['name']: r for r in card_info_full}
 
     # Aggregate into groups
     groups: dict = {}
@@ -771,26 +677,14 @@ def leader_bases(
         base_name = r.get('base')
         if not base_name:
             continue
-        meta      = base_meta.get(base_name, {})
-        aspect    = meta.get('aspect', 'none') or 'none'
-        rarity    = meta.get('rarity', 'Common') or 'Common'
-        ability   = _base_ability_type(
-            meta.get('card_text') or '',
-            meta.get('deploy_box') or '',
-            meta.get('epic_action') or '',
-            base_name
-        )
-
-        key   = _base_group_key(aspect, ability, rarity, base_name)
-        label = _base_group_label(aspect, ability, rarity, base_name)
+        key   = r['base_key']   or base_name
+        label = r['base_group'] or base_name
 
         if key not in groups:
             groups[key] = {
                 'group_key': key,
                 'label':     label,
-                'aspect':    aspect,
-                'rarity':    rarity,
-                'ability':   ability,
+                'aspect':    r['base_aspect'] or 'none',
                 'decks':       0,
                 'top8_count':  0,
                 'bases':       [],
@@ -1433,48 +1327,25 @@ def leader_matchups(
               AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where}
             GROUP BY m.p1_leader, m.p1_base
         )
-        SELECT opponent, opponent_base,
-               SUM(matches)::INT AS matches,
-               SUM(wins)::INT    AS wins,
-               SUM(losses)::INT  AS losses
+        SELECT t.opponent, t.opponent_base,
+               br.label     AS base_group,
+               br.group_key AS base_key,
+               SUM(t.matches)::INT AS matches,
+               SUM(t.wins)::INT    AS wins,
+               SUM(t.losses)::INT  AS losses
         FROM (SELECT * FROM as_p1 UNION ALL SELECT * FROM as_p2) t
-        GROUP BY opponent, opponent_base
-        ORDER BY SUM(matches) DESC
+        LEFT JOIN base_reference br ON br.name = t.opponent_base
+        GROUP BY t.opponent, t.opponent_base, br.label, br.group_key
+        ORDER BY SUM(t.matches) DESC
     """, [leader] + date_params + own_param + [leader] + date_params + own_param)
 
     if not rows:
         return []
 
-    # Classify each opponent_base into a base group (same logic as matchup_matrix_by_base)
-    all_base_names = list({r['opponent_base'] for r in rows if r['opponent_base']})
-    if all_base_names:
-        ph = ','.join(['%s'] * len(all_base_names))
-        base_cards = db.fetchall(f"""
-            SELECT DISTINCT ON (name) name,
-                   COALESCE(aspects[1], 'none') AS aspect,
-                   rarity, card_text, deploy_box, epic_action
-            FROM cards
-            WHERE is_base = true AND variant_type = 'Standard'
-              AND name IN ({ph})
-            ORDER BY name, set_code DESC
-        """, all_base_names)
-        base_meta = {r['name']: r for r in base_cards}
-    else:
-        base_meta = {}
-
     groups: dict = {}
     for r in rows:
-        meta    = base_meta.get(r['opponent_base'], {})
-        aspect  = meta.get('aspect', 'none') or 'none'
-        rarity  = meta.get('rarity', 'Common') or 'Common'
-        ability = _base_ability_type(
-            meta.get('card_text') or '',
-            meta.get('deploy_box') or '',
-            meta.get('epic_action') or '',
-            r['opponent_base'] or '',
-        )
-        grp_key = _base_group_key(aspect, ability, rarity, r['opponent_base'] or '')
-        grp_lbl = _base_group_label(aspect, ability, rarity, r['opponent_base'] or '')
+        grp_key = r['base_key']   or r['opponent_base'] or ''
+        grp_lbl = r['base_group'] or r['opponent_base'] or ''
         combo   = f"{r['opponent']}|||{grp_key}"
         if combo not in groups:
             groups[combo] = {
@@ -1921,52 +1792,32 @@ def matchup_matrix_by_base(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    # Step 1: get the top combos by deck count
+    # Step 1: get the top combos by deck count, with group info from base_reference
     combos_raw = db.fetchall(f"""
         SELECT s.leader, s.base,
+               br.label     AS base_group,
+               br.group_key AS base_key,
                COUNT(DISTINCT s.id)::INT AS decks
         FROM {t['standings']} s
         JOIN {t['events']} e ON e.id = s.event_id
+        LEFT JOIN base_reference br ON br.name = s.base
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
           AND e.date <= CURRENT_DATE {date_sql}
-        GROUP BY s.leader, s.base
+        GROUP BY s.leader, s.base, br.label, br.group_key
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
         LIMIT %s
-    """, date_params + [min_decks, top_n * 3])  # fetch extra to group by base_group
+    """, date_params + [min_decks, top_n * 3])
 
     if not combos_raw:
         return {"combos": [], "matrix": []}
 
-    # Classify into base groups
-    all_base_names = list({r["base"] for r in combos_raw})
-    ph = ','.join(['%s'] * len(all_base_names))
-    card_info = db.fetchall(f"""
-        SELECT DISTINCT ON (name) name,
-               COALESCE(aspects[1], 'none') AS aspect,
-               rarity, card_text, deploy_box, epic_action
-        FROM cards
-        WHERE is_base = true AND variant_type = 'Standard'
-          AND name IN ({ph})
-        ORDER BY name, set_code DESC
-    """, all_base_names)
-    base_meta = {r["name"]: r for r in card_info}
-
     # Aggregate into leader+base_group combos
     groups: dict = {}
     for r in combos_raw:
-        meta   = base_meta.get(r["base"], {})
-        aspect = meta.get("aspect", "none") or "none"
-        rarity = meta.get("rarity", "Common") or "Common"
-        ability = _base_ability_type(
-            meta.get("card_text") or "",
-            meta.get("deploy_box") or "",
-            meta.get("epic_action") or "",
-            r["base"]
-        )
-        grp_key = _base_group_key(aspect, ability, rarity, r["base"])
-        grp_lbl = _base_group_label(aspect, ability, rarity, r["base"])
+        grp_key = r["base_key"]   or r["base"]
+        grp_lbl = r["base_group"] or r["base"]
         combo   = f"{r['leader']}|||{grp_key}"
         if combo not in groups:
             groups[combo] = {
@@ -2128,13 +1979,17 @@ def meta_call(
 
     combos_raw = db.fetchall(f"""
         SELECT s.leader, s.base,
+               br.label     AS base_group,
+               br.group_key AS base_key,
+               br.aspect    AS base_aspect,
                COUNT(DISTINCT s.id)::INT AS decks
         FROM {t['standings']} s
         JOIN {t['events']} e ON e.id = s.event_id
+        LEFT JOIN base_reference br ON br.name = s.base
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
           AND e.date <= CURRENT_DATE {date_sql}
-        GROUP BY s.leader, s.base
+        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
         LIMIT %s
@@ -2143,20 +1998,8 @@ def meta_call(
     if not combos_raw:
         return {"decks": [], "total_decks": 0}
 
-    all_base_names   = list({r["base"]   for r in combos_raw})
     all_leader_names = list({r["leader"] for r in combos_raw})
-    ph     = ','.join(['%s'] * len(all_base_names))
     ldr_ph = ','.join(['%s'] * len(all_leader_names))
-    card_info = db.fetchall(f"""
-        SELECT DISTINCT ON (name) name,
-               COALESCE(aspects[1], 'none') AS aspect,
-               rarity, card_text, deploy_box, epic_action
-        FROM cards
-        WHERE is_base = true AND variant_type = 'Standard'
-          AND name IN ({ph})
-        ORDER BY name, set_code DESC
-    """, all_base_names)
-    base_meta_map = {r["name"]: r for r in card_info}
 
     leader_info = db.fetchall(f"""
         SELECT DISTINCT ON (full_name) full_name,
@@ -2173,19 +2016,12 @@ def meta_call(
 
     groups: dict = {}
     for r in combos_raw:
-        m       = base_meta_map.get(r["base"], {})
-        aspect  = m.get("aspect", "none") or "none"
-        rarity  = m.get("rarity", "Common") or "Common"
-        ability = _base_ability_type(
-            m.get("card_text") or "", m.get("deploy_box") or "",
-            m.get("epic_action") or "", r["base"]
-        )
-        grp_key = _base_group_key(aspect, ability, rarity, r["base"])
-        grp_lbl = _base_group_label(aspect, ability, rarity, r["base"])
+        grp_key = r["base_key"]   or r["base"]
+        grp_lbl = r["base_group"] or r["base"]
         combo   = f"{r['leader']}|||{grp_key}"
         if combo not in groups:
             groups[combo] = {"leader": r["leader"], "base_group": grp_lbl,
-                             "base_key": grp_key, "base_aspect": aspect,
+                             "base_key": grp_key, "base_aspect": r["base_aspect"] or "none",
                              "leader_aspect": leader_aspect_map.get(r["leader"], "none"),
                              "bases": [], "decks": 0}
         groups[combo]["decks"] += r["decks"]
@@ -2408,6 +2244,8 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         )
         SELECT
             s.leader, s.base,
+            br.label     AS base_group,
+            br.aspect    AS base_aspect,
             COUNT(*)::INT AS total_decks,
             COUNT(*) FILTER (WHERE s.placement <= (SELECT cutoff FROM top_n))::INT  AS top8_count,
             COUNT(*) FILTER (WHERE s.points >= 18)::INT                             AS day2_count,
@@ -2423,45 +2261,20 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
                 ORDER BY s.placement NULLS LAST
             ) AS placements
         FROM standings s
+        LEFT JOIN base_reference br ON br.name = s.base
         LEFT JOIN match_stats ms ON ms.leader = s.leader AND ms.base = s.base
         LEFT JOIN hri_stats h   ON h.leader  = s.leader AND h.base  = s.base
-        GROUP BY s.leader, s.base, ms.match_wins, ms.match_games, h.avg_hri_rating, h.rated_count
+        GROUP BY s.leader, s.base, br.label, br.aspect, ms.match_wins, ms.match_games, h.avg_hri_rating, h.rated_count
         ORDER BY total_decks DESC, best_placement ASC NULLS LAST
     """, [event_id, event_id, event_id, event_id])
 
-    # Attach base aspect/group info
-    all_bases = list({r['base'] for r in combos if r['base']})
-    base_meta = {}
-    if all_bases:
-        ph = ','.join(['%s'] * len(all_bases))
-        base_cards = db.fetchall(f"""
-            SELECT DISTINCT ON (name) name,
-                   COALESCE(aspects[1], 'none') AS aspect,
-                   rarity, card_text, deploy_box, epic_action
-            FROM cards
-            WHERE is_base = true AND variant_type = 'Standard' AND name IN ({ph})
-            ORDER BY name, set_code DESC
-        """, all_bases)
-        base_meta = {r['name']: r for r in base_cards}
-
     result = []
     for r in combos:
-        bm = base_meta.get(r['base'], {})
-        base_aspect = bm.get('aspect', 'none')
-        base_rarity = bm.get('rarity', '')
-        ability     = _base_ability_type(
-            bm.get('card_text', '') or '',
-            bm.get('deploy_box') or '',
-            bm.get('epic_action') or '',
-            r['base'],
-        )
-        base_group = _base_group_label(base_aspect, ability, base_rarity, r['base'])
-
         mwr = (r['match_wins'] / r['match_games']) if r['match_games'] else None
         result.append({
             'leader':         r['leader'],
             'base':           r['base'],
-            'base_group':     base_group,
+            'base_group':     r['base_group'] or r['base'],
             'total_decks':    r['total_decks'],
             'top8_count':         r['top8_count'],
             'day2_count':         r['day2_count'],
