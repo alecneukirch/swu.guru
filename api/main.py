@@ -2877,7 +2877,7 @@ def sealed_league_summary():
         ),
         pm AS (
             SELECT
-                p.id, p.name,
+                p.id, p.name, p.is_active,
                 COALESCE(SUM(CASE
                     WHEN m.player1_id = p.id AND m.player1_game_wins > m.player2_game_wins THEN 1
                     WHEN m.player2_id = p.id AND m.player2_game_wins > m.player1_game_wins THEN 1
@@ -2902,7 +2902,7 @@ def sealed_league_summary():
             LEFT JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
             GROUP BY p.id, p.name
         )
-        SELECT pm.id, pm.name, pm.match_wins, pm.match_draws, pm.match_losses,
+        SELECT pm.id, pm.name, pm.is_active, pm.match_wins, pm.match_draws, pm.match_losses,
                pm.game_wins, pm.game_draws, pm.game_losses,
                (6 + %s + b.bonus_packs)      AS total_packs,
                (6 + %s + b.bonus_packs) * 16 AS total_cards,
@@ -3008,7 +3008,57 @@ def sealed_league_sessions_detail():
 
 @app.get("/api/sealed-league/players")
 def get_sealed_league_players():
-    return db.fetchall("SELECT id, name FROM sealed_league_players ORDER BY name")
+    return db.fetchall("SELECT id, name, is_active FROM sealed_league_players ORDER BY name")
+
+
+@app.patch("/api/sealed-league/players/{player_id}")
+def patch_sealed_league_player(player_id: int, body: dict):
+    is_active = body.get("is_active")
+    if is_active is None:
+        raise HTTPException(400, "is_active required")
+    db.execute(
+        "UPDATE sealed_league_players SET is_active = %s WHERE id = %s",
+        [bool(is_active), player_id]
+    )
+    return {"ok": True}
+
+
+@app.get("/api/sealed-league/players/{player_id}/matchups")
+def sealed_league_player_matchups(player_id: int):
+    rows = db.fetchall("""
+        WITH player_matches AS (
+            SELECT
+                m.*,
+                CASE WHEN m.player1_id = %(pid)s THEN m.player2_id ELSE m.player1_id END AS opp_id,
+                CASE WHEN m.player1_id = %(pid)s AND m.player1_game_wins > m.player2_game_wins THEN 1
+                     WHEN m.player2_id = %(pid)s AND m.player2_game_wins > m.player1_game_wins THEN 1
+                     ELSE 0 END AS is_win,
+                CASE WHEN m.player1_game_wins = m.player2_game_wins THEN 1 ELSE 0 END AS is_draw,
+                CASE WHEN m.player1_id = %(pid)s AND m.player1_game_wins < m.player2_game_wins THEN 1
+                     WHEN m.player2_id = %(pid)s AND m.player2_game_wins < m.player1_game_wins THEN 1
+                     ELSE 0 END AS is_loss,
+                CASE WHEN m.player1_id = %(pid)s THEN m.player1_game_wins ELSE m.player2_game_wins END AS my_gw,
+                CASE WHEN m.player1_id = %(pid)s THEN m.player2_game_wins ELSE m.player1_game_wins END AS opp_gw
+            FROM sealed_league_matches m
+            WHERE m.player1_id = %(pid)s OR m.player2_id = %(pid)s
+        )
+        SELECT
+            opp.id   AS opponent_id,
+            opp.name AS opponent_name,
+            COUNT(*)::INT          AS total_matches,
+            SUM(pm.is_win)::INT    AS match_wins,
+            SUM(pm.is_draw)::INT   AS match_draws,
+            SUM(pm.is_loss)::INT   AS match_losses,
+            SUM(pm.my_gw)::INT     AS game_wins,
+            SUM(pm.game_draws)::INT AS game_draws,
+            SUM(pm.opp_gw)::INT    AS game_losses
+        FROM player_matches pm
+        JOIN sealed_league_players opp ON opp.id = pm.opp_id
+        WHERE opp.name != 'BYE'
+        GROUP BY opp.id, opp.name
+        ORDER BY total_matches DESC, match_wins DESC
+    """, {"pid": player_id})
+    return [dict(r) for r in rows]
 
 
 @app.post("/api/sealed-league/players")

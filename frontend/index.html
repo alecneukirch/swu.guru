@@ -3403,6 +3403,24 @@ tr:hover .sl-gear-btn { opacity: 1; }
 tr.sl-inactive-row td { opacity: 0.3; }
 tr.sl-inactive-row td:first-child ~ td:first-of-type { opacity: 1; }
 tr.sl-inactive-row .sl-gear-btn { opacity: 1 !important; }
+.sl-player-link { background: none; border: none; cursor: pointer; font: inherit; color: var(--text); padding: 0; text-align: left; }
+.sl-player-link:hover { color: var(--gold); }
+.sl-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.sl-modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 24px; min-width: 340px; max-width: 92vw; max-height: 80vh;
+  overflow-y: auto; position: relative;
+}
+.sl-modal-title { font-family: var(--display); font-size: 17px; font-weight: 700; color: var(--gold); margin: 0 0 16px; }
+.sl-modal-close {
+  position: absolute; top: 14px; right: 14px;
+  background: none; border: none; cursor: pointer; color: var(--text2);
+  font-size: 18px; line-height: 1;
+}
+.sl-modal-close:hover { color: var(--text); }
 .sl-games { font-family: var(--mono); font-size: 13px; color: var(--text2); }
 .sl-packs { font-family: var(--mono); font-size: 13px; color: var(--text3); }
 .sl-cards { font-family: var(--mono); font-weight: 700; color: var(--gold); }
@@ -6542,14 +6560,54 @@ function renderDecklistsTable(rows) {
 // ── SEALED LEAGUE ───────────────────────────────────────────────────────────
 let _leagueData       = null;
 let _leagueAdminOpen  = false;
-let _leagueSort       = { col: 'total_points', dir: -1 };
-const _leagueInactive = new Set(JSON.parse(localStorage.getItem('sl_inactive') || '[]'));
+let _leagueSort = { col: 'total_points', dir: -1 };
 
-function toggleLeaguePlayer(id) {
-  if (_leagueInactive.has(id)) _leagueInactive.delete(id);
-  else _leagueInactive.add(id);
-  localStorage.setItem('sl_inactive', JSON.stringify([..._leagueInactive]));
-  if (_leagueData) renderLeagueStandings(_leagueData.summary);
+async function toggleLeaguePlayer(id, currentlyActive) {
+  await api(`/api/sealed-league/players/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: !currentlyActive }),
+  });
+  await loadLeague();
+}
+
+async function showLeaguePlayerModal(id, name) {
+  const existing = document.getElementById('sl-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sl-modal-overlay';
+  overlay.className = 'sl-modal-overlay';
+  overlay.innerHTML = `<div class="sl-modal"><p class="sl-modal-title">${name}</p>
+    <button class="sl-modal-close" onclick="document.getElementById('sl-modal-overlay').remove()">✕</button>
+    <div id="sl-modal-body"><div class="loading" style="padding:16px">loading…</div></div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  try {
+    const rows = await api(`/api/sealed-league/players/${id}/matchups`);
+    const anyDraw = rows.some(r => (r.match_draws || 0) > 0 || (r.game_draws || 0) > 0);
+    const thead = anyDraw
+      ? '<tr><th>Opponent</th><th>M W-D-L</th><th>G W-D-L</th><th>Matches</th></tr>'
+      : '<tr><th>Opponent</th><th>Match W-L</th><th>Game W-L</th><th>Matches</th></tr>';
+    const tbody = rows.length ? rows.map(r => {
+      const mw = r.match_wins||0, md = r.match_draws||0, ml = r.match_losses||0;
+      const gw = r.game_wins||0,  gd = r.game_draws||0,  gl = r.game_losses||0;
+      const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+      const mRec = anyDraw ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
+      const gRec = anyDraw ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
+      return `<tr><td class="sl-player-name">${r.opponent_name}</td>
+        <td class="sl-record ${rc}">${mRec}</td>
+        <td class="sl-games">${gRec}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--text3)">${r.total_matches}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" style="color:var(--text3);padding:12px">// no matches recorded</td></tr>';
+    document.getElementById('sl-modal-body').innerHTML =
+      `<div class="table-wrap"><table class="sl-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  } catch(e) {
+    document.getElementById('sl-modal-body').innerHTML =
+      `<div class="empty-state" style="padding:12px">// ${e.message}</div>`;
+  }
 }
 
 function sortLeagueBy(col) {
@@ -6601,8 +6659,8 @@ function renderLeagueStandings(summary) {
     const av = sortVal(a), bv = sortVal(b);
     return _leagueSort.dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
   };
-  const active   = players.filter(p => !_leagueInactive.has(p.id)).sort(cmp);
-  const inactive = players.filter(p =>  _leagueInactive.has(p.id)).sort(cmp);
+  const active   = players.filter(p =>  p.is_active !== false).sort(cmp);
+  const inactive = players.filter(p =>  p.is_active === false).sort(cmp);
   const sorted   = [...active, ...inactive];
 
   const arr = col => {
@@ -6615,19 +6673,20 @@ function renderLeagueStandings(summary) {
          onclick="sortLeagueBy('${col}')">${label}${arr(col)}</th>`;
 
   const rows = sorted.map((p, i) => {
-    const inactive = _leagueInactive.has(p.id);
+    const isInactive = p.is_active === false;
     const mw = p.match_wins  || 0, md = p.match_draws || 0, ml = p.match_losses || 0;
     const gw = p.game_wins   || 0, gd = p.game_draws  || 0, gl = p.game_losses  || 0;
-    const rc    = !inactive && mw > ml ? 'sl-win' : !inactive && mw < ml ? 'sl-loss' : '';
+    const rc    = !isInactive && mw > ml ? 'sl-win' : !isInactive && mw < ml ? 'sl-loss' : '';
     const mRec  = anyMatchDraws ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
     const gRec  = anyGameDraws  ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
     const total = p.total_points != null ? Number(p.total_points) : '—';
     const norm  = p.norm_points  != null ? Number(p.norm_points).toFixed(2) : '—';
-    const gear  = `<button class="sl-gear-btn${inactive ? ' sl-gear-active' : ''}"
-                     onclick="toggleLeaguePlayer(${p.id})" title="${inactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
-    return `<tr class="${inactive ? 'sl-inactive-row' : ''}">
+    const gear  = `<button class="sl-gear-btn${isInactive ? ' sl-gear-active' : ''}"
+                     onclick="toggleLeaguePlayer(${p.id}, ${p.is_active !== false})" title="${isInactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
+    const nameBtn = `<button class="sl-player-link" onclick="showLeaguePlayerModal(${p.id}, ${JSON.stringify(p.name)})">${p.name}</button>`;
+    return `<tr class="${isInactive ? 'sl-inactive-row' : ''}">
       <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
-      <td class="sl-player-name">${p.name}${gear}</td>
+      <td class="sl-player-name">${nameBtn}${gear}</td>
       <td class="sl-pts">${total}</td>
       <td class="sl-pts" style="color:var(--text2)">${norm}</td>
       <td class="sl-record ${rc}">${mRec}</td>
