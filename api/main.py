@@ -2902,6 +2902,7 @@ def sealed_league_summary():
                (6 + %s + b.bonus_packs) * 16 AS total_cards
         FROM pm
         JOIN bonus b ON b.player_id = pm.id
+        WHERE pm.name != 'BYE'
         ORDER BY pm.match_wins DESC, pm.match_draws DESC, pm.game_wins DESC
     """, [session_count, session_count])
 
@@ -2918,7 +2919,7 @@ def sealed_league_sessions_detail():
     sessions = db.fetchall(
         "SELECT id, session_number, session_date, notes FROM sealed_league_sessions ORDER BY session_number"
     )
-    players = db.fetchall("SELECT id, name FROM sealed_league_players ORDER BY name")
+    players = db.fetchall("SELECT id, name FROM sealed_league_players WHERE name != 'BYE' ORDER BY name")
 
     if not players:
         return {"sessions": [], "players": []}
@@ -3096,7 +3097,7 @@ def import_sealed_league_melee(body: dict):
     # Fetch all matches across completed rounds
     all_matches = []
     for r in pairings_rounds:
-        all_matches.extend(melee_round_matches(r["id"]))
+        all_matches.extend(melee_round_matches(r["id"], include_byes=True))
 
     if not all_matches:
         raise HTTPException(404, "No match results found in completed rounds")

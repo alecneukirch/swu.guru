@@ -353,24 +353,42 @@ def parse_standing_row(row: dict) -> dict:
 
 # ── Melee: matches ─────────────────────────────────────────────────────────
 
-def melee_round_matches(round_id: int) -> list[dict]:
+def melee_round_matches(round_id: int, include_byes: bool = False) -> list[dict]:
     """POST GetRoundMatches → parsed match list."""
     url  = f"{MELEE}/Match/GetRoundMatches/{round_id}"
     data = _dt_params(MATCHES_COLUMNS, round_id, length=500)
     try:
         resp = post_json(url, data)
-        return _parse_matches(resp.get("data", []))
+        return _parse_matches(resp.get("data", []), include_byes=include_byes)
     except Exception as e:
         log.warning(f"    Matches failed for round {round_id}: {e}")
         return []
 
 
-def _parse_matches(raw: list) -> list[dict]:
+def _parse_matches(raw: list, include_byes: bool = False) -> list[dict]:
     matches = []
     for m in raw:
         competitors = m.get("Competitors", [])
-        is_bye = m.get("ByeReason") not in (None, 0, "0")
-        if len(competitors) < 2 or is_bye or not m.get("HasResult"):
+        is_bye = m.get("ByeReason") not in (None, 0, "0") or len(competitors) < 2
+
+        if is_bye:
+            if include_byes and competitors:
+                players = competitors[0].get("Team", {}).get("Players", [])
+                p = players[0] if players else {}
+                name = p.get("DisplayName") or p.get("Username", "")
+                if name:
+                    matches.append({
+                        "p1_name": name, "p1_melee_id": str(p.get("ID", "")),
+                        "p1_deck_id": "", "p1_deck_name": "", "p1_game_wins": 2,
+                        "p2_name": "BYE", "p2_melee_id": "",
+                        "p2_deck_id": "", "p2_deck_name": "", "p2_game_wins": 0,
+                        "game_draws": 0, "winner": "p1",
+                        "result_str": m.get("ResultString", "BYE"),
+                        "match_guid": m.get("Guid", ""), "phase_id": m.get("PhaseId"),
+                    })
+            continue
+
+        if not m.get("HasResult"):
             continue
 
         def extract(c):

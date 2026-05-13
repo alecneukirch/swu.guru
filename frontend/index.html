@@ -6620,11 +6620,15 @@ function renderLeagueSessions(data) {
     }).join('');
 
     const matchLines = (sess.matches || []).map(m => {
+      const isBye = m.player2 === 'BYE';
       const [s1, s2] = (m.score || '0-0').split('-').map(Number);
+      const p2Display = isBye
+        ? `<span style="color:var(--text3);font-style:italic">BYE</span>`
+        : `<span class="${s2 > s1 ? 'sl-win' : ''}">${m.player2}</span>`;
       return `<div class="sl-match-line">
-        <span class="${s1 > s2 ? 'sl-win' : ''}">${m.player1}</span>
-        <span class="sl-score">${m.score}</span>
-        <span class="${s2 > s1 ? 'sl-win' : ''}">${m.player2}</span>
+        <span class="${isBye || s1 > s2 ? 'sl-win' : ''}">${m.player1}</span>
+        ${isBye ? '' : `<span class="sl-score">${m.score}</span>`}
+        ${p2Display}
         <button class="sl-del-btn" onclick="leagueDeleteMatch(${m.id})" title="Remove match">✕</button>
       </div>`;
     }).join('');
