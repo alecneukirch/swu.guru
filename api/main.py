@@ -1199,14 +1199,14 @@ def cards_stats(
     rows = db.fetchall(f"""
         WITH totals AS (
             SELECT
-                COUNT(DISTINCT dc.standing_id)::INT AS total_decks,
-                COUNT(DISTINCT dc.standing_id) FILTER (
+                COUNT(DISTINCT s.id)::INT AS total_decks,
+                COUNT(DISTINCT s.id) FILTER (
                     WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
                 )::INT AS total_t8s
-            FROM {t['decklist_cards']} dc
-            JOIN {t['standings']} s ON s.id = dc.standing_id
+            FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             WHERE s.placement IS NOT NULL
+              AND s.leader IS NOT NULL
               {date_sql}
         ),
         card_stats AS (
