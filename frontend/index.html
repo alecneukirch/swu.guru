@@ -6737,14 +6737,16 @@ function renderLeagueStandings(summary) {
 
 function renderLeagueSessions(data) {
   const el = document.getElementById('league-sessions');
-  const sessions = (data.sessions || []).slice();
+  const sessions = (data.sessions || []).slice().reverse();
   const players  = data.players  || [];
   if (!sessions.length) {
     el.innerHTML = '<div class="empty-state" style="padding:16px">// no sessions yet — use Manage to add sessions</div>';
     return;
   }
   el.innerHTML = sessions.map(sess => {
-    const sessPlayers = sess.players || [];
+    const sessPlayers = (sess.players || []).slice().sort((a,b) =>
+      (b.match_wins - a.match_wins) || (b.game_wins - a.game_wins)
+    );
     const sMD = sessPlayers.some(p => (p.match_draws || 0) > 0);
     const sGD = sessPlayers.some(p => (p.game_draws  || 0) > 0);
     const playerRows = sessPlayers.map(p => {
