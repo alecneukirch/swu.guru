@@ -2849,7 +2849,27 @@ def sealed_league_summary():
     session_count = sess_row["cnt"] if sess_row else 0
 
     players = db.fetchall("""
-        WITH pm AS (
+        WITH per_session AS (
+            SELECT
+                p.id AS player_id,
+                s.id AS session_id,
+                GREATEST(0,
+                    SUM(CASE
+                        WHEN m.player1_id = p.id AND m.player1_game_wins < m.player2_game_wins THEN 1
+                        WHEN m.player2_id = p.id AND m.player2_game_wins < m.player1_game_wins THEN 1
+                        ELSE 0 END)::INT - 1
+                ) AS sess_bonus
+            FROM sealed_league_players p
+            CROSS JOIN sealed_league_sessions s
+            LEFT JOIN sealed_league_matches m
+                ON m.session_id = s.id AND (m.player1_id = p.id OR m.player2_id = p.id)
+            GROUP BY p.id, s.id
+        ),
+        bonus AS (
+            SELECT player_id, COALESCE(SUM(sess_bonus), 0)::INT AS bonus_packs
+            FROM per_session GROUP BY player_id
+        ),
+        pm AS (
             SELECT
                 p.id, p.name,
                 COALESCE(SUM(CASE
@@ -2876,12 +2896,13 @@ def sealed_league_summary():
             LEFT JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
             GROUP BY p.id, p.name
         )
-        SELECT id, name, match_wins, match_draws, match_losses,
-               game_wins, game_draws, game_losses,
-               (6 + %s + match_losses)      AS total_packs,
-               (6 + %s + match_losses) * 16 AS total_cards
+        SELECT pm.id, pm.name, pm.match_wins, pm.match_draws, pm.match_losses,
+               pm.game_wins, pm.game_draws, pm.game_losses,
+               (6 + %s + b.bonus_packs)      AS total_packs,
+               (6 + %s + b.bonus_packs) * 16 AS total_cards
         FROM pm
-        ORDER BY match_wins DESC, match_draws DESC, game_wins DESC
+        JOIN bonus b ON b.player_id = pm.id
+        ORDER BY pm.match_wins DESC, pm.match_draws DESC, pm.game_wins DESC
     """, [session_count, session_count])
 
     return {
@@ -2907,7 +2928,7 @@ def sealed_league_sessions_detail():
         FROM sealed_league_matches ORDER BY session_id, id
     """)
 
-    cumulative_losses = {p["id"]: 0 for p in players}
+    cumulative_bonus = {p["id"]: 0 for p in players}
     result = []
 
     for i, sess in enumerate(sessions):
@@ -2929,8 +2950,8 @@ def sealed_league_sessions_detail():
             gd = sum(m["game_draws"] for m in pm)
             gl = sum(m["player2_game_wins"] if m["player1_id"] == pid else m["player1_game_wins"] for m in pm)
 
-            cumulative_losses[pid] += ml
-            total_packs = 6 + (i + 1) + cumulative_losses[pid]
+            cumulative_bonus[pid] += max(0, ml - 1)
+            total_packs = 6 + (i + 1) + cumulative_bonus[pid]
 
             player_stats.append({
                 "player_id":    pid,
