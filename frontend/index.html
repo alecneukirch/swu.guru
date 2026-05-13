@@ -6569,11 +6569,13 @@ function renderLeagueStandings(summary) {
     const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
     const mRec = anyMatchDraws ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
     const gRec = anyGameDraws  ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
-    const pts  = p.norm_points != null ? Number(p.norm_points).toFixed(2) : '—';
+    const totalPts = p.total_points != null ? Number(p.total_points) : '—';
+    const normPts  = p.norm_points  != null ? Number(p.norm_points).toFixed(2) : '—';
     return `<tr>
       <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
       <td class="sl-player-name">${p.name}</td>
-      <td class="sl-pts">${pts}</td>
+      <td class="sl-pts">${totalPts}</td>
+      <td class="sl-pts" style="color:var(--text2)">${normPts}</td>
       <td class="sl-record ${rc}">${mRec}</td>
       <td class="sl-games">${gRec}</td>
       <td class="sl-packs">${p.total_packs}</td>
@@ -6586,7 +6588,8 @@ function renderLeagueStandings(summary) {
     <thead><tr>
       <th style="width:32px">#</th>
       <th>Player</th>
-      <th title="(wins×3 + draws×1.5 + losses×1) ÷ sessions played">Pts/Session</th>
+      <th title="wins×3 + draws×1 + losses×1">Pts</th>
+      <th title="total points ÷ sessions played">Pts/Sess</th>
       <th>${mHdr}</th>
       <th>${gHdr}</th>
       <th>Packs</th>

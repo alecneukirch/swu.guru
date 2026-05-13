@@ -2907,7 +2907,8 @@ def sealed_league_summary():
                (6 + %s + b.bonus_packs)      AS total_packs,
                (6 + %s + b.bonus_packs) * 16 AS total_cards,
                sp.sessions AS sessions_played,
-               ROUND((pm.match_wins * 3.0 + pm.match_draws * 1.5 + pm.match_losses * 1.0)
+               (pm.match_wins * 3 + pm.match_draws + pm.match_losses)::NUMERIC AS total_points,
+               ROUND((pm.match_wins * 3.0 + pm.match_draws + pm.match_losses)
                    / NULLIF(sp.sessions, 0), 2) AS norm_points
         FROM pm
         JOIN bonus b          ON b.player_id  = pm.id
