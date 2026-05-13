@@ -422,7 +422,7 @@ def _parse_matches(raw: list, include_byes: bool = False) -> list[dict]:
             "p2_deck_id":   c2["deck_id"],
             "p2_deck_name": c2["deck_name"],
             "p2_game_wins": c2["game_wins"],
-            "game_draws":   m.get("GameDraws", 0),
+            "game_draws":   m.get("GameDraws") or 0,
             "winner":       winner,
             "result_str":   m.get("ResultString", ""),
             "match_guid":   m.get("Guid", ""),

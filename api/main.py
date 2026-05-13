@@ -3341,7 +3341,7 @@ def import_sealed_league_melee(body: dict):
                 """INSERT INTO sealed_league_matches
                    (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
-                [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"], m.get("game_draws", 0)]
+                [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"], m.get("game_draws") or 0]
             )
             if m.get("round_number"):
                 new_id = db.fetchone("SELECT id FROM sealed_league_matches ORDER BY id DESC LIMIT 1")["id"]
