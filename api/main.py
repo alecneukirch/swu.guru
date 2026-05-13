@@ -3018,3 +3018,97 @@ def add_sealed_league_match(body: dict):
 def delete_sealed_league_match(match_id: int):
     db.execute("DELETE FROM sealed_league_matches WHERE id = %s", [match_id])
     return {"ok": True}
+
+
+@app.post("/api/sealed-league/import-melee")
+def import_sealed_league_melee(body: dict):
+    """
+    Pull match results from a melee.gg tournament and insert them into the sealed league.
+    body: { melee_id, session_id (optional), session_date (optional) }
+    If session_id is omitted a new session is created automatically.
+    Player names are auto-created if they don't already exist.
+    """
+    from scraper.melee import melee_tournament_rounds, melee_round_matches
+    import datetime as _dt
+
+    melee_id     = str(body.get("melee_id", "")).strip()
+    session_id   = body.get("session_id")
+    session_date = body.get("session_date")
+
+    if not melee_id:
+        raise HTTPException(400, "melee_id required")
+
+    try:
+        rounds_data = melee_tournament_rounds(melee_id)
+    except Exception as e:
+        raise HTTPException(502, f"Failed to fetch tournament from melee.gg: {e}")
+
+    pairings_rounds = [r for r in rounds_data.get("pairings_rounds", []) if r.get("completed")]
+    if not pairings_rounds:
+        raise HTTPException(404, "No completed pairings rounds found for this tournament ID")
+
+    # Create session if one wasn't specified
+    if not session_id:
+        existing = db.fetchall("SELECT session_number FROM sealed_league_sessions ORDER BY session_number")
+        next_num = (max(s["session_number"] for s in existing) + 1) if existing else 1
+        date_val = session_date or str(_dt.date.today())
+        db.execute(
+            "INSERT INTO sealed_league_sessions (session_number, session_date, notes) VALUES (%s, %s, %s)",
+            [next_num, date_val, f"melee.gg #{melee_id}"]
+        )
+        session_id = db.fetchone(
+            "SELECT id FROM sealed_league_sessions WHERE session_number = %s", [next_num]
+        )["id"]
+
+    # Fetch all matches across completed rounds
+    all_matches = []
+    for r in pairings_rounds:
+        all_matches.extend(melee_round_matches(r["id"]))
+
+    if not all_matches:
+        raise HTTPException(404, "No match results found in completed rounds")
+
+    def _get_or_create_player(name: str) -> Optional[int]:
+        name = name.strip()
+        if not name:
+            return None
+        db.execute(
+            "INSERT INTO sealed_league_players (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+            [name]
+        )
+        row = db.fetchone("SELECT id FROM sealed_league_players WHERE name = %s", [name])
+        return row["id"] if row else None
+
+    imported, skipped = 0, 0
+    seen_players: set[int] = set()
+    players_touched: list[str] = []
+
+    for m in all_matches:
+        p1_id = _get_or_create_player(m["p1_name"])
+        p2_id = _get_or_create_player(m["p2_name"])
+        if not p1_id or not p2_id:
+            skipped += 1
+            continue
+        for pid, name in [(p1_id, m["p1_name"]), (p2_id, m["p2_name"])]:
+            if pid not in seen_players:
+                seen_players.add(pid)
+                players_touched.append(name)
+        try:
+            db.execute(
+                """INSERT INTO sealed_league_matches
+                   (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"]]
+            )
+            imported += 1
+        except Exception:
+            skipped += 1
+
+    return {
+        "ok":         True,
+        "session_id": session_id,
+        "rounds":     len(pairings_rounds),
+        "imported":   imported,
+        "skipped":    skipped,
+        "players":    players_touched,
+    }

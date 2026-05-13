@@ -3914,6 +3914,17 @@ select.sl-input { cursor: pointer; }
         </div>
         <button class="btn" onclick="leagueAddMatch()">Record Match</button>
       </div>
+      <!-- Import from Melee -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Import from Melee.gg</div>
+        <input type="text" id="sl-import-id" class="sl-input" placeholder="Tournament ID (e.g. 428296)">
+        <select id="sl-import-session" class="sl-input">
+          <option value="">Auto-create new session</option>
+        </select>
+        <input type="date" id="sl-import-date" class="sl-input" title="Session date (only used when creating a new session)">
+        <button class="btn" id="sl-import-btn" onclick="leagueImportMelee()">Import Matches</button>
+        <div id="sl-import-status" style="font-size:12px;min-height:18px"></div>
+      </div>
     </div>
   </div>
 
@@ -6643,6 +6654,41 @@ function _populateLeagueAdmin(sessData) {
     : '<option value="">No sessions yet</option>';
   document.getElementById('sl-match-session').innerHTML = sOpts;
   if (sessions.length) document.getElementById('sl-match-session').value = sessions[sessions.length - 1].id;
+  // Import dropdown: blank = auto-create, or pick an existing session
+  document.getElementById('sl-import-session').innerHTML =
+    '<option value="">Auto-create new session</option>' +
+    sessions.map(s => `<option value="${s.id}">Session ${s.session_number} (${s.session_date})</option>`).join('');
+}
+
+async function leagueImportMelee() {
+  const meleeId   = (document.getElementById('sl-import-id')?.value || '').trim();
+  const sessionId = document.getElementById('sl-import-session')?.value;
+  const dateVal   = document.getElementById('sl-import-date')?.value;
+  const statusEl  = document.getElementById('sl-import-status');
+  const btn       = document.getElementById('sl-import-btn');
+  if (!meleeId) { alert('Enter a Melee tournament ID'); return; }
+  statusEl.textContent = 'Fetching from melee.gg…';
+  statusEl.style.color = 'var(--text2)';
+  btn.disabled = true;
+  try {
+    const body = { melee_id: meleeId };
+    if (sessionId) body.session_id = parseInt(sessionId);
+    else if (dateVal) body.session_date = dateVal;
+    const res = await api('/api/sealed-league/import-melee', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    statusEl.textContent = `Imported ${res.imported} match${res.imported !== 1 ? 'es' : ''} across ${res.rounds} round${res.rounds !== 1 ? 's' : ''}` +
+      (res.skipped ? ` (${res.skipped} skipped)` : '');
+    statusEl.style.color = 'var(--green2)';
+    document.getElementById('sl-import-id').value = '';
+    await loadLeague();
+  } catch(e) {
+    statusEl.textContent = e.message;
+    statusEl.style.color = 'var(--red2)';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function leagueAddPlayer() {
