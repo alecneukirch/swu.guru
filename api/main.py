@@ -2914,7 +2914,7 @@ def sealed_league_summary():
         JOIN bonus b          ON b.player_id  = pm.id
         JOIN sessions_played sp ON sp.player_id = pm.id
         WHERE pm.name != 'BYE'
-        ORDER BY norm_points DESC NULLS LAST, pm.match_wins DESC
+        ORDER BY total_points DESC NULLS LAST, norm_points DESC NULLS LAST
     """, [session_count, session_count])
 
     return {
