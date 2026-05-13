@@ -4429,10 +4429,10 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
     : '';
   let skillBadge = '';
   if (r.skill_badge === 'high') {
-    const tip = `High skill floor — T8 pilots avg ${r.avg_hri_rating_t8} (top 25% among all leaders' T8 pilots). This leader rewards high-level play.`;
+    const tip = `High skill floor — T8 pilots avg ${r.avg_hri_rating_t8} vs all pilots avg ${r.avg_hri_rating} (+${r.skill_delta} pts). Only play if you're good.`;
     skillBadge = `<div class="lc-skill-badge" data-tooltip="${tip}" style="color:#ff7eb3">🧠</div>`;
   } else if (r.skill_badge === 'low') {
-    const tip = `Drives itself — T8 pilots avg ${r.avg_hri_rating_t8} (bottom 25% among all leaders' T8 pilots). Even lower-rated players convert with this leader.`;
+    const tip = `Drives itself — T8 pilots avg ${r.avg_hri_rating_t8} vs all pilots avg ${r.avg_hri_rating} (${r.skill_delta} pts). Anyone can top 8 with this leader.`;
     skillBadge = `<div class="lc-skill-badge" data-tooltip="${tip}">🛞</div>`;
   }
   const top8Badge = (eventMode && r.t8_label === 'Day2' && r.literal_top8_count > 0)

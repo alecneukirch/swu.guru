@@ -306,16 +306,20 @@ def leaders(
     """, date_params)
     hri_t8_by_leader = {r['leader']: r for r in hri_t8_rows}
 
-    # Percentile thresholds across all leaders' T8 avg ratings
-    _t8_vals = sorted(
-        r['avg_hri_rating_t8'] for r in hri_t8_by_leader.values()
+    # Percentile thresholds on the delta (T8 avg − all pilots avg)
+    # High delta = only better-than-average pilots convert (brain)
+    # Low delta  = even average pilots convert (wheel)
+    _deltas = sorted(
+        r['avg_hri_rating_t8'] - hri_by_leader[r['leader']]
+        for r in hri_t8_by_leader.values()
         if r['avg_hri_rating_t8'] and r['t8_rated_count'] >= 3
+        and r['leader'] in hri_by_leader
     )
-    if len(_t8_vals) >= 5:
-        t8_p20 = _t8_vals[int(len(_t8_vals) * 0.25)]
-        t8_p80 = _t8_vals[int(len(_t8_vals) * 0.75)]
+    if len(_deltas) >= 5:
+        delta_p25 = _deltas[int(len(_deltas) * 0.25)]
+        delta_p75 = _deltas[int(len(_deltas) * 0.75)]
     else:
-        t8_p20 = t8_p80 = None
+        delta_p25 = delta_p75 = None
 
     result = []
     for r in rows:
@@ -330,10 +334,11 @@ def leaders(
         hri_t8_data = hri_t8_by_leader.get(r['leader'], {})
         hri_t8 = hri_t8_data.get('avg_hri_rating_t8')
         t8_rated = hri_t8_data.get('t8_rated_count', 0)
-        if hri_t8 and t8_rated >= 3 and t8_p20 is not None:
-            if hri_t8 >= t8_p80:
+        skill_delta = (hri_t8 - hri_all) if (hri_all and hri_t8 and t8_rated >= 3) else None
+        if skill_delta is not None and delta_p25 is not None:
+            if skill_delta >= delta_p75:
                 skill_badge = 'high'
-            elif hri_t8 <= t8_p20:
+            elif skill_delta <= delta_p25:
                 skill_badge = 'low'
             else:
                 skill_badge = None
@@ -351,6 +356,7 @@ def leaders(
             "t1_conv":           float(pct['t1_conv'])  if pct.get('t1_conv')  is not None else None,
             "avg_hri_rating":    hri_all,
             "avg_hri_rating_t8": hri_t8,
+            "skill_delta":       skill_delta,
             "skill_badge":       skill_badge,
         })
 
@@ -557,17 +563,17 @@ def leaders_by_base(
             groups[combo_key]['_hri_t8_sum']   += hri_t8['avg_hri_rating_t8'] * hri_t8['t8_rated_count']
             groups[combo_key]['_hri_t8_count'] += hri_t8['t8_rated_count']
 
-    # Percentile thresholds across all combos' T8 avg ratings
-    _t8_vals = sorted(
-        round(g['_hri_t8_sum'] / g['_hri_t8_count'])
+    # Percentile thresholds on the delta (T8 avg − all pilots avg)
+    _deltas = sorted(
+        round(g['_hri_t8_sum'] / g['_hri_t8_count']) - round(g['_hri_sum'] / g['_hri_count'])
         for g in groups.values()
-        if g['_hri_t8_count'] >= 3
+        if g['_hri_t8_count'] >= 3 and g['_hri_count'] > 0
     )
-    if len(_t8_vals) >= 5:
-        t8_p20 = _t8_vals[int(len(_t8_vals) * 0.25)]
-        t8_p80 = _t8_vals[int(len(_t8_vals) * 0.75)]
+    if len(_deltas) >= 5:
+        delta_p25 = _deltas[int(len(_deltas) * 0.25)]
+        delta_p75 = _deltas[int(len(_deltas) * 0.75)]
     else:
-        t8_p20 = t8_p80 = None
+        delta_p25 = delta_p75 = None
 
     result = []
     for g in groups.values():
@@ -578,10 +584,11 @@ def leaders_by_base(
         conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
         avg_hri    = round(g['_hri_sum']    / g['_hri_count'])    if g['_hri_count']    else None
         avg_hri_t8 = round(g['_hri_t8_sum'] / g['_hri_t8_count']) if g['_hri_t8_count'] else None
-        if avg_hri_t8 and g['_hri_t8_count'] >= 3 and t8_p20 is not None:
-            if avg_hri_t8 >= t8_p80:
+        skill_delta = (avg_hri_t8 - avg_hri) if (avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 3) else None
+        if skill_delta is not None and delta_p25 is not None:
+            if skill_delta >= delta_p75:
                 skill_badge = 'high'
-            elif avg_hri_t8 <= t8_p20:
+            elif skill_delta <= delta_p25:
                 skill_badge = 'low'
             else:
                 skill_badge = None
@@ -596,6 +603,7 @@ def leaders_by_base(
             'match_games':       g['_match_games'],
             'avg_hri_rating':    avg_hri,
             'avg_hri_rating_t8': avg_hri_t8,
+            'skill_delta':       skill_delta,
             'skill_badge':       skill_badge,
         })
 
