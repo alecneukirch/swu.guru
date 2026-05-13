@@ -2755,6 +2755,12 @@ select option { background: var(--surface2); }
   font-size: 14px;
   font-weight: 700;
 }
+.matrix-card-base {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 1px;
+}
 .matrix-card-decks {
   font-family: var(--mono);
   font-size: 10px;
@@ -5717,10 +5723,11 @@ async function loadModalData() {
     ]);
     modalLeaderData = byLeader.filter(r => r.leader);
     modalMatrixData = matrix;
-    // Also strip null keys from by_leader map
+    // Strip entries with null/empty leader from by_leader map
     if (modalMatrixData.by_leader) {
       Object.keys(modalMatrixData.by_leader).forEach(k => {
-        if (!k || k === 'null') delete modalMatrixData.by_leader[k];
+        const leader = k.split('|||')[0];
+        if (!leader || leader === 'null') delete modalMatrixData.by_leader[k];
       });
     }
     renderModalBody();
@@ -5801,8 +5808,8 @@ function renderAdvancedTab() {
 
   // Current leader first, then descending by deck count
   const leaders = Object.keys(byLeader).sort((a, b) => {
-    const aIsCurrent = a === currentLeader ? 1 : 0;
-    const bIsCurrent = b === currentLeader ? 1 : 0;
+    const aIsCurrent = a.startsWith(currentLeader + '|||') ? 1 : 0;
+    const bIsCurrent = b.startsWith(currentLeader + '|||') ? 1 : 0;
     if (aIsCurrent !== bIsCurrent) return bIsCurrent - aIsCurrent;
     return leaderDeckCount(b) - leaderDeckCount(a);
   });
@@ -5840,7 +5847,10 @@ function setPct(v) {
   renderModalBody();
 }
 
-function renderMatrixCard(leader, cells, best) {
+function renderMatrixCard(leaderBase, cells, best) {
+  const sepIdx = leaderBase.indexOf('|||');
+  const leader = sepIdx >= 0 ? leaderBase.slice(0, sepIdx) : leaderBase;
+  const base   = sepIdx >= 0 ? leaderBase.slice(sepIdx + 3) : '';
   // Find max MD and SB copies present in data
   const keys    = Object.keys(cells);
   let maxMd = 0, maxSb = 0;
@@ -5893,6 +5903,7 @@ function renderMatrixCard(leader, cells, best) {
   <div class="matrix-card-header">
     <div>
       <div class="matrix-card-leader">${shortName(leader)}</div>
+      ${base ? `<div class="matrix-card-base">${base}</div>` : ''}
       <div class="matrix-card-decks">${totalDecks} decks</div>
     </div>
     ${bestBadge}

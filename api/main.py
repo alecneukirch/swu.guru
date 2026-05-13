@@ -1097,98 +1097,82 @@ def card_copy_matrix(
 ):
     """
     For a single card: the MD-copies × SB-copies conversion matrix,
-    broken down per leader.
+    broken down per leader + base combination.
     """
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    if date_sql:
-        rows = db.fetchall(f"""
-            WITH leader_baselines AS (
-                SELECT
-                    s.leader,
-                    COUNT(*)::INT AS total_decks,
-                    COUNT(*) FILTER (
-                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
-                    )::INT AS total_t8s
-                FROM {t['standings']} s
-                JOIN {t['events']} e ON e.id = s.event_id
-                WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
-                  {date_sql}
-                GROUP BY s.leader
-            ),
-            deck_config AS (
-                SELECT
-                    s.leader,
-                    s.placement,
-                    e.player_count,
-                    md.quantity AS md_copies,
-                    COALESCE(sb.quantity, 0) AS sb_copies
-                FROM {t['standings']} s
-                JOIN {t['events']} e ON e.id = s.event_id
-                JOIN {t['decklist_cards']} md ON md.standing_id = s.id AND md.is_sideboard = false AND md.card_name = %s
-                LEFT JOIN {t['decklist_cards']} sb ON sb.standing_id = s.id AND sb.is_sideboard = true AND sb.card_name = %s
-                WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
-                  {date_sql}
-            )
+    rows = db.fetchall(f"""
+        WITH leader_baselines AS (
             SELECT
-                dc.leader,
-                dc.md_copies,
-                dc.sb_copies,
-                COUNT(*)::INT AS deck_count,
+                s.leader,
+                s.base,
+                COUNT(*)::INT AS total_decks,
+                COUNT(*) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                )::INT AS total_t8s
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
+              AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+              {date_sql}
+            GROUP BY s.leader, s.base
+        ),
+        deck_config AS (
+            SELECT
+                s.leader,
+                s.base,
+                s.placement,
+                e.player_count,
+                md.quantity AS md_copies,
+                COALESCE(sb.quantity, 0) AS sb_copies
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            JOIN {t['decklist_cards']} md ON md.standing_id = s.id AND md.is_sideboard = false AND md.card_name = %s
+            LEFT JOIN {t['decklist_cards']} sb ON sb.standing_id = s.id AND sb.is_sideboard = true AND sb.card_name = %s
+            WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
+              AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+              {date_sql}
+        )
+        SELECT
+            dc.leader,
+            dc.base,
+            dc.md_copies,
+            dc.sb_copies,
+            COUNT(*)::INT AS deck_count,
+            COUNT(*) FILTER (
+                WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
+            )::INT AS t8_count,
+            ROUND(COUNT(*) FILTER (
+                WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
+            )::numeric / NULLIF(COUNT(*), 0), 4) AS t8_rate,
+            ROUND(
                 COUNT(*) FILTER (
                     WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
-                )::INT AS t8_count,
-                ROUND(COUNT(*) FILTER (
-                    WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
-                )::numeric / NULLIF(COUNT(*), 0), 4) AS t8_rate,
-                ROUND(
-                    COUNT(*) FILTER (
-                        WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
-                    )::numeric / NULLIF(COUNT(*), 0)
-                    / NULLIF(lb.total_t8s::numeric / NULLIF(lb.total_decks, 0), 0),
-                4) AS conversion
-            FROM deck_config dc
-            JOIN leader_baselines lb ON lb.leader = dc.leader
-            WHERE dc.leader != ''
-              AND EXISTS (
-                  SELECT 1 FROM cards c
-                  WHERE c.is_leader = true AND dc.leader ILIKE c.name || '%%'
-              )
-            GROUP BY dc.leader, dc.md_copies, dc.sb_copies, lb.total_decks, lb.total_t8s
-            ORDER BY dc.leader, dc.md_copies, dc.sb_copies
-        """, date_params + [card_name, card_name] + date_params)
-    else:
-        rows = db.fetchall(f"""
-            SELECT
-                m.leader,
-                m.md_copies,
-                m.sb_copies,
-                m.deck_count,
-                m.t8_count,
-                m.t8_rate,
-                m.conversion
-            FROM {t['mv_card_copy_matrix']} m
-            WHERE m.card_name = %s
-              AND m.leader IS NOT NULL
-              AND m.leader != ''
-              AND EXISTS (
-                  SELECT 1 FROM cards c
-                  WHERE c.is_leader = true AND m.leader ILIKE c.name || '%%'
-              )
-            ORDER BY m.leader, m.md_copies, m.sb_copies
-        """, [card_name])
+                )::numeric / NULLIF(COUNT(*), 0)
+                / NULLIF(lb.total_t8s::numeric / NULLIF(lb.total_decks, 0), 0),
+            4) AS conversion
+        FROM deck_config dc
+        JOIN leader_baselines lb ON lb.leader = dc.leader AND lb.base = dc.base
+        WHERE dc.leader != ''
+          AND EXISTS (
+              SELECT 1 FROM cards c
+              WHERE c.is_leader = true AND dc.leader ILIKE c.name || '%%'
+          )
+        GROUP BY dc.leader, dc.base, dc.md_copies, dc.sb_copies, lb.total_decks, lb.total_t8s
+        ORDER BY dc.leader, dc.base, dc.md_copies, dc.sb_copies
+    """, date_params + [card_name, card_name] + date_params)
 
-    # Pivot into { leader: { "md_X_sb_Y": { deck_count, conversion, ... } } }
+    # Pivot into { "leader|||base": { "md_X_sb_Y": { deck_count, conversion, ... } } }
     by_leader: dict = {}
     best_config: dict = {}
 
     for r in rows:
-        ldr = r["leader"]
-        if ldr not in by_leader:
-            by_leader[ldr] = {}
-        key = f"{r['md_copies']}m_{r['sb_copies']}s"
-        by_leader[ldr][key] = {
+        combo = f"{r['leader']}|||{r['base'] or ''}"
+        if combo not in by_leader:
+            by_leader[combo] = {}
+        cell_key = f"{r['md_copies']}m_{r['sb_copies']}s"
+        by_leader[combo][cell_key] = {
             "md_copies":  r["md_copies"],
             "sb_copies":  r["sb_copies"],
             "deck_count": r["deck_count"],
@@ -1196,11 +1180,11 @@ def card_copy_matrix(
             "conversion": r["conversion"],
         }
 
-        # Track best config per leader (highest conversion, min 5 decks)
+        # Track best config per combo (highest conversion, min 5 decks)
         if r["deck_count"] >= 5:
-            cur_best = best_config.get(ldr)
+            cur_best = best_config.get(combo)
             if cur_best is None or (r["conversion"] or 0) > (cur_best["conversion"] or 0):
-                best_config[ldr] = {
+                best_config[combo] = {
                     "md_copies":  r["md_copies"],
                     "sb_copies":  r["sb_copies"],
                     "conversion": r["conversion"],
