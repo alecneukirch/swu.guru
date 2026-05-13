@@ -3403,8 +3403,8 @@ tr:hover .sl-gear-btn { opacity: 1; }
 tr.sl-inactive-row td { opacity: 0.3; }
 tr.sl-inactive-row td:first-child ~ td:first-of-type { opacity: 1; }
 tr.sl-inactive-row .sl-gear-btn { opacity: 1 !important; }
-.sl-player-link { background: none; border: none; cursor: pointer; font: inherit; color: var(--text); padding: 0; text-align: left; }
-.sl-player-link:hover { color: var(--gold); }
+tr.sl-clickable-row { cursor: pointer; }
+tr.sl-clickable-row:hover td { background: rgba(255,255,255,0.03); }
 .sl-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000;
   display: flex; align-items: center; justify-content: center;
@@ -6571,7 +6571,9 @@ async function toggleLeaguePlayer(id, currentlyActive) {
   await loadLeague();
 }
 
-async function showLeaguePlayerModal(id, name) {
+async function showLeaguePlayerModal(id) {
+  const player = _leagueData && _leagueData.summary.players.find(p => p.id === id);
+  const name = player ? player.name : `Player ${id}`;
   const existing = document.getElementById('sl-modal-overlay');
   if (existing) existing.remove();
 
@@ -6682,11 +6684,10 @@ function renderLeagueStandings(summary) {
     const total = p.total_points != null ? Number(p.total_points) : '—';
     const norm  = p.norm_points  != null ? Number(p.norm_points).toFixed(2) : '—';
     const gear  = `<button class="sl-gear-btn${isInactive ? ' sl-gear-active' : ''}"
-                     onclick="toggleLeaguePlayer(${p.id}, ${p.is_active !== false})" title="${isInactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
-    const nameBtn = `<button class="sl-player-link" onclick="showLeaguePlayerModal(${p.id}, ${JSON.stringify(p.name)})">${p.name}</button>`;
-    return `<tr class="${isInactive ? 'sl-inactive-row' : ''}">
+                     onclick="event.stopPropagation();toggleLeaguePlayer(${p.id}, ${p.is_active !== false})" title="${isInactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
+    return `<tr class="sl-clickable-row${isInactive ? ' sl-inactive-row' : ''}" onclick="showLeaguePlayerModal(${p.id})">
       <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
-      <td class="sl-player-name">${nameBtn}${gear}</td>
+      <td class="sl-player-name">${p.name}${gear}</td>
       <td class="sl-pts">${total}</td>
       <td class="sl-pts" style="color:var(--text2)">${norm}</td>
       <td class="sl-record ${rc}">${mRec}</td>
