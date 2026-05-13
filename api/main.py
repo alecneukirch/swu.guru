@@ -3058,7 +3058,7 @@ def import_sealed_league_melee(body: dict):
     pairings_rounds = [
         r for r in rounds_data.get("pairings_rounds", [])
         if r.get("completed") or r.get("started")
-    ]
+    ][:3]
     if not pairings_rounds:
         raise HTTPException(404, "No started pairings rounds found for this tournament ID")
 
