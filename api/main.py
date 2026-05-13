@@ -1001,89 +1001,63 @@ def card_by_leader(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    if date_sql:
-        rows = db.fetchall(f"""
-            WITH leader_totals AS (
-                SELECT
-                    s.leader,
-                    COUNT(*)::INT AS leader_total_decks,
-                    COUNT(*) FILTER (
-                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
-                    )::INT AS leader_total_t8s
-                FROM {t['standings']} s
-                JOIN {t['events']} e ON e.id = s.event_id
-                WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
-                  {date_sql}
-                GROUP BY s.leader
-            ),
-            card_leader AS (
-                SELECT
-                    s.leader,
-                    COUNT(DISTINCT s.id)::INT AS deck_count,
-                    COUNT(DISTINCT s.id) FILTER (
-                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
-                    )::INT AS t8_count
-                FROM {t['decklist_cards']} dc
-                JOIN {t['standings']} s ON s.id = dc.standing_id
-                JOIN {t['events']} e ON e.id = s.event_id
-                WHERE dc.card_name = %s
-                  AND s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
-                  {date_sql}
-                GROUP BY s.leader
-            )
+    rows = db.fetchall(f"""
+        WITH leader_totals AS (
             SELECT
-                cl.leader,
-                cl.deck_count,
-                cl.t8_count,
-                lt.leader_total_decks,
-                lt.leader_total_t8s,
-                ROUND(cl.deck_count::numeric / NULLIF(lt.leader_total_decks, 0), 4) AS inclusion_rate,
-                ROUND(cl.t8_count::numeric / NULLIF(cl.deck_count, 0), 4) AS card_t8_rate,
-                ROUND(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 4) AS baseline_t8_rate,
-                ROUND(
-                    (cl.t8_count::numeric / NULLIF(cl.deck_count, 0))
-                    / NULLIF(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 0),
-                4) AS conversion
-            FROM card_leader cl
-            JOIN leader_totals lt ON lt.leader = cl.leader
-            WHERE cl.deck_count >= 3
-              AND cl.leader != ''
-              AND EXISTS (
-                  SELECT 1 FROM cards c
-                  WHERE c.is_leader = true AND cl.leader ILIKE c.name || '%%'
-              )
-            ORDER BY cl.deck_count DESC
-        """, date_params + [card_name] + date_params)
-    else:
-        rows = db.fetchall(f"""
+                s.leader,
+                s.base,
+                COUNT(*)::INT AS leader_total_decks,
+                COUNT(*) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                )::INT AS leader_total_t8s
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
+              AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+              {date_sql}
+            GROUP BY s.leader, s.base
+        ),
+        card_leader AS (
             SELECT
-                m.leader,
-                SUM(m.deck_count)           AS deck_count,
-                SUM(m.t8_count)             AS t8_count,
-                SUM(m.leader_total_decks)   AS leader_total_decks,
-                SUM(m.leader_total_t8s)     AS leader_total_t8s,
-                ROUND(SUM(m.deck_count)::numeric
-                    / NULLIF(SUM(m.leader_total_decks), 0), 4) AS inclusion_rate,
-                ROUND(SUM(m.t8_count)::numeric
-                    / NULLIF(SUM(m.deck_count), 0), 4)         AS card_t8_rate,
-                ROUND(SUM(m.leader_total_t8s)::numeric
-                    / NULLIF(SUM(m.leader_total_decks), 0), 4) AS baseline_t8_rate,
-                ROUND(
-                    (SUM(m.t8_count)::numeric / NULLIF(SUM(m.deck_count), 0))
-                    / NULLIF(SUM(m.leader_total_t8s)::numeric / NULLIF(SUM(m.leader_total_decks), 0), 0),
-                4) AS conversion
-            FROM {t['mv_card_leader_stats']} m
-            WHERE m.card_name = %s
-              AND m.leader IS NOT NULL
-              AND m.leader != ''
-              AND EXISTS (
-                  SELECT 1 FROM cards c
-                  WHERE c.is_leader = true AND m.leader ILIKE c.name || '%%'
-              )
-            GROUP BY m.leader
-            HAVING SUM(m.deck_count) >= 3
-            ORDER BY SUM(m.deck_count) DESC
-        """, [card_name])
+                s.leader,
+                s.base,
+                COUNT(DISTINCT s.id)::INT AS deck_count,
+                COUNT(DISTINCT s.id) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                )::INT AS t8_count
+            FROM {t['decklist_cards']} dc
+            JOIN {t['standings']} s ON s.id = dc.standing_id
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE dc.card_name = %s
+              AND s.leader IS NOT NULL AND s.base IS NOT NULL
+              AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+              {date_sql}
+            GROUP BY s.leader, s.base
+        )
+        SELECT
+            cl.leader,
+            cl.base,
+            cl.deck_count,
+            cl.t8_count,
+            lt.leader_total_decks,
+            lt.leader_total_t8s,
+            ROUND(cl.deck_count::numeric / NULLIF(lt.leader_total_decks, 0), 4) AS inclusion_rate,
+            ROUND(cl.t8_count::numeric / NULLIF(cl.deck_count, 0), 4) AS card_t8_rate,
+            ROUND(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 4) AS baseline_t8_rate,
+            ROUND(
+                (cl.t8_count::numeric / NULLIF(cl.deck_count, 0))
+                / NULLIF(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 0),
+            4) AS conversion
+        FROM card_leader cl
+        JOIN leader_totals lt ON lt.leader = cl.leader AND lt.base = cl.base
+        WHERE cl.deck_count >= 3
+          AND cl.leader != ''
+          AND EXISTS (
+              SELECT 1 FROM cards c
+              WHERE c.is_leader = true AND cl.leader ILIKE c.name || '%%'
+          )
+        ORDER BY cl.deck_count DESC
+    """, date_params + [card_name] + date_params)
 
     return rows
 
