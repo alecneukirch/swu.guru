@@ -2834,3 +2834,187 @@ def _meta_counter_inner(weeks: int = 2, format: str = "standard"):
             row["meta_share_delta"] = round(row["meta_share"] - (prev["meta_share"] if prev else 0), 4)
 
     return {"weeks": result_weeks}
+
+
+# ── Sealed League ─────────────────────────────────────────────────────────────
+# Card pool formula: 6 starting packs + 1 pack per session + 1 pack per match loss.
+# Each pack = 16 cards.
+
+@app.get("/api/sealed-league/summary")
+def sealed_league_summary():
+    """Aggregate standings for the local sealed league."""
+    sess_row = db.fetchone(
+        "SELECT COUNT(*)::INT AS cnt, MAX(session_date) AS last_date FROM sealed_league_sessions"
+    )
+    session_count = sess_row["cnt"] if sess_row else 0
+
+    players = db.fetchall("""
+        WITH pm AS (
+            SELECT
+                p.id, p.name,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id AND m.player1_game_wins > m.player2_game_wins THEN 1
+                    WHEN m.player2_id = p.id AND m.player2_game_wins > m.player1_game_wins THEN 1
+                    ELSE 0 END)::INT, 0) AS match_wins,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id AND m.player1_game_wins < m.player2_game_wins THEN 1
+                    WHEN m.player2_id = p.id AND m.player2_game_wins < m.player1_game_wins THEN 1
+                    ELSE 0 END)::INT, 0) AS match_losses,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id THEN m.player1_game_wins
+                    WHEN m.player2_id = p.id THEN m.player2_game_wins
+                    ELSE 0 END)::INT, 0) AS game_wins,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id THEN m.player2_game_wins
+                    WHEN m.player2_id = p.id THEN m.player1_game_wins
+                    ELSE 0 END)::INT, 0) AS game_losses
+            FROM sealed_league_players p
+            LEFT JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            GROUP BY p.id, p.name
+        )
+        SELECT id, name, match_wins, match_losses, game_wins, game_losses,
+               (6 + %s + match_losses)      AS total_packs,
+               (6 + %s + match_losses) * 16 AS total_cards
+        FROM pm
+        ORDER BY match_wins DESC, game_wins DESC
+    """, [session_count, session_count])
+
+    return {
+        "players": [dict(r) for r in players],
+        "sessions_completed": session_count,
+        "last_session_date": str(sess_row["last_date"]) if sess_row and sess_row["last_date"] else None,
+    }
+
+
+@app.get("/api/sealed-league/sessions")
+def sealed_league_sessions_detail():
+    """Per-session breakdown for the sealed league weekly tracker."""
+    sessions = db.fetchall(
+        "SELECT id, session_number, session_date, notes FROM sealed_league_sessions ORDER BY session_number"
+    )
+    players = db.fetchall("SELECT id, name FROM sealed_league_players ORDER BY name")
+
+    if not players:
+        return {"sessions": [], "players": []}
+
+    all_matches = db.fetchall("""
+        SELECT id, session_id, player1_id, player2_id, player1_game_wins, player2_game_wins
+        FROM sealed_league_matches ORDER BY session_id, id
+    """)
+
+    cumulative_losses = {p["id"]: 0 for p in players}
+    result = []
+
+    for i, sess in enumerate(sessions):
+        sess_matches = [m for m in all_matches if m["session_id"] == sess["id"]]
+
+        player_stats = []
+        for p in players:
+            pid = p["id"]
+            pm  = [m for m in sess_matches if m["player1_id"] == pid or m["player2_id"] == pid]
+
+            mw = sum(1 for m in pm if
+                     (m["player1_id"] == pid and m["player1_game_wins"] > m["player2_game_wins"]) or
+                     (m["player2_id"] == pid and m["player2_game_wins"] > m["player1_game_wins"]))
+            ml = sum(1 for m in pm if
+                     (m["player1_id"] == pid and m["player1_game_wins"] < m["player2_game_wins"]) or
+                     (m["player2_id"] == pid and m["player2_game_wins"] < m["player1_game_wins"]))
+            gw = sum(m["player1_game_wins"] if m["player1_id"] == pid else m["player2_game_wins"] for m in pm)
+            gl = sum(m["player2_game_wins"] if m["player1_id"] == pid else m["player1_game_wins"] for m in pm)
+
+            cumulative_losses[pid] += ml
+            total_packs = 6 + (i + 1) + cumulative_losses[pid]
+
+            player_stats.append({
+                "player_id":    pid,
+                "player_name":  p["name"],
+                "match_wins":   mw,
+                "match_losses": ml,
+                "game_wins":    gw,
+                "game_losses":  gl,
+                "total_packs":  total_packs,
+                "total_cards":  total_packs * 16,
+            })
+
+        match_details = []
+        for m in sess_matches:
+            p1name = next((p["name"] for p in players if p["id"] == m["player1_id"]), "?")
+            p2name = next((p["name"] for p in players if p["id"] == m["player2_id"]), "?")
+            match_details.append({
+                "id":      m["id"],
+                "player1": p1name,
+                "player2": p2name,
+                "score":   f"{m['player1_game_wins']}-{m['player2_game_wins']}",
+            })
+
+        result.append({
+            "id":             sess["id"],
+            "session_number": sess["session_number"],
+            "session_date":   str(sess["session_date"]),
+            "notes":          sess.get("notes"),
+            "players":        player_stats,
+            "matches":        match_details,
+        })
+
+    return {
+        "sessions": result,
+        "players":  [{"id": p["id"], "name": p["name"]} for p in players],
+    }
+
+
+@app.get("/api/sealed-league/players")
+def get_sealed_league_players():
+    return db.fetchall("SELECT id, name FROM sealed_league_players ORDER BY name")
+
+
+@app.post("/api/sealed-league/players")
+def add_sealed_league_player(body: dict):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    db.execute(
+        "INSERT INTO sealed_league_players (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+        [name]
+    )
+    row = db.fetchone("SELECT id FROM sealed_league_players WHERE name = %s", [name])
+    return {"ok": True, "id": row["id"] if row else None}
+
+
+@app.post("/api/sealed-league/sessions")
+def add_sealed_league_session(body: dict):
+    session_number = body.get("session_number")
+    session_date   = body.get("session_date")
+    notes          = body.get("notes")
+    if not session_number or not session_date:
+        raise HTTPException(400, "session_number and session_date required")
+    db.execute(
+        "INSERT INTO sealed_league_sessions (session_number, session_date, notes) VALUES (%s, %s, %s)",
+        [session_number, session_date, notes]
+    )
+    return {"ok": True}
+
+
+@app.post("/api/sealed-league/matches")
+def add_sealed_league_match(body: dict):
+    session_id = body.get("session_id")
+    p1_id      = body.get("player1_id")
+    p2_id      = body.get("player2_id")
+    p1gw       = int(body.get("player1_game_wins", 0))
+    p2gw       = int(body.get("player2_game_wins", 0))
+    if not all([session_id, p1_id, p2_id]):
+        raise HTTPException(400, "session_id, player1_id, player2_id required")
+    if p1_id == p2_id:
+        raise HTTPException(400, "players must be different")
+    db.execute(
+        """INSERT INTO sealed_league_matches
+           (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins)
+           VALUES (%s, %s, %s, %s, %s)""",
+        [session_id, p1_id, p2_id, p1gw, p2gw]
+    )
+    return {"ok": True}
+
+
+@app.delete("/api/sealed-league/matches/{match_id}")
+def delete_sealed_league_match(match_id: int):
+    db.execute("DELETE FROM sealed_league_matches WHERE id = %s", [match_id])
+    return {"ok": True}

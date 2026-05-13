@@ -3366,6 +3366,80 @@ select option { background: var(--surface2); }
   background: rgba(240,180,41,0.12); color: var(--gold); border: 1px solid rgba(240,180,41,0.25);
 }
 
+/* ── Sealed League ───────────────────────────────────────── */
+.sl-section-hdr {
+  font-family: var(--display); font-size: 13px; font-weight: 700;
+  letter-spacing: 0.12em; color: var(--text3); text-transform: uppercase;
+  padding: 0 0 10px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+}
+.sl-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sl-table th {
+  font-family: var(--mono); font-size: 11px; font-weight: 400;
+  color: var(--text3); text-align: left; padding: 6px 12px;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.sl-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.sl-table tr:last-child td { border-bottom: none; }
+.sl-table tr:hover td { background: rgba(255,255,255,0.025); }
+.sl-table-compact td, .sl-table-compact th { padding: 5px 10px; }
+.sl-player-name { font-weight: 600; }
+.sl-record { font-family: var(--mono); font-weight: 700; }
+.sl-record.sl-win  { color: var(--green2); }
+.sl-record.sl-loss { color: var(--red2); }
+.sl-win  { color: var(--green2); }
+.sl-loss { color: var(--red2); }
+.sl-games { font-family: var(--mono); font-size: 13px; color: var(--text2); }
+.sl-packs { font-family: var(--mono); font-size: 13px; color: var(--text3); }
+.sl-cards { font-family: var(--mono); font-weight: 700; color: var(--gold); }
+.sl-session-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 16px; overflow: hidden;
+}
+.sl-session-hdr {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; background: var(--surface2); border-bottom: 1px solid var(--border);
+}
+.sl-session-num { font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: 0.06em; color: var(--gold); }
+.sl-session-date { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+.sl-session-notes { font-size: 12px; color: var(--text2); font-style: italic; }
+.sl-session-body { display: flex; gap: 0; flex-wrap: wrap; }
+.sl-session-table { flex: 1; min-width: 300px; overflow-x: auto; padding: 12px 0; }
+.sl-session-matches {
+  border-left: 1px solid var(--border); padding: 12px 16px;
+  min-width: 200px; display: flex; flex-direction: column; gap: 6px;
+}
+.sl-matches-title {
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;
+}
+.sl-match-line { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.sl-score { font-family: var(--mono); font-size: 12px; color: var(--text3); min-width: 28px; text-align: center; }
+.sl-del-btn {
+  background: none; border: none; cursor: pointer; color: var(--text3);
+  font-size: 11px; padding: 2px 4px; margin-left: auto; opacity: 0.4;
+  transition: opacity 0.15s, color 0.15s;
+}
+.sl-del-btn:hover { opacity: 1; color: var(--red2); }
+.sl-admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 0 24px 24px; }
+.sl-admin-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.sl-admin-title {
+  font-family: var(--display); font-size: 14px; font-weight: 700;
+  letter-spacing: 0.05em; color: var(--text2); margin-bottom: 4px;
+}
+.sl-input {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 5px;
+  color: var(--text); font-family: var(--body); font-size: 13px;
+  padding: 6px 10px; width: 100%; box-sizing: border-box;
+}
+.sl-input:focus { outline: none; border-color: var(--gold); }
+select.sl-input { cursor: pointer; }
+.sl-score-row { display: flex; gap: 8px; align-items: center; }
+.sl-score-row select.sl-input { flex: 1; }
+.sl-score-row input.sl-input { width: 52px; text-align: center; }
+
 </style>
 </head>
 <body>
@@ -3797,6 +3871,61 @@ select option { background: var(--surface2); }
 
 
 
+<!-- ══ SEALED LEAGUE PAGE (hidden — access via #league) ══ -->
+<div class="page" id="page-league">
+  <div class="page-header">
+    <div>
+      <div class="page-title">SEALED LEAGUE</div>
+      <div class="page-sub" id="league-sub">local sealed league tracker</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+      <button class="btn" onclick="loadLeague()">↺ Refresh</button>
+      <button class="btn" id="league-admin-btn" onclick="toggleLeagueAdmin()">Manage</button>
+    </div>
+  </div>
+
+  <!-- Admin panel (hidden by default) -->
+  <div id="league-admin" style="display:none">
+    <div class="sl-admin-grid">
+      <!-- Add Player -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Add Player</div>
+        <input type="text" id="sl-new-player" class="sl-input" placeholder="Player name">
+        <button class="btn" onclick="leagueAddPlayer()">Add Player</button>
+      </div>
+      <!-- Add Session -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Add Session</div>
+        <input type="date" id="sl-new-session-date" class="sl-input">
+        <input type="text" id="sl-new-session-notes" class="sl-input" placeholder="Notes (optional)">
+        <button class="btn" onclick="leagueAddSession()">Add Session</button>
+      </div>
+      <!-- Add Match -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Add Match Result</div>
+        <select id="sl-match-session" class="sl-input"></select>
+        <div class="sl-score-row">
+          <select id="sl-match-p1" class="sl-input"></select>
+          <input type="number" id="sl-match-p1gw" class="sl-input" min="0" max="2" value="2" title="Game wins">
+        </div>
+        <div class="sl-score-row">
+          <select id="sl-match-p2" class="sl-input"></select>
+          <input type="number" id="sl-match-p2gw" class="sl-input" min="0" max="2" value="0" title="Game wins">
+        </div>
+        <button class="btn" onclick="leagueAddMatch()">Record Match</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div style="padding:0 24px 32px">
+    <div class="sl-section-hdr">STANDINGS</div>
+    <div id="league-standings"><div class="loading" style="padding:24px">loading…</div></div>
+    <div class="sl-section-hdr" style="margin-top:32px">SESSION HISTORY</div>
+    <div id="league-sessions"><div class="loading" style="padding:24px">loading…</div></div>
+  </div>
+</div>
+
 <!-- ══ CARD MODAL ══ -->
 <div id="modal-backdrop" onclick="closeModal(event)">
   <div id="modal">
@@ -4007,6 +4136,7 @@ function showPage(name) {
   if (name === 'players')   loadPlayers();
   if (name === 'picks')     loadPicks();
   if (name === 'cards')     loadCardsPage();
+  if (name === 'league')    loadLeague();
 }
 function goHome() {
   showPage('home');
@@ -6378,6 +6508,198 @@ function renderDecklistsTable(rows) {
 </table>`;
 }
 
+
+// ── SEALED LEAGUE ───────────────────────────────────────────────────────────
+let _leagueData       = null;
+let _leagueAdminOpen  = false;
+
+async function loadLeague() {
+  const standEl = document.getElementById('league-standings');
+  const sessEl  = document.getElementById('league-sessions');
+  if (!standEl) return;
+  standEl.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
+  sessEl.innerHTML  = '<div class="loading" style="padding:24px">loading…</div>';
+  try {
+    const [summary, sessData] = await Promise.all([
+      api('/api/sealed-league/summary'),
+      api('/api/sealed-league/sessions'),
+    ]);
+    _leagueData = { summary, sessData };
+    const sc = summary.sessions_completed || 0;
+    document.getElementById('league-sub').textContent =
+      sc + ' session' + (sc !== 1 ? 's' : '') + ' completed' +
+      (summary.last_session_date ? ' · last ' + summary.last_session_date : '');
+    renderLeagueStandings(summary);
+    renderLeagueSessions(sessData);
+    if (_leagueAdminOpen) _populateLeagueAdmin(sessData);
+  } catch(e) {
+    standEl.innerHTML = `<div class="empty-state" style="padding:24px">// ${e.message}</div>`;
+    sessEl.innerHTML  = '';
+  }
+}
+
+function renderLeagueStandings(summary) {
+  const el = document.getElementById('league-standings');
+  const players = summary.players || [];
+  if (!players.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:16px">// no players yet — use Manage to add players</div>';
+    return;
+  }
+  const rows = players.map((p, i) => {
+    const mw = p.match_wins  || 0, ml = p.match_losses || 0;
+    const gw = p.game_wins   || 0, gl = p.game_losses  || 0;
+    const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+    return `<tr>
+      <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
+      <td class="sl-player-name">${p.name}</td>
+      <td class="sl-record ${rc}">${mw}-${ml}</td>
+      <td class="sl-games">${gw}-${gl}</td>
+      <td class="sl-packs">${p.total_packs}</td>
+      <td class="sl-cards">${p.total_cards}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div class="table-wrap"><table class="sl-table">
+    <thead><tr>
+      <th style="width:32px">#</th>
+      <th>Player</th>
+      <th>Match W-L</th>
+      <th>Game W-L</th>
+      <th>Packs</th>
+      <th>Cards</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderLeagueSessions(data) {
+  const el = document.getElementById('league-sessions');
+  const sessions = (data.sessions || []).slice().reverse();
+  const players  = data.players  || [];
+  if (!sessions.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:16px">// no sessions yet — use Manage to add sessions</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(sess => {
+    const playerRows = (sess.players || []).map(p => {
+      const mw = p.match_wins || 0, ml = p.match_losses || 0;
+      const gw = p.game_wins  || 0, gl = p.game_losses  || 0;
+      const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+      return `<tr>
+        <td class="sl-player-name">${p.player_name}</td>
+        <td class="sl-record ${rc}">${mw}-${ml}</td>
+        <td class="sl-games">${gw}-${gl}</td>
+        <td class="sl-packs">${p.total_packs}</td>
+        <td class="sl-cards">${p.total_cards}</td>
+      </tr>`;
+    }).join('');
+
+    const matchLines = (sess.matches || []).map(m => {
+      const [s1, s2] = (m.score || '0-0').split('-').map(Number);
+      return `<div class="sl-match-line">
+        <span class="${s1 > s2 ? 'sl-win' : ''}">${m.player1}</span>
+        <span class="sl-score">${m.score}</span>
+        <span class="${s2 > s1 ? 'sl-win' : ''}">${m.player2}</span>
+        <button class="sl-del-btn" onclick="leagueDeleteMatch(${m.id})" title="Remove match">✕</button>
+      </div>`;
+    }).join('');
+
+    return `<div class="sl-session-card">
+      <div class="sl-session-hdr">
+        <span class="sl-session-num">SESSION ${sess.session_number}</span>
+        <span class="sl-session-date">${sess.session_date}</span>
+        ${sess.notes ? `<span class="sl-session-notes">${sess.notes}</span>` : ''}
+      </div>
+      <div class="sl-session-body">
+        <div class="sl-session-table">
+          <table class="sl-table sl-table-compact">
+            <thead><tr><th>Player</th><th>Match</th><th>Games</th><th>Packs</th><th>Cards</th></tr></thead>
+            <tbody>${playerRows}</tbody>
+          </table>
+        </div>
+        ${matchLines ? `<div class="sl-session-matches">
+          <div class="sl-matches-title">Matches</div>
+          ${matchLines}
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleLeagueAdmin() {
+  _leagueAdminOpen = !_leagueAdminOpen;
+  document.getElementById('league-admin').style.display = _leagueAdminOpen ? '' : 'none';
+  document.getElementById('league-admin-btn').classList.toggle('active', _leagueAdminOpen);
+  if (_leagueAdminOpen && _leagueData) _populateLeagueAdmin(_leagueData.sessData);
+}
+
+function _populateLeagueAdmin(sessData) {
+  const players  = sessData?.players  || [];
+  const sessions = sessData?.sessions || [];
+  const pOpts = players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  document.getElementById('sl-match-p1').innerHTML = pOpts || '<option>—</option>';
+  document.getElementById('sl-match-p2').innerHTML = pOpts || '<option>—</option>';
+  const sOpts = sessions.length
+    ? sessions.map(s => `<option value="${s.id}">Session ${s.session_number} (${s.session_date})</option>`).join('')
+    : '<option value="">No sessions yet</option>';
+  document.getElementById('sl-match-session').innerHTML = sOpts;
+  if (sessions.length) document.getElementById('sl-match-session').value = sessions[sessions.length - 1].id;
+}
+
+async function leagueAddPlayer() {
+  const inp = document.getElementById('sl-new-player');
+  const name = (inp?.value || '').trim();
+  if (!name) return;
+  try {
+    await api('/api/sealed-league/players', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name }),
+    });
+    inp.value = '';
+    await loadLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function leagueAddSession() {
+  const dateVal  = (document.getElementById('sl-new-session-date')?.value || '').trim();
+  const notesVal = (document.getElementById('sl-new-session-notes')?.value || '').trim();
+  if (!dateVal) { alert('Please select a session date'); return; }
+  const existing = _leagueData?.sessData?.sessions || [];
+  const nextNum  = existing.length ? Math.max(...existing.map(s => s.session_number)) + 1 : 1;
+  try {
+    await api('/api/sealed-league/sessions', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ session_number: nextNum, session_date: dateVal, notes: notesVal || null }),
+    });
+    document.getElementById('sl-new-session-date').value  = '';
+    document.getElementById('sl-new-session-notes').value = '';
+    await loadLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function leagueAddMatch() {
+  const sessionId = parseInt(document.getElementById('sl-match-session')?.value);
+  const p1Id      = parseInt(document.getElementById('sl-match-p1')?.value);
+  const p2Id      = parseInt(document.getElementById('sl-match-p2')?.value);
+  const p1gw      = parseInt(document.getElementById('sl-match-p1gw')?.value || '0');
+  const p2gw      = parseInt(document.getElementById('sl-match-p2gw')?.value || '0');
+  if (!sessionId || !p1Id || !p2Id) { alert('Select session and both players'); return; }
+  if (p1Id === p2Id) { alert('Players must be different'); return; }
+  try {
+    await api('/api/sealed-league/matches', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ session_id: sessionId, player1_id: p1Id, player2_id: p2Id,
+                             player1_game_wins: p1gw, player2_game_wins: p2gw }),
+    });
+    await loadLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function leagueDeleteMatch(matchId) {
+  if (!confirm('Remove this match result?')) return;
+  try {
+    await api('/api/sealed-league/matches/' + matchId, { method: 'DELETE' });
+    await loadLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
 
 // ── Init ────────────────────────────────────────────────────────────────────
 (async () => {
