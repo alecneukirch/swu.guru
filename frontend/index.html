@@ -3487,7 +3487,15 @@ select.sl-input { cursor: pointer; }
 .sl-score-row select.sl-input { flex: 1; }
 .sl-score-row input.sl-input { width: 52px; text-align: center; }
 
+
+/* ── League Charts ─────────────────────────────────────────────────── */
+.sl-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+@media (max-width: 768px) { .sl-charts-grid { grid-template-columns: 1fr; } }
+.sl-chart-wrap { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 16px; }
+.sl-chart-label { font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -3981,6 +3989,19 @@ select.sl-input { cursor: pointer; }
 
   <!-- Content -->
   <div style="padding:0 24px 32px">
+    <div id="league-charts" style="display:none">
+      <div class="sl-section-hdr">SEASON TRENDS</div>
+      <div class="sl-charts-grid">
+        <div class="sl-chart-wrap">
+          <div class="sl-chart-label">Cumulative Points</div>
+          <canvas id="chart-cumulative"></canvas>
+        </div>
+        <div class="sl-chart-wrap">
+          <div class="sl-chart-label">Points Per Session</div>
+          <canvas id="chart-per-session"></canvas>
+        </div>
+      </div>
+    </div>
     <div class="sl-section-hdr">STANDINGS</div>
     <div id="league-standings"><div class="loading" style="padding:24px">loading…</div></div>
     <div class="sl-section-hdr" style="margin-top:32px">SESSION HISTORY</div>
@@ -6634,6 +6655,97 @@ async function showLeaguePlayerModal(id) {
   }
 }
 
+let _chartCumulative = null;
+let _chartPerSession = null;
+
+function renderLeagueCharts(summary, sessData) {
+  const sessions = (sessData.sessions || []).slice().sort((a, b) => a.session_number - b.session_number);
+  const activePlayers = (summary.players || []).filter(p => p.is_active !== false);
+  const chartsEl = document.getElementById('league-charts');
+
+  if (sessions.length < 2 || !activePlayers.length) {
+    chartsEl.style.display = 'none';
+    return;
+  }
+  chartsEl.style.display = '';
+
+  const labels = sessions.map(s =>
+    s.session_date ? s.session_date.slice(5) : `S${s.session_number}`
+  );
+
+  const COLORS = ['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb7185','#38bdf8','#a3e635'];
+
+  // Per-player, per-session points
+  const sessPoints = {};
+  for (const p of activePlayers) sessPoints[p.name] = [];
+
+  for (const sess of sessions) {
+    const playerMap = {};
+    for (const sp of (sess.players || [])) playerMap[sp.player_name] = sp;
+    for (const p of activePlayers) {
+      const sp = playerMap[p.name];
+      const pts = sp ? (sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0)) : 0;
+      sessPoints[p.name].push(pts);
+    }
+  }
+
+  const axisStyle = {
+    ticks: { color: '#5a5a70', font: { family: "'Share Tech Mono', monospace", size: 11 } },
+    grid:  { color: 'rgba(255,255,255,0.05)' },
+  };
+  const legendStyle = {
+    labels: { color: '#9090a8', font: { family: "'Share Tech Mono', monospace", size: 11 }, boxWidth: 12, padding: 12 },
+  };
+
+  if (_chartCumulative) _chartCumulative.destroy();
+  _chartCumulative = new Chart(document.getElementById('chart-cumulative'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: activePlayers.map((p, i) => {
+        let cum = 0;
+        return {
+          label: p.name,
+          data: sessPoints[p.name].map(pts => (cum += pts)),
+          borderColor: COLORS[i % COLORS.length],
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          pointRadius: 4,
+          borderWidth: 2,
+        };
+      }),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: legendStyle },
+      scales: { x: axisStyle, y: { ...axisStyle, beginAtZero: true } },
+    },
+  });
+
+  if (_chartPerSession) _chartPerSession.destroy();
+  _chartPerSession = new Chart(document.getElementById('chart-per-session'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: activePlayers.map((p, i) => ({
+        label: p.name,
+        data: sessPoints[p.name],
+        backgroundColor: COLORS[i % COLORS.length] + 'bb',
+        borderColor:     COLORS[i % COLORS.length],
+        borderWidth: 1,
+        borderRadius: 3,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: legendStyle },
+      scales: { x: axisStyle, y: { ...axisStyle, beginAtZero: true } },
+    },
+  });
+}
+
 function sortLeagueBy(col) {
   if (_leagueSort.col === col) _leagueSort.dir *= -1;
   else { _leagueSort.col = col; _leagueSort.dir = -1; }
@@ -6656,6 +6768,7 @@ async function loadLeague() {
     document.getElementById('league-sub').textContent =
       sc + ' session' + (sc !== 1 ? 's' : '') + ' completed' +
       (summary.last_session_date ? ' · last ' + summary.last_session_date : '');
+    renderLeagueCharts(summary, sessData);
     renderLeagueStandings(summary);
     renderLeagueSessions(sessData);
     if (_leagueAdminOpen) _populateLeagueAdmin(sessData);
