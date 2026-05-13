@@ -3908,6 +3908,10 @@ select.sl-input { cursor: pointer; }
           <select id="sl-match-p1" class="sl-input"></select>
           <input type="number" id="sl-match-p1gw" class="sl-input" min="0" max="2" value="2" title="Game wins">
         </div>
+        <div style="display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--text3)">
+          <span style="flex:1;text-align:center">Game draws</span>
+          <input type="number" id="sl-match-gdraw" class="sl-input" style="width:52px" min="0" max="3" value="0" title="Game draws">
+        </div>
         <div class="sl-score-row">
           <select id="sl-match-p2" class="sl-input"></select>
           <input type="number" id="sl-match-p2gw" class="sl-input" min="0" max="2" value="0" title="Game wins">
@@ -6556,25 +6560,31 @@ function renderLeagueStandings(summary) {
     el.innerHTML = '<div class="empty-state" style="padding:16px">// no players yet — use Manage to add players</div>';
     return;
   }
+  const anyMatchDraws = players.some(p => (p.match_draws || 0) > 0);
+  const anyGameDraws  = players.some(p => (p.game_draws  || 0) > 0);
   const rows = players.map((p, i) => {
-    const mw = p.match_wins  || 0, ml = p.match_losses || 0;
-    const gw = p.game_wins   || 0, gl = p.game_losses  || 0;
+    const mw = p.match_wins  || 0, md = p.match_draws || 0, ml = p.match_losses || 0;
+    const gw = p.game_wins   || 0, gd = p.game_draws  || 0, gl = p.game_losses  || 0;
     const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+    const mRec = anyMatchDraws ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
+    const gRec = anyGameDraws  ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
     return `<tr>
       <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
       <td class="sl-player-name">${p.name}</td>
-      <td class="sl-record ${rc}">${mw}-${ml}</td>
-      <td class="sl-games">${gw}-${gl}</td>
+      <td class="sl-record ${rc}">${mRec}</td>
+      <td class="sl-games">${gRec}</td>
       <td class="sl-packs">${p.total_packs}</td>
       <td class="sl-cards">${p.total_cards}</td>
     </tr>`;
   }).join('');
+  const mHdr = anyMatchDraws ? 'Match W-D-L' : 'Match W-L';
+  const gHdr = anyGameDraws  ? 'Game W-D-L'  : 'Game W-L';
   el.innerHTML = `<div class="table-wrap"><table class="sl-table">
     <thead><tr>
       <th style="width:32px">#</th>
       <th>Player</th>
-      <th>Match W-L</th>
-      <th>Game W-L</th>
+      <th>${mHdr}</th>
+      <th>${gHdr}</th>
       <th>Packs</th>
       <th>Cards</th>
     </tr></thead>
@@ -6591,14 +6601,19 @@ function renderLeagueSessions(data) {
     return;
   }
   el.innerHTML = sessions.map(sess => {
-    const playerRows = (sess.players || []).map(p => {
-      const mw = p.match_wins || 0, ml = p.match_losses || 0;
-      const gw = p.game_wins  || 0, gl = p.game_losses  || 0;
+    const sessPlayers = sess.players || [];
+    const sMD = sessPlayers.some(p => (p.match_draws || 0) > 0);
+    const sGD = sessPlayers.some(p => (p.game_draws  || 0) > 0);
+    const playerRows = sessPlayers.map(p => {
+      const mw = p.match_wins || 0, md = p.match_draws || 0, ml = p.match_losses || 0;
+      const gw = p.game_wins  || 0, gd = p.game_draws  || 0, gl = p.game_losses  || 0;
       const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+      const mRec = sMD ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
+      const gRec = sGD ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
       return `<tr>
         <td class="sl-player-name">${p.player_name}</td>
-        <td class="sl-record ${rc}">${mw}-${ml}</td>
-        <td class="sl-games">${gw}-${gl}</td>
+        <td class="sl-record ${rc}">${mRec}</td>
+        <td class="sl-games">${gRec}</td>
         <td class="sl-packs">${p.total_packs}</td>
         <td class="sl-cards">${p.total_cards}</td>
       </tr>`;
@@ -6727,13 +6742,14 @@ async function leagueAddMatch() {
   const p2Id      = parseInt(document.getElementById('sl-match-p2')?.value);
   const p1gw      = parseInt(document.getElementById('sl-match-p1gw')?.value || '0');
   const p2gw      = parseInt(document.getElementById('sl-match-p2gw')?.value || '0');
+  const gdraw     = parseInt(document.getElementById('sl-match-gdraw')?.value || '0');
   if (!sessionId || !p1Id || !p2Id) { alert('Select session and both players'); return; }
   if (p1Id === p2Id) { alert('Players must be different'); return; }
   try {
     await api('/api/sealed-league/matches', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ session_id: sessionId, player1_id: p1Id, player2_id: p2Id,
-                             player1_game_wins: p1gw, player2_game_wins: p2gw }),
+                             player1_game_wins: p1gw, player2_game_wins: p2gw, game_draws: gdraw }),
     });
     await loadLeague();
   } catch(e) { alert('Error: ' + e.message); }

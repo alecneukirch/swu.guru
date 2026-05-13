@@ -2857,6 +2857,9 @@ def sealed_league_summary():
                     WHEN m.player2_id = p.id AND m.player2_game_wins > m.player1_game_wins THEN 1
                     ELSE 0 END)::INT, 0) AS match_wins,
                 COALESCE(SUM(CASE
+                    WHEN m.player1_game_wins = m.player2_game_wins THEN 1
+                    ELSE 0 END)::INT, 0) AS match_draws,
+                COALESCE(SUM(CASE
                     WHEN m.player1_id = p.id AND m.player1_game_wins < m.player2_game_wins THEN 1
                     WHEN m.player2_id = p.id AND m.player2_game_wins < m.player1_game_wins THEN 1
                     ELSE 0 END)::INT, 0) AS match_losses,
@@ -2864,6 +2867,7 @@ def sealed_league_summary():
                     WHEN m.player1_id = p.id THEN m.player1_game_wins
                     WHEN m.player2_id = p.id THEN m.player2_game_wins
                     ELSE 0 END)::INT, 0) AS game_wins,
+                COALESCE(SUM(m.game_draws)::INT, 0) AS game_draws,
                 COALESCE(SUM(CASE
                     WHEN m.player1_id = p.id THEN m.player2_game_wins
                     WHEN m.player2_id = p.id THEN m.player1_game_wins
@@ -2872,11 +2876,12 @@ def sealed_league_summary():
             LEFT JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
             GROUP BY p.id, p.name
         )
-        SELECT id, name, match_wins, match_losses, game_wins, game_losses,
+        SELECT id, name, match_wins, match_draws, match_losses,
+               game_wins, game_draws, game_losses,
                (6 + %s + match_losses)      AS total_packs,
                (6 + %s + match_losses) * 16 AS total_cards
         FROM pm
-        ORDER BY match_wins DESC, game_wins DESC
+        ORDER BY match_wins DESC, match_draws DESC, game_wins DESC
     """, [session_count, session_count])
 
     return {
@@ -2898,7 +2903,7 @@ def sealed_league_sessions_detail():
         return {"sessions": [], "players": []}
 
     all_matches = db.fetchall("""
-        SELECT id, session_id, player1_id, player2_id, player1_game_wins, player2_game_wins
+        SELECT id, session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws
         FROM sealed_league_matches ORDER BY session_id, id
     """)
 
@@ -2916,10 +2921,12 @@ def sealed_league_sessions_detail():
             mw = sum(1 for m in pm if
                      (m["player1_id"] == pid and m["player1_game_wins"] > m["player2_game_wins"]) or
                      (m["player2_id"] == pid and m["player2_game_wins"] > m["player1_game_wins"]))
+            md = sum(1 for m in pm if m["player1_game_wins"] == m["player2_game_wins"])
             ml = sum(1 for m in pm if
                      (m["player1_id"] == pid and m["player1_game_wins"] < m["player2_game_wins"]) or
                      (m["player2_id"] == pid and m["player2_game_wins"] < m["player1_game_wins"]))
             gw = sum(m["player1_game_wins"] if m["player1_id"] == pid else m["player2_game_wins"] for m in pm)
+            gd = sum(m["game_draws"] for m in pm)
             gl = sum(m["player2_game_wins"] if m["player1_id"] == pid else m["player1_game_wins"] for m in pm)
 
             cumulative_losses[pid] += ml
@@ -2929,8 +2936,10 @@ def sealed_league_sessions_detail():
                 "player_id":    pid,
                 "player_name":  p["name"],
                 "match_wins":   mw,
+                "match_draws":  md,
                 "match_losses": ml,
                 "game_wins":    gw,
+                "game_draws":   gd,
                 "game_losses":  gl,
                 "total_packs":  total_packs,
                 "total_cards":  total_packs * 16,
@@ -2940,11 +2949,13 @@ def sealed_league_sessions_detail():
         for m in sess_matches:
             p1name = next((p["name"] for p in players if p["id"] == m["player1_id"]), "?")
             p2name = next((p["name"] for p in players if p["id"] == m["player2_id"]), "?")
+            gd = m["game_draws"] or 0
+            score = f"{m['player1_game_wins']}-{gd}-{m['player2_game_wins']}" if gd else f"{m['player1_game_wins']}-{m['player2_game_wins']}"
             match_details.append({
                 "id":      m["id"],
                 "player1": p1name,
                 "player2": p2name,
-                "score":   f"{m['player1_game_wins']}-{m['player2_game_wins']}",
+                "score":   score,
             })
 
         result.append({
@@ -3001,15 +3012,16 @@ def add_sealed_league_match(body: dict):
     p2_id      = body.get("player2_id")
     p1gw       = int(body.get("player1_game_wins", 0))
     p2gw       = int(body.get("player2_game_wins", 0))
+    gdraw      = int(body.get("game_draws", 0))
     if not all([session_id, p1_id, p2_id]):
         raise HTTPException(400, "session_id, player1_id, player2_id required")
     if p1_id == p2_id:
         raise HTTPException(400, "players must be different")
     db.execute(
         """INSERT INTO sealed_league_matches
-           (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins)
-           VALUES (%s, %s, %s, %s, %s)""",
-        [session_id, p1_id, p2_id, p1gw, p2gw]
+           (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws)
+           VALUES (%s, %s, %s, %s, %s, %s)""",
+        [session_id, p1_id, p2_id, p1gw, p2gw, gdraw]
     )
     return {"ok": True}
 
@@ -3099,9 +3111,9 @@ def import_sealed_league_melee(body: dict):
         try:
             db.execute(
                 """INSERT INTO sealed_league_matches
-                   (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins)
-                   VALUES (%s, %s, %s, %s, %s)""",
-                [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"]]
+                   (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"], m.get("game_draws", 0)]
             )
             imported += 1
         except Exception:
