@@ -3055,12 +3055,9 @@ def import_sealed_league_melee(body: dict):
     except Exception as e:
         raise HTTPException(502, f"Failed to fetch tournament from melee.gg: {e}")
 
-    pairings_rounds = [
-        r for r in rounds_data.get("pairings_rounds", [])
-        if r.get("completed") or r.get("started")
-    ][:3]
+    pairings_rounds = rounds_data.get("pairings_rounds", [])[:3]
     if not pairings_rounds:
-        raise HTTPException(404, "No started pairings rounds found for this tournament ID")
+        raise HTTPException(404, "No pairings rounds found for this tournament ID")
 
     # Create session if one wasn't specified
     if not session_id:
