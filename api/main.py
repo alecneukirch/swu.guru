@@ -990,49 +990,100 @@ def leader_cards(
 @app.get("/api/card/{card_name}/by-leader")
 def card_by_leader(
     card_name: str,
-    set_code:  Optional[str] = Query(None),
-    percentile: float        = Query(0.08, description="Top-cut fraction, e.g. 0.08 = top 8%"),
+    format:    str           = Query("standard"),
+    meta_id:   Optional[str] = Query(None),
+    days:      Optional[int] = Query(None),
 ):
     """
     For a single card: performance broken down by each leader.
     Used for the 'Conversion by Legend' section in the card modal.
     """
-    params: list = [card_name]
-    set_filter = ""
-    if set_code:
-        set_filter = "AND set_code = %s"
-        params.append(set_code)
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
-    rows = db.fetchall(f"""
-        SELECT
-            m.leader,
-            SUM(m.deck_count)           AS deck_count,
-            SUM(m.t8_count)             AS t8_count,
-            SUM(m.leader_total_decks)   AS leader_total_decks,
-            SUM(m.leader_total_t8s)     AS leader_total_t8s,
-            ROUND(SUM(m.deck_count)::numeric
-                / NULLIF(SUM(m.leader_total_decks), 0), 4) AS inclusion_rate,
-            ROUND(SUM(m.t8_count)::numeric
-                / NULLIF(SUM(m.deck_count), 0), 4)         AS card_t8_rate,
-            ROUND(SUM(m.leader_total_t8s)::numeric
-                / NULLIF(SUM(m.leader_total_decks), 0), 4) AS baseline_t8_rate,
-            ROUND(
-                (SUM(m.t8_count)::numeric / NULLIF(SUM(m.deck_count), 0))
-                / NULLIF(SUM(m.leader_total_t8s)::numeric / NULLIF(SUM(m.leader_total_decks), 0), 0),
-            4) AS conversion
-        FROM mv_card_leader_stats m
-        WHERE m.card_name = %s {set_filter}
-          AND m.leader IS NOT NULL
-          AND m.leader != ''
-          AND EXISTS (
-              SELECT 1 FROM cards c
-              WHERE c.is_leader = true
-                AND m.leader ILIKE c.name || '%%'
-          )
-        GROUP BY m.leader
-        HAVING SUM(m.deck_count) >= 3
-        ORDER BY SUM(m.deck_count) DESC
-    """, params)
+    if date_sql:
+        rows = db.fetchall(f"""
+            WITH leader_totals AS (
+                SELECT
+                    s.leader,
+                    COUNT(*)::INT AS leader_total_decks,
+                    COUNT(*) FILTER (
+                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                    )::INT AS leader_total_t8s
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+                  {date_sql}
+                GROUP BY s.leader
+            ),
+            card_leader AS (
+                SELECT
+                    s.leader,
+                    COUNT(DISTINCT s.id)::INT AS deck_count,
+                    COUNT(DISTINCT s.id) FILTER (
+                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                    )::INT AS t8_count
+                FROM {t['decklist_cards']} dc
+                JOIN {t['standings']} s ON s.id = dc.standing_id
+                JOIN {t['events']} e ON e.id = s.event_id
+                WHERE dc.card_name = %s
+                  AND s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+                  {date_sql}
+                GROUP BY s.leader
+            )
+            SELECT
+                cl.leader,
+                cl.deck_count,
+                cl.t8_count,
+                lt.leader_total_decks,
+                lt.leader_total_t8s,
+                ROUND(cl.deck_count::numeric / NULLIF(lt.leader_total_decks, 0), 4) AS inclusion_rate,
+                ROUND(cl.t8_count::numeric / NULLIF(cl.deck_count, 0), 4) AS card_t8_rate,
+                ROUND(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 4) AS baseline_t8_rate,
+                ROUND(
+                    (cl.t8_count::numeric / NULLIF(cl.deck_count, 0))
+                    / NULLIF(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 0),
+                4) AS conversion
+            FROM card_leader cl
+            JOIN leader_totals lt ON lt.leader = cl.leader
+            WHERE cl.deck_count >= 3
+              AND cl.leader != ''
+              AND EXISTS (
+                  SELECT 1 FROM cards c
+                  WHERE c.is_leader = true AND cl.leader ILIKE c.name || '%%'
+              )
+            ORDER BY cl.deck_count DESC
+        """, date_params + [card_name] + date_params)
+    else:
+        rows = db.fetchall(f"""
+            SELECT
+                m.leader,
+                SUM(m.deck_count)           AS deck_count,
+                SUM(m.t8_count)             AS t8_count,
+                SUM(m.leader_total_decks)   AS leader_total_decks,
+                SUM(m.leader_total_t8s)     AS leader_total_t8s,
+                ROUND(SUM(m.deck_count)::numeric
+                    / NULLIF(SUM(m.leader_total_decks), 0), 4) AS inclusion_rate,
+                ROUND(SUM(m.t8_count)::numeric
+                    / NULLIF(SUM(m.deck_count), 0), 4)         AS card_t8_rate,
+                ROUND(SUM(m.leader_total_t8s)::numeric
+                    / NULLIF(SUM(m.leader_total_decks), 0), 4) AS baseline_t8_rate,
+                ROUND(
+                    (SUM(m.t8_count)::numeric / NULLIF(SUM(m.deck_count), 0))
+                    / NULLIF(SUM(m.leader_total_t8s)::numeric / NULLIF(SUM(m.leader_total_decks), 0), 0),
+                4) AS conversion
+            FROM {t['mv_card_leader_stats']} m
+            WHERE m.card_name = %s
+              AND m.leader IS NOT NULL
+              AND m.leader != ''
+              AND EXISTS (
+                  SELECT 1 FROM cards c
+                  WHERE c.is_leader = true AND m.leader ILIKE c.name || '%%'
+              )
+            GROUP BY m.leader
+            HAVING SUM(m.deck_count) >= 3
+            ORDER BY SUM(m.deck_count) DESC
+        """, [card_name])
 
     return rows
 
@@ -1040,38 +1091,93 @@ def card_by_leader(
 @app.get("/api/card/{card_name}/copy-matrix")
 def card_copy_matrix(
     card_name: str,
-    set_code:  Optional[str] = Query(None),
+    format:    str           = Query("standard"),
+    meta_id:   Optional[str] = Query(None),
+    days:      Optional[int] = Query(None),
 ):
     """
     For a single card: the MD-copies × SB-copies conversion matrix,
     broken down per leader.
     """
-    params: list = [card_name]
-    set_filter = ""
-    if set_code:
-        set_filter = "AND set_code = %s"
-        params.append(set_code)
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days)
 
-    rows = db.fetchall(f"""
-        SELECT
-            m.leader,
-            m.md_copies,
-            m.sb_copies,
-            m.deck_count,
-            m.t8_count,
-            m.t8_rate,
-            m.conversion
-        FROM mv_card_copy_matrix m
-        WHERE m.card_name = %s {set_filter}
-          AND m.leader IS NOT NULL
-          AND m.leader != ''
-          AND EXISTS (
-              SELECT 1 FROM cards c
-              WHERE c.is_leader = true
-                AND m.leader ILIKE c.name || '%%'
-          )
-        ORDER BY m.leader, m.md_copies, m.sb_copies
-    """, params)
+    if date_sql:
+        rows = db.fetchall(f"""
+            WITH leader_baselines AS (
+                SELECT
+                    s.leader,
+                    COUNT(*)::INT AS total_decks,
+                    COUNT(*) FILTER (
+                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                    )::INT AS total_t8s
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+                  {date_sql}
+                GROUP BY s.leader
+            ),
+            deck_config AS (
+                SELECT
+                    s.leader,
+                    s.placement,
+                    e.player_count,
+                    md.quantity AS md_copies,
+                    COALESCE(sb.quantity, 0) AS sb_copies
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                JOIN {t['decklist_cards']} md ON md.standing_id = s.id AND md.is_sideboard = false AND md.card_name = %s
+                LEFT JOIN {t['decklist_cards']} sb ON sb.standing_id = s.id AND sb.is_sideboard = true AND sb.card_name = %s
+                WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+                  {date_sql}
+            )
+            SELECT
+                dc.leader,
+                dc.md_copies,
+                dc.sb_copies,
+                COUNT(*)::INT AS deck_count,
+                COUNT(*) FILTER (
+                    WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
+                )::INT AS t8_count,
+                ROUND(COUNT(*) FILTER (
+                    WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
+                )::numeric / NULLIF(COUNT(*), 0), 4) AS t8_rate,
+                ROUND(
+                    COUNT(*) FILTER (
+                        WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
+                    )::numeric / NULLIF(COUNT(*), 0)
+                    / NULLIF(lb.total_t8s::numeric / NULLIF(lb.total_decks, 0), 0),
+                4) AS conversion
+            FROM deck_config dc
+            JOIN leader_baselines lb ON lb.leader = dc.leader
+            WHERE dc.leader != ''
+              AND EXISTS (
+                  SELECT 1 FROM cards c
+                  WHERE c.is_leader = true AND dc.leader ILIKE c.name || '%%'
+              )
+            GROUP BY dc.leader, dc.md_copies, dc.sb_copies, lb.total_decks, lb.total_t8s
+            ORDER BY dc.leader, dc.md_copies, dc.sb_copies
+        """, date_params + [card_name, card_name] + date_params)
+    else:
+        rows = db.fetchall(f"""
+            SELECT
+                m.leader,
+                m.md_copies,
+                m.sb_copies,
+                m.deck_count,
+                m.t8_count,
+                m.t8_rate,
+                m.conversion
+            FROM {t['mv_card_copy_matrix']} m
+            WHERE m.card_name = %s
+              AND m.leader IS NOT NULL
+              AND m.leader != ''
+              AND EXISTS (
+                  SELECT 1 FROM cards c
+                  WHERE c.is_leader = true AND m.leader ILIKE c.name || '%%'
+              )
+            ORDER BY m.leader, m.md_copies, m.sb_copies
+        """, [card_name])
 
     # Pivot into { leader: { "md_X_sb_Y": { deck_count, conversion, ... } } }
     by_leader: dict = {}
