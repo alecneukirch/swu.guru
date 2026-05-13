@@ -329,8 +329,8 @@ def leaders(
         if r['avg_hri_rating_t8'] and r['t8_rated_count'] >= 1
     ) if global_avg_hri else []
     if len(_deltas) >= 5:
-        delta_p25 = _deltas[int(len(_deltas) * 0.20)]
-        delta_p75 = _deltas[int(len(_deltas) * 0.80)]
+        delta_p25 = _deltas[int(len(_deltas) * 0.25)]
+        delta_p75 = _deltas[int(len(_deltas) * 0.75)]
     else:
         delta_p25 = delta_p75 = None
 
@@ -598,8 +598,8 @@ def leaders_by_base(
         if g['_hri_t8_count'] >= 1
     ) if global_avg_hri else []
     if len(_deltas) >= 5:
-        delta_p25 = _deltas[int(len(_deltas) * 0.20)]
-        delta_p75 = _deltas[int(len(_deltas) * 0.80)]
+        delta_p25 = _deltas[int(len(_deltas) * 0.25)]
+        delta_p75 = _deltas[int(len(_deltas) * 0.75)]
     else:
         delta_p25 = delta_p75 = None
 
