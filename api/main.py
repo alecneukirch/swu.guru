@@ -1005,22 +1005,25 @@ def card_by_leader(
         WITH leader_totals AS (
             SELECT
                 s.leader,
-                s.base,
+                COALESCE(br.group_key, s.base) AS base_key,
+                COALESCE(br.label, s.base)     AS base_group,
                 COUNT(*)::INT AS leader_total_decks,
                 COUNT(*) FILTER (
                     WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
                 )::INT AS leader_total_t8s
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
               {date_sql}
-            GROUP BY s.leader, s.base
+            GROUP BY s.leader, COALESCE(br.group_key, s.base), COALESCE(br.label, s.base)
         ),
         card_leader AS (
             SELECT
                 s.leader,
-                s.base,
+                COALESCE(br.group_key, s.base) AS base_key,
+                COALESCE(br.label, s.base)     AS base_group,
                 COUNT(DISTINCT s.id)::INT AS deck_count,
                 COUNT(DISTINCT s.id) FILTER (
                     WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
@@ -1028,15 +1031,16 @@ def card_by_leader(
             FROM {t['decklist_cards']} dc
             JOIN {t['standings']} s ON s.id = dc.standing_id
             JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
             WHERE dc.card_name = %s
               AND s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
               {date_sql}
-            GROUP BY s.leader, s.base
+            GROUP BY s.leader, COALESCE(br.group_key, s.base), COALESCE(br.label, s.base)
         )
         SELECT
             cl.leader,
-            cl.base,
+            cl.base_group,
             cl.deck_count,
             cl.t8_count,
             lt.leader_total_decks,
@@ -1049,7 +1053,7 @@ def card_by_leader(
                 / NULLIF(lt.leader_total_t8s::numeric / NULLIF(lt.leader_total_decks, 0), 0),
             4) AS conversion
         FROM card_leader cl
-        JOIN leader_totals lt ON lt.leader = cl.leader AND lt.base = cl.base
+        JOIN leader_totals lt ON lt.leader = cl.leader AND lt.base_key = cl.base_key
         WHERE cl.deck_count >= 3
           AND cl.leader != ''
           AND EXISTS (
@@ -1080,28 +1084,32 @@ def card_copy_matrix(
         WITH leader_baselines AS (
             SELECT
                 s.leader,
-                s.base,
+                COALESCE(br.group_key, s.base) AS base_key,
+                COALESCE(br.label, s.base)     AS base_group,
                 COUNT(*)::INT AS total_decks,
                 COUNT(*) FILTER (
                     WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
                 )::INT AS total_t8s
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
               {date_sql}
-            GROUP BY s.leader, s.base
+            GROUP BY s.leader, COALESCE(br.group_key, s.base), COALESCE(br.label, s.base)
         ),
         deck_config AS (
             SELECT
                 s.leader,
-                s.base,
+                COALESCE(br.group_key, s.base) AS base_key,
+                COALESCE(br.label, s.base)     AS base_group,
                 s.placement,
                 e.player_count,
                 md.quantity AS md_copies,
                 COALESCE(sb.quantity, 0) AS sb_copies
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
             JOIN {t['decklist_cards']} md ON md.standing_id = s.id AND md.is_sideboard = false AND md.card_name = %s
             LEFT JOIN {t['decklist_cards']} sb ON sb.standing_id = s.id AND sb.is_sideboard = true AND sb.card_name = %s
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
@@ -1110,7 +1118,7 @@ def card_copy_matrix(
         )
         SELECT
             dc.leader,
-            dc.base,
+            dc.base_group,
             dc.md_copies,
             dc.sb_copies,
             COUNT(*)::INT AS deck_count,
@@ -1127,22 +1135,22 @@ def card_copy_matrix(
                 / NULLIF(lb.total_t8s::numeric / NULLIF(lb.total_decks, 0), 0),
             4) AS conversion
         FROM deck_config dc
-        JOIN leader_baselines lb ON lb.leader = dc.leader AND lb.base = dc.base
+        JOIN leader_baselines lb ON lb.leader = dc.leader AND lb.base_key = dc.base_key
         WHERE dc.leader != ''
           AND EXISTS (
               SELECT 1 FROM cards c
               WHERE c.is_leader = true AND dc.leader ILIKE c.name || '%%'
           )
-        GROUP BY dc.leader, dc.base, dc.md_copies, dc.sb_copies, lb.total_decks, lb.total_t8s
-        ORDER BY dc.leader, dc.base, dc.md_copies, dc.sb_copies
+        GROUP BY dc.leader, dc.base_group, dc.md_copies, dc.sb_copies, lb.total_decks, lb.total_t8s
+        ORDER BY dc.leader, dc.base_group, dc.md_copies, dc.sb_copies
     """, date_params + [card_name, card_name] + date_params)
 
-    # Pivot into { "leader|||base": { "md_X_sb_Y": { deck_count, conversion, ... } } }
+    # Pivot into { "leader|||base_group": { "md_X_sb_Y": { deck_count, conversion, ... } } }
     by_leader: dict = {}
     best_config: dict = {}
 
     for r in rows:
-        combo = f"{r['leader']}|||{r['base'] or ''}"
+        combo = f"{r['leader']}|||{r['base_group'] or ''}"
         if combo not in by_leader:
             by_leader[combo] = {}
         cell_key = f"{r['md_copies']}m_{r['sb_copies']}s"
