@@ -1319,6 +1319,16 @@ select option { background: var(--surface2); }
 }
 .lc-elo-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
 .lc-top8-badge { top: 52px; }
+.lc-skill-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  font-size: 18px;
+  line-height: 1;
+  cursor: default;
+  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.9));
+}
 .lc-stat-label { font-size: 12px; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.05em; text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
 .lc-stat-val   { font-family: var(--mono); font-size: 16px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
 .ev-stats { grid-template-columns: repeat(4, 1fr); gap: 2px 4px; }
@@ -4416,6 +4426,14 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   const eloBadge = r.avg_hri_rating
     ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
     : '';
+  let skillBadge = '';
+  if (r.skill_badge === 'high') {
+    const tip = `High skill floor — T8 pilots avg ${r.avg_hri_rating_t8} vs all pilots avg ${r.avg_hri_rating} (+${r.skill_delta} pts). This leader rewards high-level play.`;
+    skillBadge = `<div class="lc-skill-badge" data-tooltip="${tip}" style="color:#ff7eb3">🧠</div>`;
+  } else if (r.skill_badge === 'low') {
+    const tip = `Drives itself — T8 pilots avg ${r.avg_hri_rating_t8} vs all pilots avg ${r.avg_hri_rating} (${r.skill_delta} pts). Even lower-rated players convert with this leader.`;
+    skillBadge = `<div class="lc-skill-badge" data-tooltip="${tip}">🛞</div>`;
+  }
   const top8Badge = (eventMode && r.t8_label === 'Day2' && r.literal_top8_count > 0)
     ? `<div class="lc-elo-badge lc-top8-badge" data-tooltip="Number of decks that finished in the literal Top 8"><div class="lc-elo-label">Top 8</div><div style="color:var(--gold)">${r.literal_top8_count}</div></div>`
     : '';
@@ -4443,7 +4461,7 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   }
   return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
   <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
-  ${eloBadge}${top8Badge}
+  ${eloBadge}${top8Badge}${skillBadge}
   <div class="lc-body">
     <div class="lc-rank" id="${pfx}-rank-${i}"></div>
     <div class="lc-name">${shortName(r.leader)}</div>

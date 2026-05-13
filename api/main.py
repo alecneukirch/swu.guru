@@ -286,21 +286,60 @@ def leaders(
     """, date_params)
     hri_by_leader = {r['leader']: r['avg_hri_rating'] for r in hri_rows}
 
+    # Avg HRI rating of T8 pilots only — basis for skill floor badge
+    hri_t8_rows = db.fetchall(f"""
+        SELECT
+            s.leader,
+            ROUND(AVG(pi.hri_rating))::INT AS avg_hri_rating_t8,
+            COUNT(pi.hri_rating)           AS t8_rated_count
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map m ON m.melee_player_id = s.melee_player_id
+            AND m.status != 'rejected'
+        JOIN player_identities pi ON pi.id = m.identity_id
+        WHERE s.leader IS NOT NULL
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          AND s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+          {date_sql}
+        GROUP BY s.leader
+    """, date_params)
+    hri_t8_by_leader = {r['leader']: r for r in hri_t8_rows}
+
     result = []
     for r in rows:
-        t8_rate    = r["top8_count"] / r["total_decks"] if r["total_decks"] else 0
-        conversion = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
+        t8_rate = r["top8_count"] / r["total_decks"] if r["total_decks"] else 0
+        # Bayesian shrinkage: pull conversion toward meta average for small samples
+        _k = 10
+        _adjusted = (r["top8_count"] + meta_t8_rate * _k) / (r["total_decks"] + _k)
+        conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
         pct = pct_by_leader.get(r['leader'], {})
+
+        hri_all = hri_by_leader.get(r['leader'])
+        hri_t8_data = hri_t8_by_leader.get(r['leader'], {})
+        hri_t8 = hri_t8_data.get('avg_hri_rating_t8')
+        t8_rated = hri_t8_data.get('t8_rated_count', 0)
+        skill_delta = (hri_t8 - hri_all) if (hri_all and hri_t8 and t8_rated >= 3) else None
+        if skill_delta is not None and skill_delta >= 75:
+            skill_badge = 'high'
+        elif skill_delta is not None and skill_delta <= -50:
+            skill_badge = 'low'
+        else:
+            skill_badge = None
+
         result.append({
             **r,
-            "meta_share":     round(r["total_decks"] / total_all_decks, 4) if total_all_decks else 0,
-            "t8_rate":        round(t8_rate, 4),
-            "conversion":     conversion,
-            "t50_conv":       float(pct['t50_conv']) if pct.get('t50_conv') is not None else None,
-            "t25_conv":       float(pct['t25_conv']) if pct.get('t25_conv') is not None else None,
-            "t10_conv":       float(pct['t10_conv']) if pct.get('t10_conv') is not None else None,
-            "t1_conv":        float(pct['t1_conv'])  if pct.get('t1_conv')  is not None else None,
-            "avg_hri_rating": hri_by_leader.get(r['leader']),
+            "meta_share":        round(r["total_decks"] / total_all_decks, 4) if total_all_decks else 0,
+            "t8_rate":           round(t8_rate, 4),
+            "conversion":        conversion,
+            "t50_conv":          float(pct['t50_conv']) if pct.get('t50_conv') is not None else None,
+            "t25_conv":          float(pct['t25_conv']) if pct.get('t25_conv') is not None else None,
+            "t10_conv":          float(pct['t10_conv']) if pct.get('t10_conv') is not None else None,
+            "t1_conv":           float(pct['t1_conv'])  if pct.get('t1_conv')  is not None else None,
+            "avg_hri_rating":    hri_all,
+            "avg_hri_rating_t8": hri_t8,
+            "skill_delta":       skill_delta,
+            "skill_badge":       skill_badge,
         })
 
     result.sort(key=lambda x: x["total_decks"], reverse=True)
@@ -444,6 +483,27 @@ def leaders_by_base(
     """, date_params)
     hri_by_pair = {(r['leader'], r['base']): r for r in hri_rows}
 
+    # Avg HRI rating of T8 pilots per (leader, base) — basis for skill floor badge
+    hri_t8_rows = db.fetchall(f"""
+        SELECT
+            s.leader,
+            s.base,
+            ROUND(AVG(pi.hri_rating))::INT AS avg_hri_rating_t8,
+            COUNT(pi.hri_rating)           AS t8_rated_count
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map m ON m.melee_player_id = s.melee_player_id
+            AND m.status != 'rejected'
+        JOIN player_identities pi ON pi.id = m.identity_id
+        WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          AND s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+          {date_sql}
+        GROUP BY s.leader, s.base
+    """, date_params)
+    hri_t8_by_pair = {(r['leader'], r['base']): r for r in hri_t8_rows}
+
     # Aggregate by leader + base group
     groups: dict = {}
     for r in rows:
@@ -465,6 +525,8 @@ def leaders_by_base(
                 '_match_games':     0,
                 '_hri_sum':         0,
                 '_hri_count':       0,
+                '_hri_t8_sum':      0,
+                '_hri_t8_count':    0,
                 'bases':            [],
             }
         groups[combo_key]['total_decks']  += r['total_decks']
@@ -476,23 +538,40 @@ def leaders_by_base(
             groups[combo_key]['bases'].append(r['base'])
         hri = hri_by_pair.get((r['leader'], r['base']))
         if hri and hri['avg_hri_rating']:
-            # Weight by rated_count so larger bases dominate the average
             groups[combo_key]['_hri_sum']   += hri['avg_hri_rating'] * hri['rated_count']
             groups[combo_key]['_hri_count'] += hri['rated_count']
+        hri_t8 = hri_t8_by_pair.get((r['leader'], r['base']))
+        if hri_t8 and hri_t8['avg_hri_rating_t8']:
+            groups[combo_key]['_hri_t8_sum']   += hri_t8['avg_hri_rating_t8'] * hri_t8['t8_rated_count']
+            groups[combo_key]['_hri_t8_count'] += hri_t8['t8_rated_count']
 
     result = []
     for g in groups.values():
-        t8_rate    = g['top8_count'] / g['total_decks'] if g['total_decks'] else 0
-        conversion = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
-        avg_hri    = round(g['_hri_sum'] / g['_hri_count']) if g['_hri_count'] else None
+        t8_rate = g['top8_count'] / g['total_decks'] if g['total_decks'] else 0
+        # Bayesian shrinkage: pull conversion toward meta average for small samples
+        _k = 10
+        _adjusted = (g['top8_count'] + meta_t8_rate * _k) / (g['total_decks'] + _k)
+        conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
+        avg_hri    = round(g['_hri_sum']    / g['_hri_count'])    if g['_hri_count']    else None
+        avg_hri_t8 = round(g['_hri_t8_sum'] / g['_hri_t8_count']) if g['_hri_t8_count'] else None
+        skill_delta = (avg_hri_t8 - avg_hri) if (avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 3) else None
+        if skill_delta is not None and skill_delta >= 75:
+            skill_badge = 'high'
+        elif skill_delta is not None and skill_delta <= -50:
+            skill_badge = 'low'
+        else:
+            skill_badge = None
         result.append({
             **{k: v for k, v in g.items() if not k.startswith('_')},
-            'meta_share':     round(g['total_decks'] / total_all_decks, 4) if total_all_decks else 0,
-            't8_rate':        round(t8_rate, 4),
-            'conversion':     conversion,
-            'match_win_rate': round(g['_match_wins'] / g['_match_games'], 4) if g['_match_games'] else None,
-            'match_games':    g['_match_games'],
-            'avg_hri_rating': avg_hri,
+            'meta_share':        round(g['total_decks'] / total_all_decks, 4) if total_all_decks else 0,
+            't8_rate':           round(t8_rate, 4),
+            'conversion':        conversion,
+            'match_win_rate':    round(g['_match_wins'] / g['_match_games'], 4) if g['_match_games'] else None,
+            'match_games':       g['_match_games'],
+            'avg_hri_rating':    avg_hri,
+            'avg_hri_rating_t8': avg_hri_t8,
+            'skill_delta':       skill_delta,
+            'skill_badge':       skill_badge,
         })
 
     result.sort(key=lambda x: x['total_decks'], reverse=True)
