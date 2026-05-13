@@ -7227,9 +7227,15 @@ function renderGlobalCards(rows) {
   if (!wrap) return;
 
   const sub = document.getElementById('cards-sub');
-  if (sub) sub.textContent = rows.length
-    ? `${rows.length} cards · conversion vs meta baseline`
-    : 'no results';
+  if (sub) {
+    const navSet   = document.getElementById('nav-set');
+    const metaLabel = currentDays
+      ? `last ${currentDays} days`
+      : (navSet?.selectedOptions[0]?.text || (currentMeta || 'all metas'));
+    sub.textContent = rows.length
+      ? `${rows.length} cards · ${metaLabel}`
+      : 'no results';
+  }
 
   if (!rows.length) {
     wrap.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no cards matching filters</div>';
@@ -7268,17 +7274,20 @@ function renderGlobalCards(rows) {
       const costVal = (r.cost != null && r.cost > 0) ? r.cost : (r.cost === 0 ? '0' : '');
       const costBadge = costVal !== '' ? `<div class="ct-cost">${costVal}</div>` : '';
       const { name: ctName, subtitle: ctSub } = cardNameParts(r.card_name);
+      const inclTip  = `${r.deck_count} of ${r.total_decks} decks included this card (counted by deck, not copies)`;
+      const t8sTip   = `${r.t8_count} top-cut decks · ${fmtPct(r.card_t8_rate)} T8 rate among decks running it`;
+      const decksTip = `${r.deck_count} of ${r.total_decks} total decks in this meta`;
       return `<div class="card-tile conv-${cc}" data-card="${safe}" data-idx="${i}">
   <div class="ct-art" id="cp-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
-    <div class="ct-badge">${r.deck_count}<span class="ct-badge-label">decks</span></div>
-    <div class="ct-badge">${r.t8_count}<span class="ct-badge-label">t8s</span></div>
+    <div class="ct-badge" data-tooltip="${decksTip}">${r.deck_count}<span class="ct-badge-label">decks</span></div>
+    <div class="ct-badge" data-tooltip="${t8sTip}">${r.t8_count}<span class="ct-badge-label">t8s</span></div>
   </div>
   <div class="ct-bottom">
     <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` data-tooltip="${ctSub}"` : ''}>${ctName}</div></div>
     <div class="ct-stats">
-      <span class="ct-incl">${fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-incl" data-tooltip="${inclTip}">${fmtPct(r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
     </div>
   </div>
