@@ -3054,7 +3054,7 @@ def import_sealed_league_melee(body: dict):
     if not session_id:
         existing = db.fetchall("SELECT session_number FROM sealed_league_sessions ORDER BY session_number")
         next_num = (max(s["session_number"] for s in existing) + 1) if existing else 1
-        date_val = session_date or str(_dt.date.today())
+        date_val = rounds_data.get("meta", {}).get("date") or session_date or str(_dt.date.today())
         db.execute(
             "INSERT INTO sealed_league_sessions (session_number, session_date, notes) VALUES (%s, %s, %s)",
             [next_num, date_val, f"melee.gg #{melee_id}"]

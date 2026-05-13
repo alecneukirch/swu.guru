@@ -278,6 +278,12 @@ def melee_tournament_rounds(melee_id: str) -> dict:
     m = re.search(r"Format:\s*(\w+)", text)
     fmt = m.group(1) if m else "Premier"
 
+    # Event date from the first <span data-value="YYYY-MM-DDT...Z"> element
+    date_str = None
+    dt_el = soup.find(attrs={"data-value": re.compile(r"\d{4}-\d{2}-\d{2}T")})
+    if dt_el:
+        date_str = dt_el["data-value"][:10]  # "YYYY-MM-DD"
+
     def parse_round_btns(container) -> list[dict]:
         if not container:
             return []
@@ -302,7 +308,7 @@ def melee_tournament_rounds(melee_id: str) -> dict:
     log.info(f"  Pairings rounds:  {[r['name'] for r in pairings_rounds]}")
 
     return {
-        "meta": {"player_count": player_count, "format": fmt},
+        "meta": {"player_count": player_count, "format": fmt, "date": date_str},
         "standings_rounds": standings_rounds,
         "pairings_rounds":  pairings_rounds,
     }
