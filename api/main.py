@@ -3090,9 +3090,13 @@ def sealed_league_sessions_detail():
     for i, sess in enumerate(sessions):
         sess_matches = [m for m in all_matches if m["session_id"] == sess["id"]]
 
+        sess_player_ids = {m["player1_id"] for m in sess_matches} | {m["player2_id"] for m in sess_matches}
+
         player_stats = []
         for p in players:
             pid = p["id"]
+            if pid not in sess_player_ids:
+                continue
             pm  = [m for m in sess_matches if m["player1_id"] == pid or m["player2_id"] == pid]
 
             mw = sum(1 for m in pm if
