@@ -4345,9 +4345,7 @@ async function loadHome() {
   const set = currentMeta;
   const qs  = (set ? '&meta_id=' + encodeURIComponent(set) : '') + '&format=' + fmt + daysQS();
   try {
-    const deckFilter = fmt === 'eternal'
-      ? 'min_decks=3&or_has_t8=true'
-      : 'min_decks=10&or_has_t8=true';
+    const deckFilter = 'min_decks=1';
     const [data, comboData, summary] = await Promise.all([
       api('/api/leaders?' + deckFilter + qs),
       api('/api/leaders/by-base?' + deckFilter + qs),
