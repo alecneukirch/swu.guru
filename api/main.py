@@ -3040,7 +3040,9 @@ def sealed_league_summary():
                     WHEN m.player1_id = p.id THEN m.player1_game_wins
                     WHEN m.player2_id = p.id THEN m.player2_game_wins
                     ELSE 0 END)::INT, 0) AS game_wins,
-                COALESCE(SUM(m.game_draws)::INT, 0) AS game_draws,
+                COALESCE(SUM(m.game_draws)::INT, 0)
+                  + COALESCE(SUM(CASE WHEN m.player1_game_wins = m.player2_game_wins THEN 1 ELSE 0 END)::INT, 0)
+                  AS game_draws,
                 COALESCE(SUM(CASE
                     WHEN m.player1_id = p.id THEN m.player2_game_wins
                     WHEN m.player2_id = p.id THEN m.player1_game_wins
@@ -3116,7 +3118,7 @@ def sealed_league_sessions_detail():
                      (m["player1_id"] == pid and m["player1_game_wins"] < m["player2_game_wins"]) or
                      (m["player2_id"] == pid and m["player2_game_wins"] < m["player1_game_wins"]))
             gw = sum(m["player1_game_wins"] if m["player1_id"] == pid else m["player2_game_wins"] for m in pm)
-            gd = sum(m["game_draws"] for m in pm)
+            gd = sum(m["game_draws"] for m in pm) + md
             gl = sum(m["player2_game_wins"] if m["player1_id"] == pid else m["player1_game_wins"] for m in pm)
 
             cumulative_bonus[pid] += max(0, ml - 1)
