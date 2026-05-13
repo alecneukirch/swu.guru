@@ -312,8 +312,8 @@ def leaders(
         if r['avg_hri_rating_t8'] and r['t8_rated_count'] >= 3
     )
     if len(_t8_vals) >= 5:
-        t8_p20 = _t8_vals[int(len(_t8_vals) * 0.20)]
-        t8_p80 = _t8_vals[int(len(_t8_vals) * 0.80)]
+        t8_p20 = _t8_vals[int(len(_t8_vals) * 0.25)]
+        t8_p80 = _t8_vals[int(len(_t8_vals) * 0.75)]
     else:
         t8_p20 = t8_p80 = None
 
@@ -564,8 +564,8 @@ def leaders_by_base(
         if g['_hri_t8_count'] >= 3
     )
     if len(_t8_vals) >= 5:
-        t8_p20 = _t8_vals[int(len(_t8_vals) * 0.20)]
-        t8_p80 = _t8_vals[int(len(_t8_vals) * 0.80)]
+        t8_p20 = _t8_vals[int(len(_t8_vals) * 0.25)]
+        t8_p80 = _t8_vals[int(len(_t8_vals) * 0.75)]
     else:
         t8_p20 = t8_p80 = None
 
