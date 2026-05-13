@@ -2685,10 +2685,40 @@ select option { background: var(--surface2); }
   font-size: 13px;
   font-weight: 500;
   color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cbl-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
+.cbl-art {
+  width: 36px; height: 36px;
+  border-radius: 4px;
+  background: var(--surface);
+  background-size: 200% auto;
+  background-position: 50% 20%;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.cbl-art.loaded { opacity: 1; }
+.matrix-card-art {
+  width: 48px; height: 32px;
+  border-radius: 4px;
+  background: var(--surface);
+  background-size: 200% auto;
+  background-position: 50% 20%;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.3s;
+  margin-right: 10px;
+}
+.matrix-card-art.loaded { opacity: 1; }
 .cbl-bar-wrap {
   height: 28px;
   background: rgba(0,0,0,0.2);
@@ -2747,6 +2777,7 @@ select option { background: var(--surface2); }
 .matrix-card-header {
   display: flex;
   align-items: center;
+  gap: 0;
   justify-content: space-between;
   margin-bottom: 12px;
 }
@@ -5740,8 +5771,26 @@ function renderModalBody() {
   const body = document.getElementById('modal-body');
   if (modalTab === 'overview') {
     body.innerHTML = renderOverviewTab();
+    modalLeaderData.forEach((r, i) => {
+      fetchLeaderCard(r.leader).then(d => {
+        const el = document.getElementById('cbl-art-' + i);
+        if (!el) return;
+        const url = d?.back_art_url || d?.front_art_url;
+        if (url) { el.style.backgroundImage = `url(${url})`; el.classList.add('loaded'); }
+      });
+    });
   } else {
     body.innerHTML = renderAdvancedTab();
+    Object.keys(modalMatrixData.by_leader || {}).forEach(combo => {
+      const leader = combo.split('|||')[0];
+      const artId  = 'mcart-' + combo.replace(/[^a-zA-Z0-9]/g, '_');
+      fetchLeaderCard(leader).then(d => {
+        const el = document.getElementById(artId);
+        if (!el) return;
+        const url = d?.back_art_url || d?.front_art_url;
+        if (url) { el.style.backgroundImage = `url(${url})`; el.classList.add('loaded'); }
+      });
+    });
   }
 }
 
@@ -5782,7 +5831,10 @@ function renderOverviewTab() {
     const cc  = convClass(r.conversion);
     const bw  = Math.min(100, Math.round((r.inclusion_rate ?? 0) * 100 * 1.5));
     return `<div class="cbl-row">
-  <div class="cbl-name" title="${r.leader} / ${r.base || ''}">${shortName(r.leader)}${r.base ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px">${r.base}</div>` : ''}</div>
+  <div class="cbl-name" title="${r.leader} / ${r.base || ''}">
+    <div class="cbl-art" id="cbl-art-${i}"></div>
+    <div class="cbl-name-text">${shortName(r.leader)}${r.base ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px">${r.base}</div>` : ''}</div>
+  </div>
   <div class="cbl-bar-wrap">
     <div class="cbl-bar-fill ${cc}" style="width:${bw}%"></div>
     <span class="cbl-pill ${cc}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
@@ -5851,6 +5903,7 @@ function renderMatrixCard(leaderBase, cells, best) {
   const sepIdx = leaderBase.indexOf('|||');
   const leader = sepIdx >= 0 ? leaderBase.slice(0, sepIdx) : leaderBase;
   const base   = sepIdx >= 0 ? leaderBase.slice(sepIdx + 3) : '';
+  const artId  = 'mcart-' + leaderBase.replace(/[^a-zA-Z0-9]/g, '_');
   // Find max MD and SB copies present in data
   const keys    = Object.keys(cells);
   let maxMd = 0, maxSb = 0;
@@ -5901,7 +5954,8 @@ function renderMatrixCard(leaderBase, cells, best) {
 
   return `<div class="matrix-card">
   <div class="matrix-card-header">
-    <div>
+    <div class="matrix-card-art" id="${artId}"></div>
+    <div style="min-width:0;flex:1">
       <div class="matrix-card-leader">${shortName(leader)}</div>
       ${base ? `<div class="matrix-card-base">${base}</div>` : ''}
       <div class="matrix-card-decks">${totalDecks} decks</div>
