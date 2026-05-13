@@ -326,7 +326,7 @@ def leaders(
     _deltas = sorted(
         r['avg_hri_rating_t8'] - global_avg_hri
         for r in hri_t8_by_leader.values()
-        if r['avg_hri_rating_t8'] and r['t8_rated_count'] >= 3
+        if r['avg_hri_rating_t8'] and r['t8_rated_count'] >= 1
     ) if global_avg_hri else []
     if len(_deltas) >= 5:
         delta_p25 = _deltas[int(len(_deltas) * 0.20)]
@@ -595,7 +595,7 @@ def leaders_by_base(
     _deltas = sorted(
         round(g['_hri_t8_sum'] / g['_hri_t8_count']) - global_avg_hri
         for g in groups.values()
-        if g['_hri_t8_count'] >= 3
+        if g['_hri_t8_count'] >= 1
     ) if global_avg_hri else []
     if len(_deltas) >= 5:
         delta_p25 = _deltas[int(len(_deltas) * 0.20)]
@@ -612,7 +612,7 @@ def leaders_by_base(
         conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
         avg_hri    = round(g['_hri_sum']    / g['_hri_count'])    if g['_hri_count']    else None
         avg_hri_t8 = round(g['_hri_t8_sum'] / g['_hri_t8_count']) if g['_hri_t8_count'] else None
-        skill_delta = (avg_hri_t8 - global_avg_hri) if (global_avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 3) else None
+        skill_delta = (avg_hri_t8 - global_avg_hri) if (global_avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 1) else None
         if skill_delta is not None and delta_p25 is not None:
             if skill_delta >= delta_p75:
                 skill_badge = 'high'
