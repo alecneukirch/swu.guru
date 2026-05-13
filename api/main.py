@@ -3015,6 +3015,13 @@ def sealed_league_summary():
             LEFT JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
             GROUP BY p.id
         ),
+        last_played AS (
+            SELECT p.id AS player_id, MAX(s.session_date) AS last_played
+            FROM sealed_league_players p
+            JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            JOIN sealed_league_sessions s ON s.id = m.session_id
+            GROUP BY p.id
+        ),
         pm AS (
             SELECT
                 p.id, p.name, p.is_active,
@@ -3049,16 +3056,18 @@ def sealed_league_summary():
                sp.sessions AS sessions_played,
                (pm.match_wins * 3 + pm.match_draws + pm.match_losses)::NUMERIC AS total_points,
                ROUND((pm.match_wins * 3.0 + pm.match_draws + pm.match_losses)
-                   / NULLIF(sp.sessions, 0), 2) AS norm_points
+                   / NULLIF(sp.sessions, 0), 2) AS norm_points,
+               lp.last_played
         FROM pm
-        JOIN bonus b          ON b.player_id  = pm.id
+        JOIN bonus b            ON b.player_id  = pm.id
         JOIN sessions_played sp ON sp.player_id = pm.id
+        LEFT JOIN last_played lp ON lp.player_id = pm.id
         WHERE pm.name != 'BYE'
         ORDER BY total_points DESC NULLS LAST, norm_points DESC NULLS LAST
     """, [session_count, session_count])
 
     return {
-        "players": [dict(r) for r in players],
+        "players": [{**dict(r), "last_played": str(r["last_played"]) if r["last_played"] else None} for r in players],
         "sessions_completed": session_count,
         "last_session_date": str(sess_row["last_date"]) if sess_row and sess_row["last_date"] else None,
     }

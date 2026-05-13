@@ -3435,6 +3435,7 @@ tr.sl-clickable-row:hover td { background: rgba(255,255,255,0.03); }
 .sl-games { font-family: var(--mono); font-size: 13px; color: var(--text2); }
 .sl-packs { font-family: var(--mono); font-size: 13px; color: var(--text3); }
 .sl-cards { font-family: var(--mono); font-weight: 700; color: var(--gold); }
+.sl-last-played { font-family: var(--mono); font-size: 12px; color: var(--text3); white-space: nowrap; }
 .sl-session-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 8px; margin-bottom: 16px; overflow: hidden;
@@ -6702,8 +6703,9 @@ function renderLeagueStandings(summary) {
     const rc    = !isInactive && mw > ml ? 'sl-win' : !isInactive && mw < ml ? 'sl-loss' : '';
     const mRec  = anyMatchDraws ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
     const gRec  = anyGameDraws  ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
-    const total = p.total_points != null ? Number(p.total_points) : '—';
-    const norm  = p.norm_points  != null ? Number(p.norm_points).toFixed(2) : '—';
+    const total     = p.total_points != null ? Number(p.total_points) : '—';
+    const norm      = p.norm_points  != null ? Number(p.norm_points).toFixed(2) : '—';
+    const lastPlayed = p.last_played ? p.last_played.slice(0, 10) : '—';
     const gear  = `<button class="sl-gear-btn${isInactive ? ' sl-gear-active' : ''}"
                      onclick="event.stopPropagation();toggleLeaguePlayer(${p.id}, ${p.is_active !== false})" title="${isInactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
     return `<tr class="sl-clickable-row${isInactive ? ' sl-inactive-row' : ''}" onclick="showLeaguePlayerModal(${p.id})">
@@ -6715,6 +6717,7 @@ function renderLeagueStandings(summary) {
       <td class="sl-games">${gRec}</td>
       <td class="sl-packs">${p.total_packs}</td>
       <td class="sl-cards">${p.total_cards}</td>
+      <td class="sl-last-played">${lastPlayed}</td>
     </tr>`;
   }).join('');
 
@@ -6730,6 +6733,7 @@ function renderLeagueStandings(summary) {
       ${th('game_wins',    gHdr)}
       ${th('total_packs',  'Packs')}
       ${th('total_cards',  'Cards')}
+      ${th('last_played',  'Last Played')}
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
