@@ -306,15 +306,28 @@ def leaders(
     """, date_params)
     hri_t8_by_leader = {r['leader']: r for r in hri_t8_rows}
 
-    # Percentile thresholds on the delta (T8 avg − all pilots avg)
-    # High delta = only better-than-average pilots convert (brain)
-    # Low delta  = even average pilots convert (wheel)
+    # Global avg HRI across all pilots (leader-selection-agnostic baseline)
+    global_hri_row = db.fetchone(f"""
+        SELECT ROUND(AVG(pi.hri_rating))::INT AS global_avg_hri
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map m ON m.melee_player_id = s.melee_player_id
+            AND m.status != 'rejected'
+        JOIN player_identities pi ON pi.id = m.identity_id
+        WHERE s.leader IS NOT NULL
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          {date_sql}
+    """, date_params)
+    global_avg_hri = global_hri_row['global_avg_hri'] if global_hri_row else None
+
+    # Percentile thresholds on delta (leader T8 avg − global all-pilots avg)
+    # Normalizes out the bias from good players clustering into popular leaders
     _deltas = sorted(
-        r['avg_hri_rating_t8'] - hri_by_leader[r['leader']]
+        r['avg_hri_rating_t8'] - global_avg_hri
         for r in hri_t8_by_leader.values()
         if r['avg_hri_rating_t8'] and r['t8_rated_count'] >= 3
-        and r['leader'] in hri_by_leader
-    )
+    ) if global_avg_hri else []
     if len(_deltas) >= 5:
         delta_p25 = _deltas[int(len(_deltas) * 0.25)]
         delta_p75 = _deltas[int(len(_deltas) * 0.75)]
@@ -334,7 +347,7 @@ def leaders(
         hri_t8_data = hri_t8_by_leader.get(r['leader'], {})
         hri_t8 = hri_t8_data.get('avg_hri_rating_t8')
         t8_rated = hri_t8_data.get('t8_rated_count', 0)
-        skill_delta = (hri_t8 - hri_all) if (hri_all and hri_t8 and t8_rated >= 3) else None
+        skill_delta = (hri_t8 - global_avg_hri) if (global_avg_hri and hri_t8 and t8_rated >= 3) else None
         if skill_delta is not None and delta_p25 is not None:
             if skill_delta >= delta_p75:
                 skill_badge = 'high'
@@ -522,6 +535,21 @@ def leaders_by_base(
     """, date_params)
     hri_t8_by_pair = {(r['leader'], r['base']): r for r in hri_t8_rows}
 
+    # Global avg HRI across all pilots (leader-selection-agnostic baseline)
+    global_hri_row = db.fetchone(f"""
+        SELECT ROUND(AVG(pi.hri_rating))::INT AS global_avg_hri
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        JOIN player_id_map m ON m.melee_player_id = s.melee_player_id
+            AND m.status != 'rejected'
+        JOIN player_identities pi ON pi.id = m.identity_id
+        WHERE s.leader IS NOT NULL
+          AND s.placement IS NOT NULL
+          AND pi.hri_rating IS NOT NULL
+          {date_sql}
+    """, date_params)
+    global_avg_hri = global_hri_row['global_avg_hri'] if global_hri_row else None
+
     # Aggregate by leader + base group
     groups: dict = {}
     for r in rows:
@@ -563,12 +591,12 @@ def leaders_by_base(
             groups[combo_key]['_hri_t8_sum']   += hri_t8['avg_hri_rating_t8'] * hri_t8['t8_rated_count']
             groups[combo_key]['_hri_t8_count'] += hri_t8['t8_rated_count']
 
-    # Percentile thresholds on the delta (T8 avg − all pilots avg)
+    # Percentile thresholds on delta (leader T8 avg − global all-pilots avg)
     _deltas = sorted(
-        round(g['_hri_t8_sum'] / g['_hri_t8_count']) - round(g['_hri_sum'] / g['_hri_count'])
+        round(g['_hri_t8_sum'] / g['_hri_t8_count']) - global_avg_hri
         for g in groups.values()
-        if g['_hri_t8_count'] >= 3 and g['_hri_count'] > 0
-    )
+        if g['_hri_t8_count'] >= 3
+    ) if global_avg_hri else []
     if len(_deltas) >= 5:
         delta_p25 = _deltas[int(len(_deltas) * 0.25)]
         delta_p75 = _deltas[int(len(_deltas) * 0.75)]
@@ -584,7 +612,7 @@ def leaders_by_base(
         conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
         avg_hri    = round(g['_hri_sum']    / g['_hri_count'])    if g['_hri_count']    else None
         avg_hri_t8 = round(g['_hri_t8_sum'] / g['_hri_t8_count']) if g['_hri_t8_count'] else None
-        skill_delta = (avg_hri_t8 - avg_hri) if (avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 3) else None
+        skill_delta = (avg_hri_t8 - global_avg_hri) if (global_avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 3) else None
         if skill_delta is not None and delta_p25 is not None:
             if skill_delta >= delta_p75:
                 skill_badge = 'high'
