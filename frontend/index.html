@@ -3456,6 +3456,8 @@ tr.sl-clickable-row:hover td { background: rgba(255,255,255,0.03); }
   font-family: var(--mono); font-size: 11px; color: var(--text3);
   text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;
 }
+.sl-round-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin: 8px 0 3px; }
+.sl-round-label:first-child { margin-top: 0; }
 .sl-match-line { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .sl-score { font-family: var(--mono); font-size: 12px; color: var(--text3); min-width: 28px; text-align: center; }
 .sl-del-btn {
@@ -6735,7 +6737,7 @@ function renderLeagueStandings(summary) {
 
 function renderLeagueSessions(data) {
   const el = document.getElementById('league-sessions');
-  const sessions = (data.sessions || []).slice().reverse();
+  const sessions = (data.sessions || []).slice();
   const players  = data.players  || [];
   if (!sessions.length) {
     el.innerHTML = '<div class="empty-state" style="padding:16px">// no sessions yet — use Manage to add sessions</div>';
@@ -6760,7 +6762,9 @@ function renderLeagueSessions(data) {
       </tr>`;
     }).join('');
 
-    const matchLines = (sess.matches || []).map(m => {
+    const matches = sess.matches || [];
+    const hasRounds = matches.some(m => m.round_number != null);
+    const mkMatchLine = m => {
       const isBye = m.player2 === 'BYE';
       const [s1, s2] = (m.score || '0-0').split('-').map(Number);
       const p2Display = isBye
@@ -6772,7 +6776,21 @@ function renderLeagueSessions(data) {
         ${p2Display}
         <button class="sl-del-btn" onclick="leagueDeleteMatch(${m.id})" title="Remove match">✕</button>
       </div>`;
-    }).join('');
+    };
+    let matchLines = '';
+    if (hasRounds) {
+      const byRound = {};
+      matches.forEach(m => {
+        const rn = m.round_number ?? 0;
+        (byRound[rn] = byRound[rn] || []).push(m);
+      });
+      matchLines = Object.keys(byRound).sort((a,b) => +a - +b).map(rn => {
+        const label = +rn > 0 ? `<div class="sl-round-label">Round ${rn}</div>` : '';
+        return label + byRound[rn].map(mkMatchLine).join('');
+      }).join('');
+    } else {
+      matchLines = matches.map(mkMatchLine).join('');
+    }
 
     return `<div class="sl-session-card">
       <div class="sl-session-hdr">

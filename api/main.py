@@ -3076,8 +3076,12 @@ def sealed_league_sessions_detail():
         return {"sessions": [], "players": []}
 
     all_matches = db.fetchall("""
-        SELECT id, session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws
-        FROM sealed_league_matches ORDER BY session_id, id
+        SELECT m.id, m.session_id, m.player1_id, m.player2_id,
+               m.player1_game_wins, m.player2_game_wins, m.game_draws,
+               r.round_number
+        FROM sealed_league_matches m
+        LEFT JOIN sealed_league_match_rounds r ON r.match_id = m.id
+        ORDER BY m.session_id, COALESCE(r.round_number, 999), m.id
     """)
 
     cumulative_bonus = {p["id"]: 0 for p in players}
@@ -3125,10 +3129,11 @@ def sealed_league_sessions_detail():
             gd = m["game_draws"] or 0
             score = f"{m['player1_game_wins']}-{gd}-{m['player2_game_wins']}" if gd else f"{m['player1_game_wins']}-{m['player2_game_wins']}"
             match_details.append({
-                "id":      m["id"],
-                "player1": p1name,
-                "player2": p2name,
-                "score":   score,
+                "id":           m["id"],
+                "player1":      p1name,
+                "player2":      p2name,
+                "score":        score,
+                "round_number": m.get("round_number"),
             })
 
         result.append({
@@ -3295,10 +3300,13 @@ def import_sealed_league_melee(body: dict):
             "SELECT id FROM sealed_league_sessions WHERE session_number = %s", [next_num]
         )["id"]
 
-    # Fetch all matches across completed rounds
+    # Fetch all matches across completed rounds, tagging each with its round number
     all_matches = []
-    for r in pairings_rounds:
-        all_matches.extend(melee_round_matches(r["id"], include_byes=True))
+    for round_num, r in enumerate(pairings_rounds, start=1):
+        round_matches = melee_round_matches(r["id"], include_byes=True)
+        for m in round_matches:
+            m["round_number"] = round_num
+        all_matches.extend(round_matches)
 
     if not all_matches:
         raise HTTPException(404, "No match results found in completed rounds")
@@ -3335,6 +3343,12 @@ def import_sealed_league_melee(body: dict):
                    VALUES (%s, %s, %s, %s, %s, %s)""",
                 [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"], m.get("game_draws", 0)]
             )
+            if m.get("round_number"):
+                new_id = db.fetchone("SELECT id FROM sealed_league_matches ORDER BY id DESC LIMIT 1")["id"]
+                db.execute(
+                    "INSERT INTO sealed_league_match_rounds (match_id, round_number) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    [new_id, m["round_number"]]
+                )
             imported += 1
         except Exception:
             skipped += 1
