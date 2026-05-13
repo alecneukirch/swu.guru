@@ -2869,6 +2869,12 @@ def sealed_league_summary():
             SELECT player_id, COALESCE(SUM(sess_bonus), 0)::INT AS bonus_packs
             FROM per_session GROUP BY player_id
         ),
+        sessions_played AS (
+            SELECT p.id AS player_id, COUNT(DISTINCT m.session_id)::INT AS sessions
+            FROM sealed_league_players p
+            LEFT JOIN sealed_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            GROUP BY p.id
+        ),
         pm AS (
             SELECT
                 p.id, p.name,
@@ -2899,11 +2905,15 @@ def sealed_league_summary():
         SELECT pm.id, pm.name, pm.match_wins, pm.match_draws, pm.match_losses,
                pm.game_wins, pm.game_draws, pm.game_losses,
                (6 + %s + b.bonus_packs)      AS total_packs,
-               (6 + %s + b.bonus_packs) * 16 AS total_cards
+               (6 + %s + b.bonus_packs) * 16 AS total_cards,
+               sp.sessions AS sessions_played,
+               ROUND((pm.match_wins * 3.0 + pm.match_draws * 1.5 + pm.match_losses * 1.0)
+                   / NULLIF(sp.sessions, 0), 2) AS norm_points
         FROM pm
-        JOIN bonus b ON b.player_id = pm.id
+        JOIN bonus b          ON b.player_id  = pm.id
+        JOIN sessions_played sp ON sp.player_id = pm.id
         WHERE pm.name != 'BYE'
-        ORDER BY pm.match_wins DESC, pm.match_draws DESC, pm.game_wins DESC
+        ORDER BY norm_points DESC NULLS LAST, pm.match_wins DESC
     """, [session_count, session_count])
 
     return {
