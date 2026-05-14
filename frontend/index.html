@@ -3496,7 +3496,7 @@ select.sl-input { cursor: pointer; }
 
 /* ── League Charts ─────────────────────────────────────────────────── */
 .sl-charts-grid { margin-bottom: 32px; }
-.sl-chart-wrap { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 16px; }
+.sl-chart-wrap { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 16px; max-height: 320px; }
 .sl-chart-label { font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
 
 </style>
@@ -3999,7 +3999,7 @@ select.sl-input { cursor: pointer; }
       <div class="sl-charts-grid">
         <div class="sl-chart-wrap">
           <div class="sl-chart-label">Cumulative Points</div>
-          <canvas id="chart-cumulative"></canvas>
+          <canvas id="chart-cumulative" style="max-height:280px"></canvas>
         </div>
       </div>
     </div>
