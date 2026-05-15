@@ -3454,7 +3454,7 @@ def import_sealed_league_melee(body: dict):
 # ── Karabast (swustats.net matchup data) ─────────────────────────────────────
 
 @app.get("/api/karabast/leaders")
-def karabast_leaders():
+def karabast_leaders(min_games: int = Query(200)):
     rows = db.fetchall("""
         SELECT leader_id, base_id, leader_name, base_name,
                SUM(num_wins)::int  AS total_wins,
@@ -3473,9 +3473,9 @@ def karabast_leaders():
                 )
           )
         GROUP BY leader_id, base_id, leader_name, base_name
-        HAVING SUM(num_plays) > 0
+        HAVING SUM(num_plays) >= %s
         ORDER BY SUM(num_wins)::float / SUM(num_plays) DESC
-    """)
+    """, (min_games,))
     if not rows:
         return []
     total_wins  = sum(r["total_wins"]  for r in rows)

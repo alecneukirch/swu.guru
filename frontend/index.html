@@ -4032,6 +4032,10 @@ select.sl-input { cursor: pointer; }
     <div class="mb-stat"><div class="mb-val" id="kb-leaders">—</div><div class="mb-label">Leaders</div></div>
     <div class="mb-stat"><div class="mb-val" id="kb-games">—</div><div class="mb-label">Games</div></div>
   </div>
+  <div class="controls">
+    <span class="ctrl-label">Min Games</span>
+    <input type="number" id="kb-min-games" value="200" min="1" style="width:72px" oninput="loadKarabast()">
+  </div>
   <div id="kb-grid"><div class="loading" style="padding:24px">loading…</div></div>
   <div id="kb-detail" style="display:none">
     <div class="kb-detail-hdr">
@@ -7508,7 +7512,8 @@ async function loadKarabast() {
   grid.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   closeKbDetail();
   try {
-    kbData = await api('/api/karabast/leaders');
+    const minGames = parseInt(document.getElementById('kb-min-games')?.value) || 200;
+    kbData = await api(`/api/karabast/leaders?min_games=${minGames}`);
     renderKbGrid();
     const totalGames = kbData.reduce((s, r) => s + r.total_plays, 0);
     document.getElementById('kb-leaders').textContent = kbData.length;
