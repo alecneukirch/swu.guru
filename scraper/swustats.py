@@ -124,71 +124,54 @@ def sync_matchup_stats(week_num: int, force: bool = False) -> int:
 # ── Sync: card stats (one-time) ────────────────────────────────────────────
 
 def sync_card_stats(force: bool = False) -> int:
-    """Fetch card stats once per unique (leader_id, base_id) to map card IDs.
+    """Fetch the full card list once from CardMetaStatsAPI to map card IDs/names.
     Uses DO NOTHING — existing rows are never overwritten."""
 
     if not force and already_synced("swustats_cards"):
         log.info("Card stats already synced — skipping (use --force)")
         return 0
 
-    decks = db.fetchall(
-        "SELECT DISTINCT leader_id, base_id FROM swustats_matchup_stats WHERE week_num = 0"
-    )
-    if not decks:
-        log.warning("No matchup rows found — run without --cards first")
+    log.info("Fetching card list from CardMetaStatsAPI…")
+    cards = get("/Stats/CardMetaStatsAPI.php")
+    if not isinstance(cards, list):
+        log.error(f"Unexpected response: {type(cards)}")
         return 0
-
-    log.info(f"Fetching card stats for {len(decks)} deck archetypes (one-time)…")
+    log.info(f"  {len(cards)} cards")
 
     total = 0
-    for i, deck in enumerate(decks, 1):
-        leader_id = deck["leader_id"]
-        base_id   = deck["base_id"]
-
-        cards = get(
-            "/Stats/CardMetaStatsAPI.php",
-            {"leaderID": leader_id, "baseID": base_id},
-        )
-        if not isinstance(cards, list):
-            log.warning(f"  Unexpected response for {leader_id}/{base_id}: {type(cards)}")
-            continue
-
-        for c in cards:
-            db.execute(
-                """
-                INSERT INTO swustats_card_stats (
-                    week_num, leader_id, base_id,
-                    card_uid, card_name,
-                    times_included, times_included_in_wins, percent_included_in_wins,
-                    times_played, times_played_in_wins, percent_played_in_wins,
-                    times_resourced, times_resourced_in_wins, percent_resourced_in_wins,
-                    synced_at
-                ) VALUES (
-                    0, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s,
-                    NOW()
-                )
-                ON CONFLICT (week_num, leader_id, base_id, card_uid) DO NOTHING
-                """,
-                (
-                    leader_id, base_id,
-                    c["cardUid"], c.get("cardName"),
-                    c.get("timesIncluded", 0),
-                    c.get("timesIncludedInWins", 0),
-                    _pct(c.get("percentIncludedInWins")),
-                    c.get("timesPlayed", 0),
-                    c.get("timesPlayedInWins", 0),
-                    _pct(c.get("percentPlayedInWins")),
-                    c.get("timesResourced", 0),
-                    c.get("timesResourcedInWins", 0),
-                    _pct(c.get("percentResourcedInWins")),
-                )
+    for c in cards:
+        db.execute(
+            """
+            INSERT INTO swustats_card_stats (
+                week_num, leader_id, base_id,
+                card_uid, card_name,
+                times_included, times_included_in_wins, percent_included_in_wins,
+                times_played, times_played_in_wins, percent_played_in_wins,
+                times_resourced, times_resourced_in_wins, percent_resourced_in_wins,
+                synced_at
+            ) VALUES (
+                0, '', '',
+                %s, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                NOW()
             )
-            total += 1
-
-        log.info(f"  [{i}/{len(decks)}] {leader_id}/{base_id}: {len(cards)} cards")
-        time.sleep(0.1)
+            ON CONFLICT (week_num, leader_id, base_id, card_uid) DO NOTHING
+            """,
+            (
+                c["cardUid"], c.get("cardName"),
+                c.get("timesIncluded", 0),
+                c.get("timesIncludedInWins", 0),
+                _pct(c.get("percentIncludedInWins")),
+                c.get("timesPlayed", 0),
+                c.get("timesPlayedInWins", 0),
+                _pct(c.get("percentPlayedInWins")),
+                c.get("timesResourced", 0),
+                c.get("timesResourcedInWins", 0),
+                _pct(c.get("percentResourcedInWins")),
+            )
+        )
+        total += 1
 
     mark_synced("swustats_cards", total)
     log.info(f"Card stats sync complete: {total} rows")
