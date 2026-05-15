@@ -59,3 +59,31 @@ CREATE INDEX IF NOT EXISTS idx_swustats_card_uid
 
 GRANT ALL ON swustats_matchup_stats, swustats_card_stats TO swu_user;
 GRANT USAGE, SELECT ON SEQUENCE swustats_matchup_stats_id_seq, swustats_card_stats_id_seq TO swu_user;
+
+CREATE OR REPLACE VIEW swustats_matchup_view AS
+SELECT
+    m.week_num,
+    m.leader_id,
+    lc.card_name                      AS leader_name,
+    m.base_id,
+    bc.card_name                      AS base_name,
+    m.opponent_leader_id,
+    olc.card_name                     AS opponent_leader_name,
+    m.opponent_base_id,
+    m.num_wins,
+    m.num_plays,
+    m.plays_going_first,
+    m.turns_in_wins,
+    m.total_turns,
+    m.cards_resourced_in_wins,
+    m.total_cards_resourced,
+    m.remaining_health_in_wins,
+    m.wins_going_first,
+    m.wins_going_second,
+    m.synced_at
+FROM swustats_matchup_stats m
+LEFT JOIN swustats_card_stats lc  ON lc.card_uid = m.leader_id           AND lc.week_num = 0
+LEFT JOIN swustats_card_stats bc  ON bc.card_uid = m.base_id             AND bc.week_num = 0
+LEFT JOIN swustats_card_stats olc ON olc.card_uid = m.opponent_leader_id AND olc.week_num = 0;
+
+GRANT SELECT ON swustats_matchup_view TO swu_user;
