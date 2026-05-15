@@ -56,3 +56,6 @@ CREATE INDEX IF NOT EXISTS idx_swustats_card_deck
 
 CREATE INDEX IF NOT EXISTS idx_swustats_card_uid
     ON swustats_card_stats (week_num, card_uid);
+
+GRANT ALL ON swustats_matchup_stats, swustats_card_stats TO swu_user;
+GRANT USAGE, SELECT ON SEQUENCE swustats_matchup_stats_id_seq, swustats_card_stats_id_seq TO swu_user;
