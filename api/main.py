@@ -3467,6 +3467,10 @@ def karabast_leaders():
                 AND c.variant_type = 'Standard'
                 AND c.set_code = ANY(ARRAY['LAW','JTL','LOF','SEC'])
                 AND c.name ILIKE SPLIT_PART(leader_name, ',', 1)
+                AND (
+                    SPLIT_PART(leader_name, ',', 2) = ''
+                    OR c.subtitle ILIKE LTRIM(SPLIT_PART(leader_name, ',', 2))
+                )
           )
         GROUP BY leader_id, base_id, leader_name, base_name
         HAVING SUM(num_plays) > 0
