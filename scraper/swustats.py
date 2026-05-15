@@ -2,18 +2,17 @@
 scraper/swustats.py
 ~~~~~~~~~~~~~~~~~~~
 Syncs weekly meta statistics from swustats.net:
-  - MetaMatchupStatsAPI  →  swustats_matchup_stats
-  - CardMetaStatsAPI     →  swustats_card_stats  (one call per unique deck archetype)
+  - MetaMatchupStatsAPI  →  swustats_matchup_stats  (run weekly)
+  - CardMetaStatsAPI     →  swustats_card_stats      (run once to map card IDs to leaders/bases)
 
 week_num=0 is the rolling "current week" slot — always re-fetched, no week
 param sent to the API so the server returns whatever it considers current.
 Historical weeks (week_num > 0) are written once and never overwritten.
 
 Usage:
-    python -m scraper.swustats                    # current week (week_num=0)
-    python -m scraper.swustats --matchups         # current week, matchups only
-    python -m scraper.swustats --week 52          # historical week 52
-    python -m scraper.swustats --week 52 --force  # re-sync historical week
+    python -m scraper.swustats                    # current week matchups only
+    python -m scraper.swustats --week 52          # historical week matchups only
+    python -m scraper.swustats --cards            # one-time card → leader/base mapping
 """
 
 import argparse
@@ -55,12 +54,7 @@ def _pct(value: str | None) -> Decimal | None:
         return None
 
 
-def _week_params(week_num: int) -> dict:
-    """Return API params dict; omit week key when fetching current week."""
-    return {} if week_num == CURRENT else {"week": week_num}
-
-
-# ── Sync: matchup stats ────────────────────────────────────────────────────
+# ── Sync: matchup stats (weekly) ───────────────────────────────────────────
 
 def sync_matchup_stats(week_num: int, force: bool = False) -> int:
     label = "current" if week_num == CURRENT else f"week {week_num}"
@@ -69,8 +63,9 @@ def sync_matchup_stats(week_num: int, force: bool = False) -> int:
         log.info(f"Matchup stats {label} already synced — skipping (use --force)")
         return 0
 
+    params = {} if week_num == CURRENT else {"week": week_num}
     log.info(f"Fetching matchup stats ({label})…")
-    rows = get("/APIs/MetaMatchupStatsAPI.php", _week_params(week_num))
+    rows = get("/APIs/MetaMatchupStatsAPI.php", params)
     log.info(f"  {len(rows)} matchup rows")
 
     upserted = 0
@@ -126,24 +121,24 @@ def sync_matchup_stats(week_num: int, force: bool = False) -> int:
     return upserted
 
 
-# ── Sync: card stats ───────────────────────────────────────────────────────
+# ── Sync: card stats (one-time) ────────────────────────────────────────────
 
-def sync_card_stats(week_num: int, force: bool = False) -> int:
-    label = "current" if week_num == CURRENT else f"week {week_num}"
+def sync_card_stats(force: bool = False) -> int:
+    """Fetch card stats once per unique (leader_id, base_id) to map card IDs.
+    Uses DO NOTHING — existing rows are never overwritten."""
 
-    if week_num != CURRENT and not force and already_synced(f"swustats_cards_{week_num}"):
-        log.info(f"Card stats {label} already synced — skipping (use --force)")
+    if not force and already_synced("swustats_cards"):
+        log.info("Card stats already synced — skipping (use --force)")
         return 0
 
     decks = db.fetchall(
-        "SELECT DISTINCT leader_id, base_id FROM swustats_matchup_stats WHERE week_num = %s",
-        (week_num,)
+        "SELECT DISTINCT leader_id, base_id FROM swustats_matchup_stats WHERE week_num = 0"
     )
     if not decks:
-        log.warning(f"No matchup rows for {label} — run --matchups first")
+        log.warning("No matchup rows found — run without --cards first")
         return 0
 
-    log.info(f"Fetching card stats for {len(decks)} deck archetypes ({label})…")
+    log.info(f"Fetching card stats for {len(decks)} deck archetypes (one-time)…")
 
     total = 0
     for i, deck in enumerate(decks, 1):
@@ -152,7 +147,7 @@ def sync_card_stats(week_num: int, force: bool = False) -> int:
 
         cards = get(
             "/Stats/CardMetaStatsAPI.php",
-            {**_week_params(week_num), "leaderID": leader_id, "baseID": base_id},
+            {"leaderID": leader_id, "baseID": base_id},
         )
         if not isinstance(cards, list):
             log.warning(f"  Unexpected response for {leader_id}/{base_id}: {type(cards)}")
@@ -169,28 +164,15 @@ def sync_card_stats(week_num: int, force: bool = False) -> int:
                     times_resourced, times_resourced_in_wins, percent_resourced_in_wins,
                     synced_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s,
+                    0, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s,
                     %s, %s, %s, %s,
                     NOW()
                 )
-                ON CONFLICT (week_num, leader_id, base_id, card_uid)
-                DO UPDATE SET
-                    card_name                 = EXCLUDED.card_name,
-                    times_included            = EXCLUDED.times_included,
-                    times_included_in_wins    = EXCLUDED.times_included_in_wins,
-                    percent_included_in_wins  = EXCLUDED.percent_included_in_wins,
-                    times_played              = EXCLUDED.times_played,
-                    times_played_in_wins      = EXCLUDED.times_played_in_wins,
-                    percent_played_in_wins    = EXCLUDED.percent_played_in_wins,
-                    times_resourced           = EXCLUDED.times_resourced,
-                    times_resourced_in_wins   = EXCLUDED.times_resourced_in_wins,
-                    percent_resourced_in_wins = EXCLUDED.percent_resourced_in_wins,
-                    synced_at                 = NOW()
-                WHERE swustats_card_stats.week_num = 0
+                ON CONFLICT (week_num, leader_id, base_id, card_uid) DO NOTHING
                 """,
                 (
-                    week_num, leader_id, base_id,
+                    leader_id, base_id,
                     c["cardUid"], c.get("cardName"),
                     c.get("timesIncluded", 0),
                     c.get("timesIncludedInWins", 0),
@@ -208,8 +190,7 @@ def sync_card_stats(week_num: int, force: bool = False) -> int:
         log.info(f"  [{i}/{len(decks)}] {leader_id}/{base_id}: {len(cards)} cards")
         time.sleep(0.1)
 
-    if week_num != CURRENT:
-        mark_synced(f"swustats_cards_{week_num}", total)
+    mark_synced("swustats_cards", total)
     log.info(f"Card stats sync complete: {total} rows")
     return total
 
@@ -244,29 +225,18 @@ def mark_synced(resource: str, count: int):
 
 # ── Entry point ────────────────────────────────────────────────────────────
 
-def run(week_num: int, matchups: bool = True, cards: bool = True, force: bool = False):
-    if matchups:
-        sync_matchup_stats(week_num, force)
-    if cards:
-        sync_card_stats(week_num, force)
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sync swustats.net weekly meta data")
-    parser.add_argument("--week",     type=int, default=None,
+    parser = argparse.ArgumentParser(description="Sync swustats.net meta data")
+    parser.add_argument("--week",  type=int, default=None,
                         help="Week number to sync (omit for current week)")
-    parser.add_argument("--matchups", action="store_true", help="Sync matchup stats only")
-    parser.add_argument("--cards",    action="store_true", help="Sync card stats only")
-    parser.add_argument("--force",    action="store_true",
-                        help="Re-sync historical week even if already done")
+    parser.add_argument("--cards", action="store_true",
+                        help="One-time sync of card → leader/base mapping")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-sync even if already done")
     args = parser.parse_args()
 
-    sync_all = not (args.matchups or args.cards)
-    week_num = args.week if args.week is not None else CURRENT
-
-    run(
-        week_num = week_num,
-        matchups = sync_all or args.matchups,
-        cards    = sync_all or args.cards,
-        force    = args.force,
-    )
+    if args.cards:
+        sync_card_stats(force=args.force)
+    else:
+        week_num = args.week if args.week is not None else CURRENT
+        sync_matchup_stats(week_num, force=args.force)
