@@ -626,6 +626,16 @@ select option { background: var(--surface2); }
 .mu-detail-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
 .mu-detail-wr { margin-left: auto; font-family: var(--mono); font-size: 22px; font-weight: 500; flex-shrink: 0; }
 .mu-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+/* ── Karabast page ── */
+.kb-detail-hdr { display: flex; align-items: center; gap: 16px; padding: 16px 0 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.kb-mu-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; max-width: 640px; }
+.kb-mu-row { display: grid; grid-template-columns: 1fr 80px 70px; gap: 8px; align-items: center; padding: 8px 12px; background: var(--surface); border-radius: 4px; border: 1px solid var(--border); }
+.kb-mu-row:hover { border-color: var(--border2); }
+.kb-mu-name { font-size: 13px; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-mu-base { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.kb-mu-games { font-family: var(--mono); font-size: 12px; color: var(--text3); text-align: right; }
+.kb-mu-mwr { font-family: var(--mono); font-size: 14px; font-weight: 700; text-align: right; }
+.leader-card.kb-selected { outline: 2px solid var(--accent, #7c6af7); outline-offset: 2px; }
 .mu-section-hdr {
   grid-column: 1 / -1;
   font-size: 10px;
@@ -4010,6 +4020,31 @@ select.sl-input { cursor: pointer; }
   </div>
 </div>
 
+<!-- ══ KARABAST PAGE ══ -->
+<div class="page" id="page-karabast">
+  <div class="page-header">
+    <div>
+      <div class="page-title">KARABAST</div>
+      <div class="page-sub">swustats.net · community matchup data</div>
+    </div>
+  </div>
+  <div class="meta-banner">
+    <div class="mb-stat"><div class="mb-val" id="kb-leaders">—</div><div class="mb-label">Leaders</div></div>
+    <div class="mb-stat"><div class="mb-val" id="kb-games">—</div><div class="mb-label">Games</div></div>
+  </div>
+  <div id="kb-grid"><div class="loading" style="padding:24px">loading…</div></div>
+  <div id="kb-detail" style="display:none">
+    <div class="kb-detail-hdr">
+      <button class="mu-back-btn" onclick="closeKbDetail()">← All leaders</button>
+      <div>
+        <div class="mu-detail-title" id="kb-detail-title"></div>
+      </div>
+      <div class="mu-detail-wr" id="kb-detail-mwr"></div>
+    </div>
+    <div id="kb-matchups-list"></div>
+  </div>
+</div>
+
 <!-- ══ CARD MODAL ══ -->
 <div id="modal-backdrop" onclick="closeModal(event)">
   <div id="modal">
@@ -4221,6 +4256,7 @@ function showPage(name) {
   if (name === 'picks')     loadPicks();
   if (name === 'cards')     loadCardsPage();
   if (name === 'league')    loadLeague();
+  if (name === 'karabast') loadKarabast();
 }
 function goHome() {
   showPage('home');
@@ -7462,6 +7498,144 @@ function renderPickDetail() {
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+}
+
+// ══ KARABAST PAGE ════════════════════════════════════════════════════════════
+let kbData = [];
+
+async function loadKarabast() {
+  const grid = document.getElementById('kb-grid');
+  grid.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
+  closeKbDetail();
+  try {
+    kbData = await api('/api/karabast/leaders');
+    renderKbGrid();
+    const totalGames = kbData.reduce((s, r) => s + r.total_plays, 0);
+    document.getElementById('kb-leaders').textContent = kbData.length;
+    document.getElementById('kb-games').textContent   = totalGames.toLocaleString();
+  } catch(e) {
+    grid.innerHTML = '<div class="empty-state">// failed to load</div>';
+  }
+}
+
+function renderKbGrid() {
+  const grid = document.getElementById('kb-grid');
+  if (!kbData.length) { grid.innerHTML = '<div class="empty-state">// no data</div>'; return; }
+
+  grid.classList.add('tier-grouped');
+  const sorted   = [...kbData].sort((a, b) => b.mwr - a.mwr);
+  const maxGames = Math.max(...sorted.map(r => r.total_plays), 1);
+
+  const TIER_ORDER   = ['S','A','B','C','D','F'];
+  const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
+  const TIER_TOOLTIP = { S:'Significantly above average MWR', A:'Above average MWR', B:'Around average MWR', C:'Slightly below average MWR', D:'Below average MWR', F:'Well below average MWR' };
+  const byTier       = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
+
+  sorted.forEach(r => {
+    const g = tierGrade(r.mwr_ratio).grade;
+    byTier[g in byTier ? g : 'C'].push(r);
+  });
+
+  let html = '', imgIdx = 0;
+  const allCards = [];
+
+  TIER_ORDER.forEach(t => {
+    const group = byTier[t];
+    if (!group.length) return;
+    const tier = tierGrade(group[0].mwr_ratio);
+    html += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span><span class="tsh-count">${group.length}</span></div>`;
+    html += `<div class="tier-section-grid">`;
+    group.forEach(r => {
+      const i = imgIdx++;
+      html += mkKbCard(r, i, maxGames);
+      allCards.push({ r, i });
+    });
+    html += `</div>`;
+  });
+
+  grid.innerHTML = html;
+
+  grid.onclick = e => {
+    const card = e.target.closest('.leader-card[data-kb-id]');
+    if (card) openKbDetail(card.dataset.kbId);
+  };
+
+  allCards.forEach(({ r, i }) => {
+    fetchLeaderCard(r.leader_name).then(d => {
+      const wrap = document.getElementById('kbimg-wrap-' + i);
+      if (!wrap) return;
+      const url = d?.back_art_url || d?.front_art_url;
+      if (url) { wrap.style.backgroundImage = `url(${url})`; wrap.classList.add('loaded'); }
+      const leaderAsps = d?.all_aspects || [];
+      const rankEl     = document.getElementById('kbimg-rank-' + i);
+      if (rankEl && leaderAsps.length) {
+        rankEl.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center">${aspectIcons(leaderAsps, 20)}</span>`;
+        const primaryAsp = aspectFromArray(leaderAsps);
+        const cardEl = wrap?.closest('.leader-card');
+        if (cardEl && primaryAsp !== 'Unknown') cardEl.className = cardEl.className.replace(/asp-\S+/, 'asp-' + primaryAsp);
+      }
+    });
+  });
+}
+
+function mkKbCard(r, i, maxGames) {
+  const mwr      = Math.round(r.mwr * 100);
+  const mwrColor = r.mwr >= 0.53 ? 'var(--green)' : r.mwr >= 0.47 ? 'var(--text2)' : 'var(--red, #e74c3c)';
+  const barW     = Math.round((r.total_plays / maxGames) * 100);
+  const kbId     = (r.leader_id + '::' + r.base_id).replace(/"/g,'&quot;');
+  return `<div class="leader-card asp-Unknown" data-kb-id="${kbId}">
+  <div class="lc-img-wrap" id="kbimg-wrap-${i}"></div>
+  <div class="lc-body">
+    <div class="lc-rank" id="kbimg-rank-${i}"></div>
+    <div class="lc-name">${shortName(r.leader_name)}</div>
+    <div class="lc-base">${r.base_name || '—'}</div>
+    <div class="lc-stats">
+      <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${mwrColor}">${mwr}%</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">Games</div><div class="lc-stat-val">${r.total_plays.toLocaleString()}</div></div>
+    </div>
+    <div class="lc-bar"><div class="lc-bar-fill" style="width:${barW}%"></div></div>
+  </div>
+</div>`;
+}
+
+async function openKbDetail(kbId) {
+  const [leaderId, baseId] = kbId.split('::');
+  const r = kbData.find(d => d.leader_id === leaderId && d.base_id === baseId);
+  if (!r) return;
+
+  document.querySelectorAll('#kb-grid .leader-card').forEach(c => c.classList.remove('kb-selected'));
+  document.querySelector(`[data-kb-id="${kbId.replace(/"/g,'&quot;')}"]`)?.classList.add('kb-selected');
+
+  const detail = document.getElementById('kb-detail');
+  document.getElementById('kb-detail-title').textContent = `${shortName(r.leader_name)} · ${r.base_name || r.base_id}`;
+  const mwr      = Math.round(r.mwr * 100);
+  const mwrColor = r.mwr >= 0.53 ? 'var(--green)' : r.mwr >= 0.47 ? 'var(--text2)' : 'var(--red, #e74c3c)';
+  document.getElementById('kb-detail-mwr').innerHTML = `<span style="color:${mwrColor}">${mwr}%</span> <span style="color:var(--text3);font-size:13px">${r.total_plays.toLocaleString()} games</span>`;
+  document.getElementById('kb-matchups-list').innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
+  detail.style.display = '';
+  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  try {
+    const matchups = await api(`/api/karabast/leader/${encodeURIComponent(leaderId)}/${encodeURIComponent(baseId)}/matchups`);
+    const list = document.getElementById('kb-matchups-list');
+    if (!matchups.length) { list.innerHTML = '<div class="empty-state">// no matchup data</div>'; return; }
+    list.innerHTML = `<div class="kb-mu-list">${matchups.map(m => {
+      const mwr      = m.mwr != null ? Math.round(m.mwr * 100) : null;
+      const mwrColor = mwr == null ? 'var(--text3)' : mwr >= 53 ? 'var(--green)' : mwr >= 47 ? 'var(--text2)' : 'var(--red, #e74c3c)';
+      return `<div class="kb-mu-row">
+        <div><div class="kb-mu-name">${shortName(m.opponent_leader_name || m.opponent_leader_id)}</div><div class="kb-mu-base">${m.opponent_base_id || ''}</div></div>
+        <div class="kb-mu-games">${m.num_plays.toLocaleString()} games</div>
+        <div class="kb-mu-mwr" style="color:${mwrColor}">${mwr != null ? mwr + '%' : '—'}</div>
+      </div>`;
+    }).join('')}</div>`;
+  } catch(e) {
+    document.getElementById('kb-matchups-list').innerHTML = '<div class="empty-state">// failed to load</div>';
+  }
+}
+
+function closeKbDetail() {
+  document.getElementById('kb-detail').style.display = 'none';
+  document.querySelectorAll('#kb-grid .leader-card').forEach(c => c.classList.remove('kb-selected'));
 }
 </script>
 

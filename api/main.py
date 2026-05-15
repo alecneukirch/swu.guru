@@ -3449,3 +3449,44 @@ def import_sealed_league_melee(body: dict):
         "skipped":    skipped,
         "players":    players_touched,
     }
+
+
+# ── Karabast (swustats.net matchup data) ─────────────────────────────────────
+
+@app.get("/api/karabast/leaders")
+def karabast_leaders():
+    rows = db.fetchall("""
+        SELECT leader_id, base_id, leader_name, base_name,
+               SUM(num_wins)::int  AS total_wins,
+               SUM(num_plays)::int AS total_plays
+        FROM swustats_matchup_view
+        WHERE week_num = 0 AND leader_name IS NOT NULL
+        GROUP BY leader_id, base_id, leader_name, base_name
+        HAVING SUM(num_plays) > 0
+        ORDER BY SUM(num_wins)::float / SUM(num_plays) DESC
+    """)
+    if not rows:
+        return []
+    total_wins  = sum(r["total_wins"]  for r in rows)
+    total_plays = sum(r["total_plays"] for r in rows)
+    avg_mwr = total_wins / total_plays if total_plays else 0.5
+    return [
+        {
+            **r,
+            "mwr":       round(r["total_wins"] / r["total_plays"], 4),
+            "mwr_ratio": round(r["total_wins"] / r["total_plays"] / avg_mwr, 4),
+        }
+        for r in rows
+    ]
+
+
+@app.get("/api/karabast/leader/{leader_id}/{base_id}/matchups")
+def karabast_leader_matchups(leader_id: str, base_id: str):
+    return db.fetchall("""
+        SELECT opponent_leader_id, opponent_leader_name, opponent_base_id,
+               num_wins, num_plays,
+               ROUND(num_wins::numeric / NULLIF(num_plays, 0), 4) AS mwr
+        FROM swustats_matchup_view
+        WHERE week_num = 0 AND leader_id = %s AND base_id = %s AND num_plays > 0
+        ORDER BY num_plays DESC
+    """, (leader_id, base_id))
