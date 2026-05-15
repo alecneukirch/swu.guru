@@ -3461,6 +3461,13 @@ def karabast_leaders():
                SUM(num_plays)::int AS total_plays
         FROM swustats_matchup_view
         WHERE week_num = 0 AND leader_name IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM cards c
+              WHERE c.is_leader = true
+                AND c.variant_type = 'Standard'
+                AND c.set_code = ANY(ARRAY['LAW','JTL','LOF','SEC'])
+                AND c.name ILIKE SPLIT_PART(leader_name, ',', 1)
+          )
         GROUP BY leader_id, base_id, leader_name, base_name
         HAVING SUM(num_plays) > 0
         ORDER BY SUM(num_wins)::float / SUM(num_plays) DESC
