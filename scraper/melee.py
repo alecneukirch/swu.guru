@@ -956,7 +956,7 @@ def sync_from_swu(
                 "name":         stub["name"],
                 "date":         event_date,
                 "player_count": None,
-                "set_code":     None,
+                "set_code":     current_set_code,
                 "melee_url":    stub["melee_url"],
                 "venue":        stub.get("venue"),
                 "country":      stub.get("country"),
