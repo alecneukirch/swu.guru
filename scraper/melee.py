@@ -588,12 +588,6 @@ def save_match(event_id: int, round_id: int, round_name: str,
         (event_id, match["p2_melee_id"])
     )
     guid = match.get("match_guid")
-    if guid:
-        existing = db.fetchone(
-            f"SELECT id FROM {tbls['matches']} WHERE match_guid=%s", (guid,)
-        )
-        if existing:
-            return
 
     # Parse leader/base from deck names directly — most reliable source
     # Falls back to standings lookup if deck name is missing
@@ -619,7 +613,13 @@ def save_match(event_id: int, round_id: int, round_name: str,
             p2_name, p2_melee_id, p2_deck_id, p2_deck_name, p2_game_wins,
             game_draws, winner, result_str, match_guid, phase_id)
            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-           ON CONFLICT (match_guid) DO NOTHING""",
+           ON CONFLICT (match_guid) DO UPDATE SET
+           p1_leader = COALESCE(EXCLUDED.p1_leader, {tbls['matches']}.p1_leader),
+           p1_base   = COALESCE(EXCLUDED.p1_base,   {tbls['matches']}.p1_base),
+           p2_leader = COALESCE(EXCLUDED.p2_leader, {tbls['matches']}.p2_leader),
+           p2_base   = COALESCE(EXCLUDED.p2_base,   {tbls['matches']}.p2_base),
+           p1_deck_name = COALESCE(NULLIF(EXCLUDED.p1_deck_name,''), {tbls['matches']}.p1_deck_name),
+           p2_deck_name = COALESCE(NULLIF(EXCLUDED.p2_deck_name,''), {tbls['matches']}.p2_deck_name)""",
         (event_id, round_id, round_num, round_name, _round_type(round_name),
          p1_standing["id"] if p1_standing else None,
          p2_standing["id"] if p2_standing else None,
@@ -978,19 +978,24 @@ def sync_from_swu(
                 skipped += 1
                 continue
 
-            # Skip if already fully scraped
+            # Skip if already fully scraped with leader data
             existing = db.fetchone(
-                f"""SELECT e.id, COUNT(s.id) AS n
+                f"""SELECT e.id, COUNT(s.id) AS n,
+                       COUNT(s.id) FILTER (WHERE s.leader IS NOT NULL) AS with_leader
                    FROM {tbls['events']} e
                    LEFT JOIN {tbls['standings']} s ON s.event_id = e.id
                    WHERE e.melee_id = %s
                    GROUP BY e.id""",
                 (melee_id,)
             )
-            if existing and (existing["n"] or 0) > 0:
-                log.info(f"  Already scraped ({existing['n']} standings) -- skipping")
+            n           = (existing["n"]           or 0) if existing else 0
+            with_leader = (existing["with_leader"] or 0) if existing else 0
+            if n > 0 and with_leader > 0:
+                log.info(f"  Already scraped ({n} standings, {with_leader} with leaders) -- skipping")
                 skipped += 1
                 continue
+            if n > 0:
+                log.info(f"  Re-scraping ({n} standings, no leader data yet)")
 
             result = import_tournament(melee_id, event_meta, fetch_cards, eternal=eternal)
             if result:
@@ -1077,19 +1082,24 @@ def sync_from_hub(
                 except ValueError:
                     pass
 
-            # Skip if already fully scraped
+            # Skip if already fully scraped with leader data
             existing = db.fetchone(
-                f"""SELECT e.id, COUNT(s.id) AS n
+                f"""SELECT e.id, COUNT(s.id) AS n,
+                       COUNT(s.id) FILTER (WHERE s.leader IS NOT NULL) AS with_leader
                    FROM {tbls['events']} e
                    LEFT JOIN {tbls['standings']} s ON s.event_id = e.id
                    WHERE e.melee_id = %s
                    GROUP BY e.id""",
                 (melee_id,)
             )
-            if existing and (existing["n"] or 0) > 0:
-                log.info(f"  Already scraped ({existing['n']} standings) -- skipping")
+            n           = (existing["n"]           or 0) if existing else 0
+            with_leader = (existing["with_leader"] or 0) if existing else 0
+            if n > 0 and with_leader > 0:
+                log.info(f"  Already scraped ({n} standings, {with_leader} with leaders) -- skipping")
                 skipped += 1
                 continue
+            if n > 0:
+                log.info(f"  Re-scraping ({n} standings, no leader data yet)")
 
             event_meta = {
                 "name":        stub.get("name") or hub_data.get("name"),
