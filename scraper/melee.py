@@ -191,7 +191,8 @@ def hub_event_list(set_code: str = "LAW", limit: int = 0,
                 continue
             # Only PQ / SQ / RQ level events (skip Minor Tournaments)
             if not any(t in level for t in ("Planetary Qualifier", "Sector Qualifier",
-                                             "Regional Qualifier", "Galactic Championship")):
+                                             "Regional Qualifier", "Regional Championship",
+                                             "Galactic Championship")):
                 continue
 
         a = cells[1].find("a")
