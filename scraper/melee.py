@@ -158,14 +158,14 @@ def hub_event_list(set_code: str = "LAW", limit: int = 0,
                    eternal: bool = False) -> list[dict]:
     """
     Scrape the hub tournament results page.
-    Premier mode: filters to target set + PQ/SQ/RQ level events.
+    Premier mode: fetches all events, filters out Limited/Eternal, keeps target set + known level events.
     Eternal mode: uses the eternal category URL, no set/level filtering.
     Returns list of stubs with: name, date, hub_url, country, players, set_code.
     """
     if eternal:
         url = f"{HUB_BASE}/tournaments-results/?range=all&category=eternal"
     else:
-        url = f"{HUB_BASE}/tournaments-results/?range=all&category=premier"
+        url = f"{HUB_BASE}/tournaments-results/?range=all"
     log.info(f"Fetching hub event list: {url}")
     soup = get(url)
 
