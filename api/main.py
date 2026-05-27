@@ -885,6 +885,8 @@ def leader_cards(
                     )::INT                                                           AS leader_total_t8s
                 FROM {t['standings']} s
                 JOIN {t['events']} e ON e.id = s.event_id
+                JOIN (SELECT DISTINCT standing_id FROM {t['decklist_cards']}) dc_any
+                    ON dc_any.standing_id = s.id
                 {elo_join}
                 WHERE s.leader = %s
                   AND s.placement IS NOT NULL
