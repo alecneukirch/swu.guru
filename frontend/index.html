@@ -3374,6 +3374,38 @@ select option { background: var(--surface2); }
 .merge-id-name { font-size: 12px; color: var(--text3); }
 .merge-id-count{ font-family: var(--mono); font-size: 11px; color: var(--text3); margin-left: 8px; }
 .merge-actions { display: flex; gap: 8px; }
+.confirm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.confirm-table th { font-family: var(--mono); font-size: 11px; color: var(--text3); text-align: left;
+  padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.confirm-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+.confirm-table tr:hover td { background: rgba(255,255,255,0.02); }
+.confirm-row.status-confirmed td:first-child { border-left: 3px solid var(--green); }
+.confirm-row.status-guess     td:first-child { border-left: 3px solid var(--yellow); }
+.confirm-row.status-unset     td:first-child { border-left: 3px solid rgba(255,255,255,0.1); }
+.confirm-ocr-name { font-family: var(--mono); font-size: 12px; }
+.confirm-swuid { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.confirm-select {
+  font-family: var(--mono); font-size: 12px; background: var(--bg2);
+  color: var(--text1); border: 1px solid var(--border); border-radius: 3px;
+  padding: 4px 6px; width: 220px; cursor: pointer;
+}
+.confirm-select:focus { outline: none; border-color: var(--accent); }
+.confirm-select option.used { color: var(--text3); }
+.confirm-save-btn {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 3px; cursor: pointer; border: 1px solid;
+  background: rgba(46,204,113,0.12); color: var(--green); border-color: rgba(46,204,113,0.3);
+  transition: background 0.15s; white-space: nowrap;
+}
+.confirm-save-btn:hover:not(:disabled) { background: rgba(46,204,113,0.22); }
+.confirm-save-btn:disabled { opacity: 0.5; cursor: default; }
+.confirm-status-badge {
+  font-family: var(--mono); font-size: 10px; padding: 2px 6px;
+  border-radius: 2px; border: 1px solid; white-space: nowrap;
+}
+.badge-confirmed { background: rgba(46,204,113,0.12); color: var(--green); border-color: rgba(46,204,113,0.3); }
+.badge-guess { background: rgba(241,196,15,0.10); color: var(--yellow); border-color: rgba(241,196,15,0.25); }
+.badge-unset { background: rgba(255,255,255,0.04); color: var(--text3); border-color: var(--border); }
 .merge-confirm-btn {
   font-family: var(--mono); font-size: 11px; font-weight: 700;
   padding: 4px 10px; border-radius: 3px; cursor: pointer; border: 1px solid;
@@ -4021,6 +4053,23 @@ select.sl-input { cursor: pointer; }
 </div>
 
 <!-- ══ KARABAST PAGE ══ -->
+<!-- ══ SEALED CONFIRM PAGE (hidden — access via #confirm) ══ -->
+<div class="page" id="page-confirm">
+  <div class="page-header">
+    <div>
+      <div class="page-title">SEALED PLAYER IDs</div>
+      <div class="page-sub">associate paper registration sheets → melee accounts</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="confirm-progress" style="font-family:var(--mono);font-size:12px;color:var(--text3)"></span>
+      <button class="btn" onclick="loadConfirm()">↺ Refresh</button>
+    </div>
+  </div>
+  <div id="confirm-body" style="padding:0 24px 40px">
+    <div class="loading" style="padding:40px">loading…</div>
+  </div>
+</div>
+
 <div class="page" id="page-karabast">
   <div class="page-header">
     <div>
@@ -4261,6 +4310,7 @@ function showPage(name) {
   if (name === 'cards')     loadCardsPage();
   if (name === 'league')    loadLeague();
   if (name === 'karabast') loadKarabast();
+  if (name === 'confirm')  loadConfirm();
 }
 function goHome() {
   showPage('home');
@@ -7641,6 +7691,127 @@ async function openKbDetail(kbId) {
 function closeKbDetail() {
   document.getElementById('kb-detail').style.display = 'none';
   document.querySelectorAll('#kb-grid .leader-card').forEach(c => c.classList.remove('kb-selected'));
+}
+
+// ══ SEALED CONFIRM ══════════════════════════════════════════════════════════
+let _confirmData = null;
+
+async function loadConfirm() {
+  const body = document.getElementById('confirm-body');
+  body.innerHTML = '<div class="loading" style="padding:40px">loading…</div>';
+  try {
+    _confirmData = await api('/api/sealed/confirm-data');
+    renderConfirm();
+  } catch(e) {
+    body.innerHTML = `<div class="empty-state" style="padding:40px">// ${e.message}</div>`;
+  }
+}
+
+function renderConfirm() {
+  const { pools, melee_players, assigned } = _confirmData;
+  const assignedSet = new Set(assigned);
+
+  const confirmed = pools.filter(p => p.melee_player_id).length;
+  document.getElementById('confirm-progress').textContent =
+    `${confirmed} / ${pools.length} confirmed`;
+
+  // Group pools by table for context
+  const byTable = {};
+  pools.forEach(p => {
+    const t = p.table_num || '?';
+    if (!byTable[t]) byTable[t] = [];
+    byTable[t].push(p);
+  });
+
+  const optionsHtml = melee_players.map(m => {
+    const used = assignedSet.has(m.id) ? ' class="used"' : '';
+    return `<option value="${m.id}"${used}>${m.placement}. ${m.name}${assignedSet.has(m.id) ? ' ✓' : ''}</option>`;
+  }).join('');
+
+  const rows = pools.map(p => {
+    const isConfirmed = !!p.melee_player_id;
+    const effectiveId = p.melee_player_id || p.guess_melee_id || '';
+    const statusClass = isConfirmed ? 'status-confirmed' : (p.guess_score >= 0.75 ? 'status-guess' : 'status-unset');
+    const badge = isConfirmed
+      ? `<span class="confirm-status-badge badge-confirmed">confirmed</span>`
+      : p.guess_score >= 0.75
+        ? `<span class="confirm-status-badge badge-guess">guess ${Math.round(p.guess_score*100)}%</span>`
+        : `<span class="confirm-status-badge badge-unset">unset</span>`;
+
+    // Pair context: other player at same table
+    const tablemates = (byTable[p.table_num] || []).filter(x => x.pool_id !== p.pool_id);
+    const pairHint = tablemates.length
+      ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num} · ${tablemates.map(x=>x.ocr_name).join(', ')}</div>`
+      : `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num}</div>`;
+
+    return `<tr class="confirm-row ${statusClass}" id="crow-${p.pool_id}">
+  <td style="color:var(--text3);font-family:var(--mono);font-size:11px">${p.scan_page}</td>
+  <td>
+    <div class="confirm-ocr-name">${p.ocr_name || '—'}</div>
+    ${p.swu_id ? `<div class="confirm-swuid">SWU ${p.swu_id}</div>` : ''}
+    ${pairHint}
+  </td>
+  <td>
+    <select class="confirm-select" id="csel-${p.pool_id}"
+      onchange="onConfirmChange(${p.pool_id})">
+      <option value="">— unassigned —</option>
+      ${optionsHtml}
+    </select>
+  </td>
+  <td>${badge}</td>
+  <td>
+    <button class="confirm-save-btn" id="csave-${p.pool_id}"
+      onclick="saveConfirm(${p.pool_id})" disabled>Save</button>
+  </td>
+</tr>`;
+  }).join('');
+
+  document.getElementById('confirm-body').innerHTML = `
+    <div style="font-size:12px;font-family:var(--mono);color:var(--text3);padding:12px 0 16px">
+      Tournament: Planetary Qualifier (Brute Squad) · melee 421058 ·
+      <a href="https://melee.gg/Tournament/View/421058" target="_blank" style="color:var(--accent)">melee.gg ↗</a>
+      &nbsp;|&nbsp; green = confirmed &nbsp; yellow = best fuzzy guess ≥75% &nbsp; dim = no confident match
+    </div>
+    <table class="confirm-table">
+      <thead><tr>
+        <th>SCAN</th><th>OCR NAME</th><th>MELEE ACCOUNT</th><th>STATUS</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  // Set current values
+  pools.forEach(p => {
+    const sel = document.getElementById(`csel-${p.pool_id}`);
+    if (!sel) return;
+    const val = p.melee_player_id || p.guess_melee_id || '';
+    sel.value = String(val);
+  });
+}
+
+function onConfirmChange(poolId) {
+  document.getElementById(`csave-${poolId}`).disabled = false;
+}
+
+async function saveConfirm(poolId) {
+  const sel = document.getElementById(`csel-${poolId}`);
+  const btn = document.getElementById(`csave-${poolId}`);
+  const val = sel.value;
+  btn.textContent = '…';
+  btn.disabled = true;
+  try {
+    await api('/api/sealed/confirm', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ pool_id: poolId, melee_player_id: val ? parseInt(val) : null })
+    });
+    // Reload to refresh assigned marks
+    _confirmData = await api('/api/sealed/confirm-data');
+    renderConfirm();
+  } catch(e) {
+    btn.textContent = 'Error';
+    btn.disabled = false;
+    alert(e.message);
+  }
 }
 </script>
 

@@ -3493,6 +3493,76 @@ def karabast_leaders(min_games: int = Query(200)):
     ]
 
 
+@app.get("/api/sealed/confirm-data")
+def sealed_confirm_data():
+    import difflib, re
+    EVENT_MELEE_ID = "421058"
+
+    event = db.fetchone("SELECT id FROM events WHERE melee_id = %s", (EVENT_MELEE_ID,))
+    if not event:
+        return {"event_id": None, "melee_players": [], "pools": []}
+    event_id = event["id"]
+
+    melee_players = db.fetchall(
+        "SELECT melee_player_id, player_name, placement FROM standings WHERE event_id=%s ORDER BY placement",
+        (event_id,)
+    )
+
+    pools = db.fetchall(
+        "SELECT id, scan_page, table_num, player_first_name, player_last_name, "
+        "player_swu_id, melee_player_id FROM sealed_pools ORDER BY scan_page"
+    )
+
+    def norm(s):
+        return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+    melee_norm = [(p["melee_player_id"], p["player_name"], norm(p["player_name"])) for p in melee_players]
+
+    assigned = {p["melee_player_id"] for p in pools if p["melee_player_id"]}
+
+    result_pools = []
+    for p in pools:
+        full = f"{p['player_first_name'] or ''} {p['player_last_name'] or ''}".strip()
+        full_norm = norm(full)
+        scores = sorted(
+            [(difflib.SequenceMatcher(None, full_norm, mn).ratio(), mid, mname)
+             for mid, mname, mn in melee_norm],
+            reverse=True
+        )
+        guess_id, guess_name, guess_score = scores[0][1], scores[0][2], scores[0][0]
+        result_pools.append({
+            "pool_id":            p["id"],
+            "scan_page":          p["scan_page"],
+            "table_num":          p["table_num"],
+            "ocr_name":           full,
+            "swu_id":             p["player_swu_id"],
+            "melee_player_id":    p["melee_player_id"],
+            "guess_melee_id":     guess_id if not p["melee_player_id"] else None,
+            "guess_melee_name":   guess_name if not p["melee_player_id"] else None,
+            "guess_score":        round(guess_score, 2) if not p["melee_player_id"] else None,
+        })
+
+    return {
+        "event_id":      event_id,
+        "melee_players": [{"id": p["melee_player_id"], "name": p["player_name"], "placement": p["placement"]} for p in melee_players],
+        "assigned":      list(assigned),
+        "pools":         result_pools,
+    }
+
+
+@app.post("/api/sealed/confirm")
+def sealed_confirm_player(payload: dict):
+    pool_id        = int(payload["pool_id"])
+    melee_player_id = payload.get("melee_player_id")  # None to clear
+    if melee_player_id is not None:
+        melee_player_id = int(melee_player_id)
+    db.execute(
+        "UPDATE sealed_pools SET melee_player_id=%s WHERE id=%s",
+        (melee_player_id, pool_id)
+    )
+    return {"ok": True}
+
+
 @app.get("/api/karabast/leader/{leader_id}/{base_id}/matchups")
 def karabast_leader_matchups(leader_id: str, base_id: str):
     return db.fetchall("""
