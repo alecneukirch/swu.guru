@@ -7806,22 +7806,54 @@ function renderSealed() {
   }
 
   if (_sealedTab === 'leaders') {
+    let imgIdx = 0;
+    const imgItems = [];  // { leader, i } for post-render image loading
+
     const mkLeader = r => {
+      const i = imgIdx++;
+      imgItems.push({ leader: r.leader, i });
+      const tier = sealedGrade(r.gwr);
       const gwr = r.gwr ?? 0;
       const gwrTxt = r.gwr != null ? (gwr * 100).toFixed(1) + '%' : '—';
-      const col = r.gwr != null ? gwrColor(gwr) : 'var(--text3)';
-      return `<div class="sl-card">` +
-        `<div class="sl-card-name">${r.leader}</div>` +
-        `<div class="sl-card-gwr" style="color:${col}">${gwrTxt}</div>` +
-        `<div class="sl-stats-row">` +
-          `<div class="sl-stat"><div class="sl-sv">${r.n}</div><div class="sl-sl">Players</div></div>` +
-          `<div class="sl-stat"><div class="sl-sv">${r.gw ?? '—'}</div><div class="sl-sl">GW</div></div>` +
-          `<div class="sl-stat"><div class="sl-sv">${r.gl ?? '—'}</div><div class="sl-sl">GL</div></div>` +
+      const gwrCls = r.gwr == null ? '' : gwr >= 0.55 ? 'good' : gwr >= 0.45 ? 'mid' : 'bad';
+      const mwrColor = r.gwr >= 0.52 ? 'var(--green)' : r.gwr > 0 ? 'var(--text2)' : 'var(--text3)';
+      return `<div class="leader-card asp-Unknown">` +
+        `<div class="lc-img-wrap" id="slimg-wrap-${i}"></div>` +
+        `<div class="lc-tier ${tier.cls}">${tier.grade}</div>` +
+        `<div class="lc-body">` +
+          `<div class="lc-rank" id="slimg-rank-${i}"></div>` +
+          `<div class="lc-name">${shortName(r.leader)}</div>` +
+          `<div class="lc-conversion ${gwrCls}">${gwrTxt} GWR</div>` +
+          `<div class="lc-stats ev-stats">` +
+            `<div class="lc-stat"><div class="lc-stat-label">Players</div><div class="lc-stat-val">${r.n}</div></div>` +
+            `<div class="lc-stat"><div class="lc-stat-label">GW</div><div class="lc-stat-val">${r.gw ?? '—'}</div></div>` +
+            `<div class="lc-stat"><div class="lc-stat-label">GL</div><div class="lc-stat-val">${r.gl ?? '—'}</div></div>` +
+          `</div>` +
         `</div></div>`;
     };
+
     document.getElementById('sealed-body').innerHTML =
       mkTierSections(leaders, mkLeader) ||
       '<div class="empty-state" style="padding:40px">// no leader data</div>';
+
+    imgItems.forEach(({ leader, i }) => {
+      fetchLeaderCard(leader).then(d => {
+        const wrap = document.getElementById('slimg-wrap-' + i);
+        if (!wrap) return;
+        const url = d?.back_art_url || d?.front_art_url;
+        if (url) { wrap.style.backgroundImage = `url(${url})`; wrap.classList.add('loaded'); }
+        const leaderAsps = d?.all_aspects || [];
+        const rankEl = document.getElementById('slimg-rank-' + i);
+        if (rankEl && leaderAsps.length) {
+          rankEl.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center">${aspectIcons(leaderAsps, 20)}</span>`;
+          const primaryAsp = aspectFromArray(leaderAsps);
+          const cardEl = wrap?.closest('.leader-card');
+          if (cardEl && primaryAsp !== 'Unknown') {
+            cardEl.className = cardEl.className.replace(/asp-\S+/, 'asp-' + primaryAsp);
+          }
+        }
+      });
+    });
 
   } else {
     const aspBadge = s => {
