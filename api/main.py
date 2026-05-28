@@ -3510,8 +3510,26 @@ def sealed_confirm_data():
 
     pools = db.fetchall(
         "SELECT id, scan_page, table_num, player_first_name, player_last_name, "
-        "player_swu_id, melee_player_id FROM sealed_pools ORDER BY scan_page"
+        "player_swu_id, melee_player_id, confirmed_leader FROM sealed_pools ORDER BY scan_page"
     )
+
+    # Leaders per pool: all section='leader' rows, ordered best-guess first
+    all_leaders = db.fetchall(
+        "SELECT pool_id, card_name, pool_count, played_count "
+        "FROM sealed_pool_cards WHERE section='leader' "
+        "ORDER BY pool_id, pool_count DESC NULLS LAST, played_count DESC, card_name"
+    )
+    leaders_by_pool = {}
+    for ldr in all_leaders:
+        leaders_by_pool.setdefault(ldr["pool_id"], []).append(ldr)
+
+    # Auto-leader: DISTINCT ON tiebreaker (pool_count DESC then played_count DESC)
+    auto_rows = db.fetchall(
+        "SELECT DISTINCT ON (pool_id) pool_id, card_name "
+        "FROM sealed_pool_cards WHERE section='leader' AND played_count > 0 "
+        "ORDER BY pool_id, pool_count DESC NULLS LAST, played_count DESC, card_name"
+    )
+    auto_leader_map = {r["pool_id"]: r["card_name"] for r in auto_rows}
 
     def norm(s):
         return re.sub(r"[^a-z0-9]", "", (s or "").lower())
@@ -3530,6 +3548,12 @@ def sealed_confirm_data():
             reverse=True
         )
         guess_id, guess_name, guess_score = scores[0][1], scores[0][2], scores[0][0]
+        pool_leaders = leaders_by_pool.get(p["id"], [])
+        auto_ldr = auto_leader_map.get(p["id"])
+        # Is it ambiguous? Multiple candidates with pool_count > 0
+        has_pool = [l for l in pool_leaders if (l["pool_count"] or 0) > 0 and (l["played_count"] or 0) > 0]
+        ambiguous = len(has_pool) > 1
+
         result_pools.append({
             "pool_id":            p["id"],
             "scan_page":          p["scan_page"],
@@ -3540,6 +3564,11 @@ def sealed_confirm_data():
             "guess_melee_id":     guess_id if not p["melee_player_id"] else None,
             "guess_melee_name":   guess_name if not p["melee_player_id"] else None,
             "guess_score":        round(guess_score, 2) if not p["melee_player_id"] else None,
+            "confirmed_leader":   p["confirmed_leader"],
+            "auto_leader":        auto_ldr,
+            "leader_ambiguous":   ambiguous,
+            "leader_candidates":  [{"name": l["card_name"], "pool_count": l["pool_count"], "played_count": l["played_count"]}
+                                   for l in pool_leaders],
         })
 
     return {
@@ -3559,6 +3588,17 @@ def sealed_confirm_player(payload: dict):
     db.execute(
         "UPDATE sealed_pools SET melee_player_id=%s WHERE id=%s",
         (melee_player_id, pool_id)
+    )
+    return {"ok": True}
+
+
+@app.post("/api/sealed/confirm-leader")
+def sealed_confirm_leader(payload: dict):
+    pool_id = int(payload["pool_id"])
+    leader  = payload.get("leader") or None  # None to clear
+    db.execute(
+        "UPDATE sealed_pools SET confirmed_leader=%s WHERE id=%s",
+        (leader, pool_id)
     )
     return {"ok": True}
 
@@ -3592,10 +3632,16 @@ def sealed_stats():
             GROUP BY sp.id
         ),
         leader_choice AS (
-            SELECT DISTINCT ON (pool_id) pool_id, card_name
-            FROM sealed_pool_cards
-            WHERE section = 'leader' AND played_count > 0
-            ORDER BY pool_id, pool_count DESC NULLS LAST, played_count DESC, card_name
+            SELECT sp2.id AS pool_id,
+                COALESCE(
+                    sp2.confirmed_leader,
+                    (SELECT spc2.card_name FROM sealed_pool_cards spc2
+                     WHERE spc2.pool_id = sp2.id AND spc2.section = 'leader' AND spc2.played_count > 0
+                     ORDER BY spc2.pool_count DESC NULLS LAST, spc2.played_count DESC, spc2.card_name
+                     LIMIT 1)
+                ) AS card_name
+            FROM sealed_pools sp2
+            WHERE sp2.melee_player_id IS NOT NULL
         )
         SELECT lc.card_name AS leader,
             COUNT(DISTINCT sp.id)  AS n,

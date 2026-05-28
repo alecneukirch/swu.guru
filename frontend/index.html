@@ -7913,9 +7913,10 @@ function renderConfirm() {
   const { pools, melee_players, assigned } = _confirmData;
   const assignedSet = new Set(assigned);
 
-  const confirmed = pools.filter(p => p.melee_player_id).length;
+  const confirmedPlayers  = pools.filter(p => p.melee_player_id).length;
+  const confirmedLeaders  = pools.filter(p => p.confirmed_leader).length;
   document.getElementById('confirm-progress').textContent =
-    `${confirmed} / ${pools.length} confirmed`;
+    `players ${confirmedPlayers}/${pools.length} · leaders ${confirmedLeaders}/${pools.length}`;
 
   // Group pools by table for context
   const byTable = {};
@@ -7944,6 +7945,18 @@ function renderConfirm() {
       ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num} · ${tablemates.map(x=>x.ocr_name).join(', ')}</div>`
       : `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num}</div>`;
 
+    // Leader dropdown — all candidates from this pool
+    const leaderOpts = p.leader_candidates.map(c => {
+      const hint = c.pool_count > 0 ? ` (pool: ${c.pool_count})` : '';
+      return `<option value="${c.name.replace(/"/g,'&quot;')}">${c.name}${hint}</option>`;
+    }).join('');
+    const ldrConfirmed = !!p.confirmed_leader;
+    const ldrDot = ldrConfirmed
+      ? `<span style="color:var(--green);font-size:10px">✓</span>`
+      : p.leader_ambiguous
+        ? `<span style="color:var(--yellow);font-size:10px" title="ambiguous — please confirm">!</span>`
+        : `<span style="color:var(--text3);font-size:10px">~</span>`;
+
     return `<tr class="confirm-row ${statusClass}" id="crow-${p.pool_id}" data-confirmed="${p.melee_player_id || ''}">
   <td style="color:var(--text3);font-family:var(--mono);font-size:11px">${p.scan_page}</td>
   <td>
@@ -7956,6 +7969,15 @@ function renderConfirm() {
       <option value="">— unassigned —</option>
       ${allOptionsHtml}
     </select>
+  </td>
+  <td style="white-space:nowrap">
+    ${ldrDot}
+    <select class="confirm-select" id="lsel-${p.pool_id}" onchange="onLeaderChange(${p.pool_id})" style="max-width:220px">
+      <option value="">— unknown —</option>
+      ${leaderOpts}
+    </select>
+    <button class="confirm-save-btn" id="lsave-${p.pool_id}"
+      onclick="saveLeader(${p.pool_id})" disabled>Save</button>
   </td>
   <td>${badge}</td>
   <td>
@@ -7973,7 +7995,7 @@ function renderConfirm() {
     </div>
     <table class="confirm-table">
       <thead><tr>
-        <th>SCAN</th><th>OCR NAME</th><th>MELEE ACCOUNT</th><th>STATUS</th><th></th>
+        <th>SCAN</th><th>OCR NAME</th><th>MELEE ACCOUNT</th><th>LEADER</th><th>STATUS</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -7984,6 +8006,13 @@ function renderConfirm() {
     if (!sel) return;
     if (p.melee_player_id) sel.value = String(p.melee_player_id);
     else if (p.guess_melee_id) sel.value = String(p.guess_melee_id);
+
+    // Set leader dropdown: prefer confirmed, then auto
+    const lsel = document.getElementById(`lsel-${p.pool_id}`);
+    if (lsel) {
+      const pick = p.confirmed_leader || p.auto_leader || '';
+      lsel.value = pick;
+    }
   });
 
   // Remove confirmed players from dropdowns where they don't belong
@@ -8001,6 +8030,30 @@ function renderConfirm() {
 
 function onConfirmChange(poolId) {
   document.getElementById(`csave-${poolId}`).disabled = false;
+}
+
+function onLeaderChange(poolId) {
+  document.getElementById(`lsave-${poolId}`).disabled = false;
+}
+
+async function saveLeader(poolId) {
+  const sel = document.getElementById(`lsel-${poolId}`);
+  const btn = document.getElementById(`lsave-${poolId}`);
+  btn.textContent = '…';
+  btn.disabled = true;
+  try {
+    await api('/api/sealed/confirm-leader', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ pool_id: poolId, leader: sel.value || null })
+    });
+    _confirmData = await api('/api/sealed/confirm-data');
+    renderConfirm();
+  } catch(e) {
+    btn.textContent = 'Error';
+    btn.disabled = false;
+    alert(e.message);
+  }
 }
 
 async function saveConfirm(poolId) {
