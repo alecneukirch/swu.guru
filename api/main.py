@@ -3563,6 +3563,98 @@ def sealed_confirm_player(payload: dict):
     return {"ok": True}
 
 
+@app.get("/api/sealed/stats")
+def sealed_stats():
+    EVENT_MELEE_ID = "421058"
+    event = db.fetchone("SELECT id FROM events WHERE melee_id = %s", (EVENT_MELEE_ID,))
+    if not event:
+        return {"leaders": [], "cards": [], "pool_count": 0}
+    event_id = event["id"]
+
+    pool_count = db.fetchone(
+        "SELECT COUNT(*) AS n FROM sealed_pools WHERE melee_player_id IS NOT NULL"
+    )["n"]
+
+    # Leaders
+    leaders = db.fetchall("""
+        WITH pg AS (
+            SELECT sp.id AS pool_id,
+                SUM(CASE WHEN m.p1_melee_id::text = sp.melee_player_id::text THEN m.p1_game_wins
+                         ELSE m.p2_game_wins END) AS gw,
+                SUM(CASE WHEN m.p1_melee_id::text = sp.melee_player_id::text THEN m.p2_game_wins
+                         ELSE m.p1_game_wins END) AS gl
+            FROM sealed_pools sp
+            JOIN matches m ON (m.p1_melee_id::text = sp.melee_player_id::text
+                            OR m.p2_melee_id::text = sp.melee_player_id::text)
+                          AND m.event_id = %s
+            WHERE sp.melee_player_id IS NOT NULL
+            GROUP BY sp.id
+        )
+        SELECT spc.card_name AS leader,
+            COUNT(DISTINCT sp.id)  AS n,
+            SUM(pg.gw)::int        AS gw,
+            SUM(pg.gl)::int        AS gl,
+            ROUND(SUM(pg.gw)::numeric / NULLIF(SUM(pg.gw)+SUM(pg.gl),0), 3) AS gwr
+        FROM sealed_pools sp
+        JOIN sealed_pool_cards spc ON spc.pool_id = sp.id
+            AND spc.section = 'leader' AND spc.played_count > 0
+        JOIN pg ON pg.pool_id = sp.id
+        WHERE sp.melee_player_id IS NOT NULL
+        GROUP BY spc.card_name
+        ORDER BY gwr DESC NULLS LAST
+    """, (event_id,))
+
+    # Cards (all sections except leader/base, no minimum)
+    cards = db.fetchall("""
+        WITH pg AS (
+            SELECT sp.id AS pool_id,
+                SUM(CASE WHEN m.p1_melee_id::text = sp.melee_player_id::text THEN m.p1_game_wins
+                         ELSE m.p2_game_wins END) AS gw,
+                SUM(CASE WHEN m.p1_melee_id::text = sp.melee_player_id::text THEN m.p2_game_wins
+                         ELSE m.p1_game_wins END) AS gl
+            FROM sealed_pools sp
+            JOIN matches m ON (m.p1_melee_id::text = sp.melee_player_id::text
+                            OR m.p2_melee_id::text = sp.melee_player_id::text)
+                          AND m.event_id = %s
+            WHERE sp.melee_player_id IS NOT NULL
+            GROUP BY sp.id
+        ),
+        played AS (
+            SELECT spc.card_name, spc.section, spc.card_number,
+                COUNT(DISTINCT sp.id)  AS n,
+                SUM(pg.gw)::int        AS gw,
+                SUM(pg.gl)::int        AS gl
+            FROM sealed_pools sp
+            JOIN sealed_pool_cards spc ON spc.pool_id = sp.id
+                AND spc.section NOT IN ('leader','base')
+                AND spc.played_count > 0
+            JOIN pg ON pg.pool_id = sp.id
+            WHERE sp.melee_player_id IS NOT NULL
+            GROUP BY spc.card_name, spc.section, spc.card_number
+        ),
+        in_pool AS (
+            SELECT card_name,
+                COUNT(DISTINCT pool_id) AS pool_n
+            FROM sealed_pool_cards
+            WHERE section NOT IN ('leader','base') AND pool_count > 0
+            GROUP BY card_name
+        )
+        SELECT p.card_name, p.section, p.card_number,
+            p.n, p.gw, p.gl,
+            ROUND(p.gw::numeric / NULLIF(p.gw+p.gl,0), 3) AS gwr,
+            ip.pool_n
+        FROM played p
+        LEFT JOIN in_pool ip ON ip.card_name = p.card_name
+        ORDER BY gwr DESC NULLS LAST, p.n DESC
+    """, (event_id,))
+
+    return {
+        "pool_count": pool_count,
+        "leaders": [dict(r) for r in leaders],
+        "cards":   [dict(r) for r in cards],
+    }
+
+
 @app.get("/api/karabast/leader/{leader_id}/{base_id}/matchups")
 def karabast_leader_matchups(leader_id: str, base_id: str):
     return db.fetchall("""
