@@ -7724,12 +7724,11 @@ function renderConfirm() {
   });
 
   // Build per-row options: exclude assigned players except the one assigned to this row
-  function buildOptions(currentMeleeId) {
-    return melee_players
+  const buildOptions = (currentMeleeId) =>
+    melee_players
       .filter(m => !assignedSet.has(m.id) || m.id === currentMeleeId)
       .map(m => `<option value="${m.id}">${m.placement}. ${m.name}</option>`)
       .join('');
-  }
 
   const rows = pools.map(p => {
     const isConfirmed = !!p.melee_player_id;
@@ -7747,7 +7746,7 @@ function renderConfirm() {
       ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num} · ${tablemates.map(x=>x.ocr_name).join(', ')}</div>`
       : `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num}</div>`;
 
-    const currentId = p.melee_player_id || p.guess_melee_id || null;
+    const currentId = p.melee_player_id || null;  // only keep confirmed assignment in dropdown
     return `<tr class="confirm-row ${statusClass}" id="crow-${p.pool_id}">
   <td style="color:var(--text3);font-family:var(--mono);font-size:11px">${p.scan_page}</td>
   <td>
