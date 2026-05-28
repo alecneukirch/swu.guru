@@ -3575,7 +3575,8 @@ def sealed_stats():
         "SELECT COUNT(*) AS n FROM sealed_pools WHERE melee_player_id IS NOT NULL"
     )["n"]
 
-    # Leaders
+    # Leaders — one per pool: prefer highest pool_count (card was actually opened),
+    # then highest played_count, as a tiebreaker for OCR noise
     leaders = db.fetchall("""
         WITH pg AS (
             SELECT sp.id AS pool_id,
@@ -3589,18 +3590,23 @@ def sealed_stats():
                           AND m.event_id = %s
             WHERE sp.melee_player_id IS NOT NULL
             GROUP BY sp.id
+        ),
+        leader_choice AS (
+            SELECT DISTINCT ON (pool_id) pool_id, card_name
+            FROM sealed_pool_cards
+            WHERE section = 'leader' AND played_count > 0
+            ORDER BY pool_id, pool_count DESC NULLS LAST, played_count DESC, card_name
         )
-        SELECT spc.card_name AS leader,
+        SELECT lc.card_name AS leader,
             COUNT(DISTINCT sp.id)  AS n,
             SUM(pg.gw)::int        AS gw,
             SUM(pg.gl)::int        AS gl,
             ROUND(SUM(pg.gw)::numeric / NULLIF(SUM(pg.gw)+SUM(pg.gl),0), 3) AS gwr
         FROM sealed_pools sp
-        JOIN sealed_pool_cards spc ON spc.pool_id = sp.id
-            AND spc.section = 'leader' AND spc.played_count > 0
+        JOIN leader_choice lc ON lc.pool_id = sp.id
         JOIN pg ON pg.pool_id = sp.id
         WHERE sp.melee_player_id IS NOT NULL
-        GROUP BY spc.card_name
+        GROUP BY lc.card_name
         ORDER BY gwr DESC NULLS LAST
     """, (event_id,))
 
