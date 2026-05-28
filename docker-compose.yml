@@ -48,6 +48,7 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  filedrops_data:
 
 # =============================================================================
 # Services
@@ -150,6 +151,46 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # FILEDROPS — deck sheet submission service at files.swu.guru
+  # ---------------------------------------------------------------------------
+  filedrops:
+    build: ./filedrops
+    container_name: filedrops
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 256m
+    networks:
+      - dmz
+    volumes:
+      - filedrops_data:/data/uploads
+    environment:
+      UPLOAD_DIR: /data/uploads
+      NOTIFY_EMAIL: ${NOTIFY_EMAIL:-alecneukirch@gmail.com}
+      FILEDROPS_ADMIN_TOKEN: ${FILEDROPS_ADMIN_TOKEN}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-150}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=swuguru_dmz"
+      - "traefik.http.routers.filedrops.rule=Host(`files.${DOMAIN}`)"
+      - "traefik.http.routers.filedrops.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.filedrops.middlewares=secure-headers@file,filedrops-limit@docker"
+      - "traefik.http.services.filedrops.loadbalancer.server.port=8000"
+      # generous body limit for file uploads (overrides Traefik default 1MB)
+      - "traefik.http.middlewares.filedrops-limit.buffering.maxRequestBodyBytes=157286400"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ===========================================================================
   # METRICS STACK
