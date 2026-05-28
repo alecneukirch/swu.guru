@@ -7723,16 +7723,13 @@ function renderConfirm() {
     byTable[t].push(p);
   });
 
-  // Build per-row options: exclude assigned players except the one assigned to this row
-  const buildOptions = (currentMeleeId) =>
-    melee_players
-      .filter(m => !assignedSet.has(m.id) || m.id === currentMeleeId)
-      .map(m => `<option value="${m.id}">${m.placement}. ${m.name}</option>`)
-      .join('');
+  // All options HTML (full list — we trim per-row after render)
+  const allOptionsHtml = melee_players
+    .map(m => `<option value="${m.id}">${m.placement}. ${m.name}</option>`)
+    .join('');
 
   const rows = pools.map(p => {
     const isConfirmed = !!p.melee_player_id;
-    const effectiveId = p.melee_player_id || p.guess_melee_id || '';
     const statusClass = isConfirmed ? 'status-confirmed' : (p.guess_score >= 0.75 ? 'status-guess' : 'status-unset');
     const badge = isConfirmed
       ? `<span class="confirm-status-badge badge-confirmed">confirmed</span>`
@@ -7740,14 +7737,12 @@ function renderConfirm() {
         ? `<span class="confirm-status-badge badge-guess">guess ${Math.round(p.guess_score*100)}%</span>`
         : `<span class="confirm-status-badge badge-unset">unset</span>`;
 
-    // Pair context: other player at same table
     const tablemates = (byTable[p.table_num] || []).filter(x => x.pool_id !== p.pool_id);
     const pairHint = tablemates.length
       ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num} · ${tablemates.map(x=>x.ocr_name).join(', ')}</div>`
       : `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px">t${p.table_num}</div>`;
 
-    const currentId = p.melee_player_id || null;  // only keep confirmed assignment in dropdown
-    return `<tr class="confirm-row ${statusClass}" id="crow-${p.pool_id}">
+    return `<tr class="confirm-row ${statusClass}" id="crow-${p.pool_id}" data-confirmed="${p.melee_player_id || ''}">
   <td style="color:var(--text3);font-family:var(--mono);font-size:11px">${p.scan_page}</td>
   <td>
     <div class="confirm-ocr-name">${p.ocr_name || '—'}</div>
@@ -7755,10 +7750,9 @@ function renderConfirm() {
     ${pairHint}
   </td>
   <td>
-    <select class="confirm-select" id="csel-${p.pool_id}"
-      onchange="onConfirmChange(${p.pool_id})">
+    <select class="confirm-select" id="csel-${p.pool_id}" onchange="onConfirmChange(${p.pool_id})">
       <option value="">— unassigned —</option>
-      ${buildOptions(currentId)}
+      ${allOptionsHtml}
     </select>
   </td>
   <td>${badge}</td>
@@ -7782,12 +7776,24 @@ function renderConfirm() {
       <tbody>${rows}</tbody>
     </table>`;
 
-  // Set current values
+  // Set current values, then remove assigned options from other rows' dropdowns
   pools.forEach(p => {
     const sel = document.getElementById(`csel-${p.pool_id}`);
     if (!sel) return;
-    const val = p.melee_player_id || p.guess_melee_id || '';
-    sel.value = String(val);
+    if (p.melee_player_id) sel.value = String(p.melee_player_id);
+    else if (p.guess_melee_id) sel.value = String(p.guess_melee_id);
+  });
+
+  // Remove confirmed players from dropdowns where they don't belong
+  pools.forEach(p => {
+    const sel = document.getElementById(`csel-${p.pool_id}`);
+    if (!sel) return;
+    Array.from(sel.options).forEach(opt => {
+      const optId = parseInt(opt.value);
+      if (!isNaN(optId) && assignedSet.has(optId) && optId !== p.melee_player_id) {
+        opt.remove();
+      }
+    });
   });
 }
 
