@@ -3374,19 +3374,13 @@ select option { background: var(--surface2); }
 .merge-id-name { font-size: 12px; color: var(--text3); }
 .merge-id-count{ font-family: var(--mono); font-size: 11px; color: var(--text3); margin-left: 8px; }
 .merge-actions { display: flex; gap: 8px; }
-.sealed-section-hdr { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.08em;
-  color:var(--text3); padding:28px 0 10px; text-transform:uppercase; }
+.sealed-tabs { display:flex; border-bottom:2px solid var(--border2); padding:0 24px; margin-bottom:0; }
+.sealed-tab { font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+  padding:10px 18px; color:var(--text3); cursor:pointer; background:none; border:none;
+  border-bottom:3px solid transparent; margin-bottom:-2px; transition:color .15s; }
+.sealed-tab:hover { color:var(--text2); }
+.sealed-tab.active { color:var(--text); border-bottom-color:var(--accent); }
 .sealed-note { font-family:var(--mono); font-size:11px; color:var(--text3); padding:0 0 16px; }
-.sealed-table { width:100%; border-collapse:collapse; font-size:13px; }
-.sealed-table th { font-family:var(--mono); font-size:11px; color:var(--text3); text-align:left;
-  padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
-.sealed-table th:hover { color:var(--text1); }
-.sealed-table th.sort-asc::after  { content:' ↑'; }
-.sealed-table th.sort-desc::after { content:' ↓'; }
-.sealed-table th.num, .sealed-table td.num { text-align:right; }
-.sealed-table td { padding:5px 10px; border-bottom:1px solid rgba(255,255,255,0.04); }
-.sealed-table tr:hover td { background:rgba(255,255,255,0.02); }
-.sealed-gwr-bar { display:inline-block; height:6px; border-radius:3px; vertical-align:middle; margin-left:6px; }
 .sealed-aspect { font-size:10px; padding:1px 5px; border-radius:2px; font-family:var(--mono); }
 .asp-vigilance { background:rgba(100,149,237,0.15); color:#6495ed; }
 .asp-command   { background:rgba(60,179,113,0.15);  color:#3cb371; }
@@ -3395,6 +3389,14 @@ select option { background: var(--surface2); }
 .sealed-filter-btn { font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:3px;
   cursor:pointer; border:1px solid var(--border); background:var(--bg2); color:var(--text3); }
 .sealed-filter-btn.active { border-color:var(--accent); color:var(--accent); }
+.sl-card { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:14px 12px; }
+.sl-card-name { font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px; line-height:1.25; }
+.sl-card-gwr { font-family:var(--display); font-size:26px; font-weight:700; line-height:1; margin-bottom:8px; }
+.sl-stats-row { display:flex; }
+.sl-stat { flex:1; text-align:center; border-right:1px solid var(--border); padding:4px 0; }
+.sl-stat:last-child { border-right:none; }
+.sl-sv { font-family:var(--mono); font-size:13px; font-weight:600; }
+.sl-sl { font-family:var(--mono); font-size:10px; color:var(--text3); margin-top:1px; }
 .confirm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .confirm-table th { font-family: var(--mono); font-size: 11px; color: var(--text3); text-align: left;
   padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -4085,6 +4087,10 @@ select.sl-input { cursor: pointer; }
     <div style="display:flex;gap:8px;align-items:center">
       <span id="sealed-pool-count" style="font-family:var(--mono);font-size:12px;color:var(--text3)"></span>
     </div>
+  </div>
+  <div class="sealed-tabs">
+    <button class="sealed-tab active" id="sealed-tab-btn-leaders" onclick="sealedShowTab('leaders')">Leaders</button>
+    <button class="sealed-tab" id="sealed-tab-btn-cards" onclick="sealedShowTab('cards')">Cards</button>
   </div>
   <div id="sealed-body" style="padding:0 24px 48px">
     <div class="loading" style="padding:40px">loading…</div>
@@ -7732,8 +7738,8 @@ function closeKbDetail() {
 }
 
 // ══ SEALED STATS ════════════════════════════════════════════════════════════
-let _sealedData = null;
-let _sealedSort = { col: 'gwr', dir: 'desc' };
+let _sealedData   = null;
+let _sealedTab    = 'leaders';
 let _sealedFilter = 'all';
 
 async function loadSealed() {
@@ -7747,107 +7753,109 @@ async function loadSealed() {
   }
 }
 
+function sealedShowTab(tab) {
+  _sealedTab = tab;
+  document.querySelectorAll('.sealed-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`sealed-tab-btn-${tab}`)?.classList.add('active');
+  renderSealed();
+}
+
+function sealedGrade(gwr) {
+  if (gwr == null) return { grade: '?', cls: 'tier-c' };
+  return tierGrade(gwr * 2);  // baseline 50% → ratio 1.0 = B tier
+}
+
 function renderSealed() {
   const { leaders, cards, pool_count } = _sealedData;
   document.getElementById('sealed-pool-count').textContent = `${pool_count} pools tracked`;
 
-  // ── Leaders ──
-  const leaderRows = leaders.map(r => {
-    const gwr = r.gwr ?? 0;
-    const barW = Math.round(gwr * 80);
-    const barColor = gwr >= 0.55 ? 'var(--green)' : gwr >= 0.48 ? 'var(--yellow)' : 'var(--red2)';
-    return `<tr>
-      <td>${r.leader}</td>
-      <td class="num">${r.n}</td>
-      <td class="num">${r.gw}</td>
-      <td class="num">${r.gl}</td>
-      <td class="num" style="white-space:nowrap">
-        ${r.gwr != null ? (gwr*100).toFixed(1)+'%' : '—'}
-        <span class="sealed-gwr-bar" style="width:${barW}px;background:${barColor}"></span>
-      </td>
-    </tr>`;
-  }).join('');
+  const TIER_ORDER = ['S','A','B','C','D','F'];
+  const TIER_LABEL = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
+  const TIER_RANGE = { S:'≥ 65% GWR', A:'55–64% GWR', B:'45–54% GWR', C:'35–44% GWR', D:'25–34% GWR', F:'< 25% GWR' };
 
-  // ── Cards ──
-  const aspBadge = s => {
-    if (s === 'vigilance') return `<span class="sealed-aspect asp-vigilance">vigilance</span>`;
-    if (s === 'command')   return `<span class="sealed-aspect asp-command">command</span>`;
-    return `<span class="sealed-aspect asp-multicolor">${s}</span>`;
-  };
+  const gwrColor = gwr => gwr >= 0.55 ? 'var(--green)' : gwr >= 0.45 ? 'var(--text2)' : 'var(--red2)';
 
-  const filteredCards = _sealedFilter === 'all' ? cards : cards.filter(c => c.section === _sealedFilter);
+  function mkTierSections(items, mkItem) {
+    const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
+    const noData = [];
+    items.forEach(r => {
+      if (r.gwr == null || r.n === 0) { noData.push(r); return; }
+      const g = sealedGrade(r.gwr).grade;
+      byTier[g in byTier ? g : 'C'].push(r);
+    });
 
-  const sorted = [...filteredCards].sort((a, b) => {
-    let av = a[_sealedSort.col] ?? -1, bv = b[_sealedSort.col] ?? -1;
-    return _sealedSort.dir === 'desc' ? bv - av : av - bv;
-  });
+    let html = '';
+    TIER_ORDER.forEach(t => {
+      const group = byTier[t];
+      if (!group.length) return;
+      html += `<div class="tier-section-header tier-${t.toLowerCase()}">` +
+        `<span class="tsh-grade" data-tooltip="${TIER_RANGE[t]}">${t}</span>` +
+        `<span class="tsh-label">${TIER_LABEL[t]} · ${TIER_RANGE[t]}</span>` +
+        `<span class="tsh-count">${group.length}</span></div>` +
+        `<div class="tier-section-grid">${group.map(mkItem).join('')}</div>`;
+    });
 
-  const cardRows = sorted.map(r => {
-    const gwr = r.gwr ?? 0;
-    const barW = Math.round(gwr * 80);
-    const barColor = gwr >= 0.55 ? 'var(--green)' : gwr >= 0.48 ? 'var(--yellow)' : 'var(--red2)';
-    return `<tr>
-      <td>${r.card_name}</td>
-      <td>${aspBadge(r.section)}</td>
-      <td class="num">${r.n}</td>
-      <td class="num">${r.gw}</td>
-      <td class="num">${r.gl}</td>
-      <td class="num" style="white-space:nowrap">
-        ${r.gwr != null ? (gwr*100).toFixed(1)+'%' : '—'}
-        <span class="sealed-gwr-bar" style="width:${barW}px;background:${barColor}"></span>
-      </td>
-      <td class="num" style="color:var(--text3)">${r.pool_n ?? '—'}</td>
-    </tr>`;
-  }).join('');
-
-  const thClass = col => {
-    if (_sealedSort.col !== col) return 'num';
-    return `num sort-${_sealedSort.dir}`;
-  };
-  const thStr = (col, label, extra='') =>
-    `<th class="${extra || 'num'}" onclick="sealedSort('${col}')"${_sealedSort.col===col ? ` class="${extra||'num'} sort-${_sealedSort.dir}"`:``}>${label}</th>`;
-
-  const filterBtns = ['all','vigilance','command']
-    .map(f => `<button class="sealed-filter-btn${_sealedFilter===f?' active':''}" onclick="sealedSetFilter('${f}')">${f}</button>`)
-    .join('');
-
-  document.getElementById('sealed-body').innerHTML = `
-    <div class="sealed-section-hdr">Leaders</div>
-    <table class="sealed-table" style="max-width:600px">
-      <thead><tr>
-        <th onclick="sealedSort('leader')">Leader</th>
-        <th class="num" onclick="sealedSort('n')">Players</th>
-        <th class="num" onclick="sealedSort('gw')">GW</th>
-        <th class="num" onclick="sealedSort('gl')">GL</th>
-        <th class="num" onclick="sealedSort('gwr')">GWR</th>
-      </tr></thead>
-      <tbody>${leaderRows}</tbody>
-    </table>
-
-    <div class="sealed-section-hdr">Cards</div>
-    <div class="sealed-note">Game win rate of players who included the card in their deck. Front-side data only (Vigilance + Command).</div>
-    <div class="sealed-filter-row">${filterBtns}</div>
-    <table class="sealed-table">
-      <thead><tr>
-        <th onclick="sealedSort('card_name')">Card</th>
-        <th onclick="sealedSort('section')">Aspect</th>
-        <th class="num" onclick="sealedSort('n')">In Deck</th>
-        <th class="num" onclick="sealedSort('gw')">GW</th>
-        <th class="num" onclick="sealedSort('gl')">GL</th>
-        <th class="num" onclick="sealedSort('gwr')">GWR</th>
-        <th class="num" onclick="sealedSort('pool_n')" title="# pools containing this card">In Pool</th>
-      </tr></thead>
-      <tbody>${cardRows}</tbody>
-    </table>`;
-}
-
-function sealedSort(col) {
-  if (_sealedSort.col === col) {
-    _sealedSort.dir = _sealedSort.dir === 'desc' ? 'asc' : 'desc';
-  } else {
-    _sealedSort = { col, dir: col === 'card_name' || col === 'section' ? 'asc' : 'desc' };
+    if (noData.length) {
+      html += `<div class="rogue-section-header" style="margin-top:32px">` +
+        `<span class="rogue-label">No Data</span>` +
+        `<span class="rogue-sub">no recorded games</span>` +
+        `<span class="tsh-count">${noData.length}</span></div>` +
+        `<div class="tier-section-grid">${noData.map(mkItem).join('')}</div>`;
+    }
+    return html;
   }
-  renderSealed();
+
+  if (_sealedTab === 'leaders') {
+    const mkLeader = r => {
+      const gwr = r.gwr ?? 0;
+      const gwrTxt = r.gwr != null ? (gwr * 100).toFixed(1) + '%' : '—';
+      const col = r.gwr != null ? gwrColor(gwr) : 'var(--text3)';
+      return `<div class="sl-card">` +
+        `<div class="sl-card-name">${r.leader}</div>` +
+        `<div class="sl-card-gwr" style="color:${col}">${gwrTxt}</div>` +
+        `<div class="sl-stats-row">` +
+          `<div class="sl-stat"><div class="sl-sv">${r.n}</div><div class="sl-sl">Players</div></div>` +
+          `<div class="sl-stat"><div class="sl-sv">${r.gw ?? '—'}</div><div class="sl-sl">GW</div></div>` +
+          `<div class="sl-stat"><div class="sl-sv">${r.gl ?? '—'}</div><div class="sl-sl">GL</div></div>` +
+        `</div></div>`;
+    };
+    document.getElementById('sealed-body').innerHTML =
+      mkTierSections(leaders, mkLeader) ||
+      '<div class="empty-state" style="padding:40px">// no leader data</div>';
+
+  } else {
+    const aspBadge = s => {
+      if (s === 'vigilance') return `<span class="sealed-aspect asp-vigilance">vigilance</span>`;
+      if (s === 'command')   return `<span class="sealed-aspect asp-command">command</span>`;
+      return `<span class="sealed-aspect asp-multicolor">${s}</span>`;
+    };
+    const filterBtns = ['all','vigilance','command']
+      .map(f => `<button class="sealed-filter-btn${_sealedFilter===f?' active':''}" onclick="sealedSetFilter('${f}')">${f}</button>`)
+      .join('');
+    const filtered = _sealedFilter === 'all' ? cards : cards.filter(c => c.section === _sealedFilter);
+
+    const mkCardItem = r => {
+      const gwr = r.gwr ?? 0;
+      const gwrTxt = r.gwr != null ? (gwr * 100).toFixed(1) + '%' : '—';
+      const col = r.gwr != null ? gwrColor(gwr) : 'var(--text3)';
+      return `<div class="sl-card">` +
+        `<div class="sl-card-name">${r.card_name}</div>` +
+        `<div style="margin-bottom:6px">${aspBadge(r.section)}</div>` +
+        `<div class="sl-card-gwr" style="color:${col}">${gwrTxt}</div>` +
+        `<div class="sl-stats-row">` +
+          `<div class="sl-stat"><div class="sl-sv">${r.n}</div><div class="sl-sl">In Deck</div></div>` +
+          `<div class="sl-stat"><div class="sl-sv">${r.pool_n ?? '—'}</div><div class="sl-sl">In Pool</div></div>` +
+          `<div class="sl-stat"><div class="sl-sv">${r.gw ?? '—'}</div><div class="sl-sl">GW</div></div>` +
+          `<div class="sl-stat"><div class="sl-sv">${r.gl ?? '—'}</div><div class="sl-sl">GL</div></div>` +
+        `</div></div>`;
+    };
+
+    document.getElementById('sealed-body').innerHTML =
+      `<div class="sealed-filter-row" style="padding-top:24px">${filterBtns}</div>` +
+      `<div class="sealed-note">Game win rate when included in deck. Front-side data only (Vigilance + Command).</div>` +
+      (mkTierSections(filtered, mkCardItem) ||
+        '<div class="empty-state" style="padding:24px">// no card data</div>');
+  }
 }
 
 function sealedSetFilter(f) {
