@@ -4503,6 +4503,7 @@ async function loadHome() {
     homeComboData = comboData;
     const total = comboData.reduce((s, r) => s + r.total_decks, 0);
     const uniqueLeaders = new Set(comboData.map(r => r.leader)).size;
+    console.log('[loadHome] decay=' + currentDecay + ' rows=' + comboData.length + ' first.total_decks=' + (comboData[0]?.total_decks));
     document.getElementById('mb-events').textContent  = (summary.total_events ?? '—').toLocaleString?.() ?? summary.total_events;
     document.getElementById('mb-decks').textContent   = Math.round(total).toLocaleString();
     document.getElementById('mb-leaders').textContent = uniqueLeaders;
@@ -4647,6 +4648,7 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
 function renderLeaderGrid() {
   const search = document.getElementById('home-search').value.toLowerCase();
   const grid   = document.getElementById('leader-grid');
+  console.log('[renderLeaderGrid] grid=' + !!grid + ' rows=' + homeComboData.length + ' first.total_decks=' + (homeComboData[0]?.total_decks));
 
   grid.classList.add('tier-grouped');
   let rows = [...homeComboData];
