@@ -35,10 +35,12 @@ app = FastAPI(title="SWU Cards", version="1.0.0")
 _DECAY_LAMBDA = 0.693147 / 90.0  # ln(2) / 90
 
 def decay_weight(event_alias: str = "e") -> str:
-    """SQL expression for per-row exponential decay weight by event date."""
+    """SQL expression for per-row exponential decay weight by event date.
+    CURRENT_DATE - date yields an integer (days) in PostgreSQL.
+    """
     return (
         f"EXP(-{_DECAY_LAMBDA:.6f} * "
-        f"GREATEST(EXTRACT(epoch FROM (CURRENT_DATE - {event_alias}.date)) / 86400.0, 0))"
+        f"GREATEST((CURRENT_DATE - {event_alias}.date)::FLOAT, 0))"
     )
 
 
@@ -219,10 +221,10 @@ def leaders(
             SELECT
                 s.leader,
                 SUM({w})                                                    AS total_decks,
-                SUM({w}) FILTER (
+                COALESCE(SUM({w}) FILTER (
                     WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
-                )                                                           AS top8_count,
-                SUM({w}) FILTER (WHERE s.placement = 1)                    AS wins
+                ), 0)                                                       AS top8_count,
+                COALESCE(SUM({w}) FILTER (WHERE s.placement = 1), 0)       AS wins
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             WHERE s.leader IS NOT NULL
@@ -486,10 +488,10 @@ def leaders_by_base(
                 br.group_key  AS base_key,
                 br.aspect     AS base_aspect,
                 SUM({w})                                                    AS total_decks,
-                SUM({w}) FILTER (
+                COALESCE(SUM({w}) FILTER (
                     WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
-                )                                                           AS top8_count,
-                SUM({w}) FILTER (WHERE s.placement = 1)                    AS wins
+                ), 0)                                                       AS top8_count,
+                COALESCE(SUM({w}) FILTER (WHERE s.placement = 1), 0)       AS wins
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             LEFT JOIN base_reference br ON br.name = s.base
