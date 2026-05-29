@@ -1148,12 +1148,12 @@ def leader_cards(
                 ROUND(cs.t8_count::numeric, 1)                                            AS t8_count,
                 lt.leader_total_decks,
                 lt.leader_total_t8s,
-                ROUND(cs.deck_count / NULLIF(lt.leader_total_decks, 0), 4)                AS inclusion_rate,
-                ROUND(cs.t8_count   / NULLIF(cs.deck_count, 0), 4)                       AS card_t8_rate,
-                ROUND(lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0), 4)          AS baseline_t8_rate,
+                ROUND((cs.deck_count / NULLIF(lt.leader_total_decks, 0))::numeric, 4)       AS inclusion_rate,
+                ROUND((cs.t8_count   / NULLIF(cs.deck_count, 0))::numeric, 4)             AS card_t8_rate,
+                ROUND((lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0))::numeric, 4) AS baseline_t8_rate,
                 ROUND(
-                    (cs.t8_count / NULLIF(cs.deck_count, 0))
-                    / NULLIF(lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0), 0),
+                    ((cs.t8_count / NULLIF(cs.deck_count, 0))
+                    / NULLIF(lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0), 0))::numeric,
                 4)                                                                         AS conversion,
                 COALESCE(c.type, 'Unit') AS card_type,
                 COALESCE(c.cost, 0)      AS cost,
