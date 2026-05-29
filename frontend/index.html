@@ -7915,8 +7915,9 @@ function renderConfirm() {
 
   const confirmedPlayers  = pools.filter(p => p.melee_player_id).length;
   const confirmedLeaders  = pools.filter(p => p.confirmed_leader).length;
+  const qcFailing         = pools.filter(p => !p.qc.ok).length;
   document.getElementById('confirm-progress').textContent =
-    `players ${confirmedPlayers}/${pools.length} · leaders ${confirmedLeaders}/${pools.length}`;
+    `players ${confirmedPlayers}/${pools.length} · leaders ${confirmedLeaders}/${pools.length} · qc ${pools.length - qcFailing}/${pools.length} clean`;
 
   // Group pools by table for context
   const byTable = {};
@@ -7979,6 +7980,12 @@ function renderConfirm() {
     <button class="confirm-save-btn" id="lsave-${p.pool_id}"
       onclick="saveLeader(${p.pool_id})" disabled>Save</button>
   </td>
+  <td style="font-family:var(--mono);font-size:11px;min-width:120px">
+    ${p.qc.ok
+      ? `<span style="color:var(--green)">✓ clean</span>`
+      : p.qc.issues.map(i => `<div style="color:var(--red2)">⚠ ${i}</div>`).join('')
+    }
+  </td>
   <td>${badge}</td>
   <td>
     <button class="confirm-save-btn" id="csave-${p.pool_id}"
@@ -7995,7 +8002,7 @@ function renderConfirm() {
     </div>
     <table class="confirm-table">
       <thead><tr>
-        <th>SCAN</th><th>OCR NAME</th><th>MELEE ACCOUNT</th><th>LEADER</th><th>STATUS</th><th></th>
+        <th>SCAN</th><th>OCR NAME</th><th>MELEE ACCOUNT</th><th>LEADER</th><th>QC</th><th>STATUS</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;

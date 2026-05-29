@@ -3531,6 +3531,18 @@ def sealed_confirm_data():
     )
     auto_leader_map = {r["pool_id"]: r["card_name"] for r in auto_rows}
 
+    # QC stats per pool
+    qc_rows = db.fetchall("""
+        SELECT pool_id,
+            SUM(pool_count)                                                       AS total_pool,
+            SUM(CASE WHEN section='leader'  AND played_count > 0 THEN 1 ELSE 0 END) AS played_leaders,
+            SUM(CASE WHEN section='base'    AND played_count > 0 THEN 1 ELSE 0 END) AS played_bases,
+            SUM(CASE WHEN section NOT IN ('leader','base') THEN played_count ELSE 0 END) AS deck_cards
+        FROM sealed_pool_cards
+        GROUP BY pool_id
+    """)
+    qc_by_pool = {r["pool_id"]: r for r in qc_rows}
+
     def norm(s):
         return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
@@ -3554,6 +3566,17 @@ def sealed_confirm_data():
         has_pool = [l for l in pool_leaders if (l["pool_count"] or 0) > 0 and (l["played_count"] or 0) > 0]
         ambiguous = len(has_pool) > 1
 
+        qc = qc_by_pool.get(p["id"], {})
+        total_pool   = int(qc.get("total_pool")   or 0)
+        pl_leaders   = int(qc.get("played_leaders") or 0)
+        pl_bases     = int(qc.get("played_bases")   or 0)
+        deck_cards   = int(qc.get("deck_cards")     or 0)
+        qc_issues = []
+        if pl_leaders != 1:  qc_issues.append(f"{pl_leaders} played leaders (expected 1)")
+        if pl_bases   != 1:  qc_issues.append(f"{pl_bases} played bases (expected 1)")
+        if total_pool != 96: qc_issues.append(f"pool total {total_pool} (expected 96)")
+        if deck_cards < 30:  qc_issues.append(f"deck has {deck_cards} cards (min 30)")
+
         result_pools.append({
             "pool_id":            p["id"],
             "scan_page":          p["scan_page"],
@@ -3569,6 +3592,14 @@ def sealed_confirm_data():
             "leader_ambiguous":   ambiguous,
             "leader_candidates":  [{"name": l["card_name"], "pool_count": l["pool_count"], "played_count": l["played_count"]}
                                    for l in pool_leaders],
+            "qc": {
+                "ok":           len(qc_issues) == 0,
+                "issues":       qc_issues,
+                "total_pool":   total_pool,
+                "played_leaders": pl_leaders,
+                "played_bases": pl_bases,
+                "deck_cards":   deck_cards,
+            },
         })
 
     return {
