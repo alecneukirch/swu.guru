@@ -267,6 +267,9 @@ body::before {
   color: var(--gold);
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
+.decay-btn { display: none; opacity: 0.35; font-size: 14px; padding: 4px 7px; }
+.decay-btn.visible { display: inline-block; }
+.decay-btn.active { opacity: 1; color: var(--text1); }
 
 .nav-status {
   margin-left: 16px;
@@ -3586,6 +3589,7 @@ select.sl-input { cursor: pointer; }
       <button class="days-btn active" id="days-14"  onclick="setDays(14)">2W</button>
       <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
       <button class="days-btn"        id="days-all" onclick="setDays(null)">Full</button>
+      <button class="days-btn decay-btn" id="decay-toggle" onclick="toggleDecay()" title="Time-decay weighting (30-day half-life)">⏳</button>
     </div>
   </div>
   <div class="nav-format-toggle">
@@ -4173,6 +4177,7 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
 // ── State ──────────────────────────────────────────────────────────────────
 let currentFormat  = 'standard';  // 'standard' | 'eternal'
 let currentDays    = 14;           // null | 28 | 14
+let currentDecay   = true;         // exponential decay for Full mode
 let currentMeta    = '';           // selected meta/era id, or '' for all
 let _stdMetaOpts   = '<option value="">All metas</option>';
 let _eternalMetaOpts = '<option value="">All eras</option>';
@@ -4456,6 +4461,9 @@ function setDays(d) {
   document.getElementById('days-all').classList.toggle('active', d === null);
   document.getElementById('days-28').classList.toggle('active', d === 28);
   document.getElementById('days-14').classList.toggle('active', d === 14);
+  const btn = document.getElementById('decay-toggle');
+  btn.classList.toggle('visible', d === null);
+  btn.classList.toggle('active', d === null && currentDecay);
   const activePage = document.querySelector('.page.active')?.id;
   if (activePage === 'page-matrix') loadMatrix();
   else if (activePage === 'page-picks') loadPicks();
@@ -4470,8 +4478,15 @@ function setDays(d) {
   }
 }
 
+function toggleDecay() {
+  currentDecay = !currentDecay;
+  document.getElementById('decay-toggle').classList.toggle('active', currentDecay);
+  loadHome();
+}
+
 function daysQS() {
-  return currentDays ? '&days=' + currentDays : '';
+  if (currentDays) return '&days=' + currentDays;
+  return currentDecay ? '' : '&decay=false';
 }
 
 async function loadHome() {

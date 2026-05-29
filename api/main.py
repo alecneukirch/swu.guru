@@ -32,7 +32,7 @@ app = FastAPI(title="SWU Cards", version="1.0.0")
 
 # Exponential time-decay for "Full" (unfiltered) stats.
 # Half-life of 90 days: events from 3 months ago count ~50%, 1 year ago ~6%.
-_DECAY_LAMBDA = 0.693147 / 60.0  # ln(2) / 60  →  120 days (1 set cycle) = 25% weight
+_DECAY_LAMBDA = 0.693147 / 30.0  # ln(2) / 30  →  30d=50%, 60d=25%, 120d=6%
 
 def decay_weight(event_alias: str = "e") -> str:
     """SQL expression for per-row exponential decay weight by event date.
@@ -172,6 +172,7 @@ def leaders(
     or_has_t8: bool           = Query(False, description="Also include leaders with any top-8 finish regardless of deck count"),
     format:    str            = Query("standard"),
     days:      Optional[int]  = Query(None),
+    decay:     bool           = Query(True),
 ):
     """
     Returns aggregated leader stats (summed across all bases).
@@ -210,8 +211,8 @@ def leaders(
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
             ORDER BY COUNT(DISTINCT s.id) DESC
         """, date_params + [min_decks])
-    else:
-        # Full dataset with exponential time-decay (half-life 90 days)
+    elif decay:
+        # Full dataset with exponential time-decay (half-life 30 days)
         w = decay_weight()
         t8_having_decay = (
             f"OR SUM({w}) FILTER "
@@ -263,6 +264,45 @@ def leaders(
              'match_games':    mw_by_leader.get(r['leader'], {}).get('match_games', 0)}
             for r in rows
         ]
+    else:
+        # Full dataset, no decay — materialized view (fast path)
+        rows = db.fetchall(f"""
+            SELECT
+                v.leader,
+                v.total_decks,
+                v.top8_count,
+                v.wins,
+                ROUND(ms.match_wins::numeric / NULLIF(ms.match_games, 0), 4) AS match_win_rate,
+                COALESCE(ms.match_games, 0)::INT AS match_games
+            FROM (
+                SELECT leader,
+                       SUM(total_decks)::INT AS total_decks,
+                       SUM(top8_count)::INT  AS top8_count,
+                       SUM(wins)::INT        AS wins
+                FROM {t['mv_leader_stats']}
+                GROUP BY leader
+                HAVING SUM(total_decks) >= %s {t8_having_mv}
+            ) v
+            LEFT JOIN (
+                SELECT leader,
+                       SUM(mw)::INT AS match_wins,
+                       SUM(mg)::INT AS match_games
+                FROM (
+                    SELECT p1_leader AS leader,
+                           COUNT(*) FILTER (WHERE winner = 'p1') AS mw,
+                           COUNT(*) FILTER (WHERE winner IN ('p1','p2')) AS mg
+                    FROM {t['matches']} WHERE p1_leader IS NOT NULL AND winner IS NOT NULL
+                    GROUP BY p1_leader
+                    UNION ALL
+                    SELECT p2_leader,
+                           COUNT(*) FILTER (WHERE winner = 'p2'),
+                           COUNT(*) FILTER (WHERE winner IN ('p1','p2'))
+                    FROM {t['matches']} WHERE p2_leader IS NOT NULL AND winner IS NOT NULL
+                    GROUP BY p2_leader
+                ) t2 GROUP BY leader
+            ) ms ON ms.leader = v.leader
+            ORDER BY v.total_decks DESC
+        """, [min_decks])
 
     if not rows:
         return []
@@ -417,6 +457,7 @@ def leaders_by_base(
     or_has_t8: bool           = Query(False),
     format:    str            = Query("standard"),
     days:      Optional[int]  = Query(None),
+    decay:     bool           = Query(True),
 ):
     """
     Returns stats for each leader+base-group combo.
@@ -473,8 +514,8 @@ def leaders_by_base(
             GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
         """, date_params + [min_decks])
-    else:
-        # Full dataset with exponential time-decay (half-life 90 days)
+    elif decay:
+        # Full dataset with exponential time-decay (half-life 30 days)
         w = decay_weight()
         t8_having_decay = (
             f"OR SUM({w}) FILTER "
@@ -531,6 +572,48 @@ def leaders_by_base(
              'match_games': mw_by_lb.get((r['leader'], r['base']), {}).get('match_games', 0)}
             for r in rows
         ]
+    else:
+        # Full dataset, no decay — materialized view (fast path)
+        rows = db.fetchall(f"""
+            SELECT v.leader, v.base,
+                   br.label      AS base_group,
+                   br.group_key  AS base_key,
+                   br.aspect     AS base_aspect,
+                   v.total_decks, v.top8_count, v.wins,
+                   COALESCE(ms.match_wins,  0)::INT AS match_wins,
+                   COALESCE(ms.match_games, 0)::INT AS match_games
+            FROM (
+                SELECT leader, base,
+                       SUM(total_decks)::INT AS total_decks,
+                       SUM(top8_count)::INT  AS top8_count,
+                       SUM(wins)::INT        AS wins
+                FROM {t['mv_leader_stats']}
+                WHERE leader IS NOT NULL AND base IS NOT NULL
+                GROUP BY leader, base
+                HAVING SUM(total_decks) >= %s {t8_having_mv}
+            ) v
+            LEFT JOIN base_reference br ON br.name = v.base
+            LEFT JOIN (
+                SELECT leader, base,
+                       SUM(mw)::INT AS match_wins,
+                       SUM(mg)::INT AS match_games
+                FROM (
+                    SELECT p1_leader AS leader, p1_base AS base,
+                           COUNT(*) FILTER (WHERE winner = 'p1') AS mw,
+                           COUNT(*) FILTER (WHERE winner IN ('p1','p2')) AS mg
+                    FROM {t['matches']}
+                    WHERE p1_leader IS NOT NULL AND p1_base IS NOT NULL AND winner IS NOT NULL
+                    GROUP BY p1_leader, p1_base
+                    UNION ALL
+                    SELECT p2_leader, p2_base,
+                           COUNT(*) FILTER (WHERE winner = 'p2'),
+                           COUNT(*) FILTER (WHERE winner IN ('p1','p2'))
+                    FROM {t['matches']}
+                    WHERE p2_leader IS NOT NULL AND p2_base IS NOT NULL AND winner IS NOT NULL
+                    GROUP BY p2_leader, p2_base
+                ) t2 GROUP BY leader, base
+            ) ms ON ms.leader = v.leader AND ms.base = v.base
+        """, [min_decks])
 
     if not rows:
         return []
