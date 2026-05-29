@@ -4616,7 +4616,7 @@ async function renderLeaderHero(name) {
     <div class="lh-sub">${name} <button class="share-btn" onclick="shareLeader(this)" title="Copy link">&#128279; Share</button></div>
     <div class="lh-stats">
       <div class="lh-stat">
-        <div class="lh-stat-val">${stats.total_decks?.toLocaleString() ?? '—'}</div>
+        <div class="lh-stat-val">${stats.total_decks != null ? Math.round(stats.total_decks).toLocaleString() : '—'}</div>
         <div class="lh-stat-label">Decklists</div>
       </div>
       <div class="lh-stat">
@@ -4624,7 +4624,7 @@ async function renderLeaderHero(name) {
         <div class="lh-stat-label">T8 Rate</div>
       </div>
       <div class="lh-stat">
-        <div class="lh-stat-val">${stats.wins ?? 0}</div>
+        <div class="lh-stat-val">${Math.round(stats.wins ?? 0)}</div>
         <div class="lh-stat-label">Event Wins</div>
       </div>
       <div class="lh-stat">
@@ -4834,7 +4834,7 @@ function renderCardTable(rows) {
   <div class="ct-scrim"></div>
   <div class="ct-top">
     <div class="ct-badge"><span class="ct-badge-label">avg</span>${mdStr}x</div>
-    <div class="ct-badge">${r.deck_count}<span class="ct-badge-label">decks</span></div>
+    <div class="ct-badge">${Math.round(r.deck_count)}<span class="ct-badge-label">decks</span></div>
     ${isSpicy(r) ? '<div class="ct-spice" title="Spice — low inclusion, high conversion">🌶</div>' : ''}
   </div>
   <div class="ct-bottom">
@@ -4884,7 +4884,7 @@ function renderCardTable(rows) {
   <div class="ct-scrim"></div>
   <div class="ct-top">
     <div class="ct-badge"><span class="ct-badge-label">avg</span>${mdStr}x</div>
-    <div class="ct-badge">${r.deck_count}<span class="ct-badge-label">decks</span></div>
+    <div class="ct-badge">${Math.round(r.deck_count)}<span class="ct-badge-label">decks</span></div>
   </div>
   <div class="ct-bottom">
     <div class="ct-name-row">${sbCostBadge}<div class="ct-name"${sbSub ? ` data-tooltip="${sbSub}"` : ''}>${sbName}</div></div>
@@ -7097,13 +7097,13 @@ function renderGlobalCards(rows) {
       const { name: ctName, subtitle: ctSub } = cardNameParts(r.card_name);
       const inclTip  = `${r.deck_count} of ${r.total_decks} decks included this card (counted by deck, not copies)`;
       const t8sTip   = `${r.t8_count} top-cut decks · ${fmtPct(r.card_t8_rate)} T8 rate among decks running it`;
-      const decksTip = `${r.deck_count} of ${r.total_decks} total decks in this meta`;
+      const decksTip = `${Math.round(r.deck_count)} of ${Math.round(r.total_decks)} total decks in this meta`;
       return `<div class="card-tile conv-${cc}" data-card="${safe}" data-idx="${i}">
   <div class="ct-art" id="cp-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
-    <div class="ct-badge" data-tooltip="${decksTip}">${r.deck_count}<span class="ct-badge-label">decks</span></div>
-    <div class="ct-badge" data-tooltip="${t8sTip}">${r.t8_count}<span class="ct-badge-label">t8s</span></div>
+    <div class="ct-badge" data-tooltip="${decksTip}">${Math.round(r.deck_count)}<span class="ct-badge-label">decks</span></div>
+    <div class="ct-badge" data-tooltip="${t8sTip}">${Math.round(r.t8_count)}<span class="ct-badge-label">t8s</span></div>
   </div>
   <div class="ct-bottom">
     <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` data-tooltip="${ctSub}"` : ''}>${ctName}</div></div>
