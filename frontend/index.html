@@ -3554,7 +3554,6 @@ select.sl-input { cursor: pointer; }
   <div class="leader-top-row">
     <div class="leader-top-left">
       <div id="leader-hero"></div>
-      <div id="lp-base-label" style="display:none;padding:8px 0 0;font-size:12px;color:var(--text3);font-family:var(--mono)"></div>
     </div>
     <div id="leader-elo-chart" class="leader-top-right">
       <div class="loading" style="padding:24px">loading…</div>
@@ -4270,13 +4269,6 @@ function openLeader(name, base = null) {
   document.getElementById('bc-base-sep').style.display = 'none';
   document.getElementById('bc-base').style.display = 'none';
   document.getElementById('breadcrumb').classList.add('visible');
-  const baseLabel = document.getElementById('lp-base-label');
-  if (currentLeaderBase) {
-    baseLabel.textContent = '// base: ' + currentLeaderBase;
-    baseLabel.style.display = '';
-  } else {
-    baseLabel.style.display = 'none';
-  }
   matchupData    = [];
   weaknessesData = [];
   weaknessSort   = 'count';
@@ -4618,6 +4610,11 @@ async function renderLeaderHero(name) {
     const tier = tierGrade(stats.conversion);
 
     const pctColor = v => v == null ? 'var(--text3)' : v >= 1.1 ? 'var(--green)' : v >= 0.9 ? 'var(--gold)' : 'var(--red2)';
+    const comma = name.indexOf(',');
+    const subtitle = comma > 0 ? name.slice(comma + 1).trim() : '';
+    const baseDot = currentLeaderBase
+      ? `<div class="pick-base" id="lh-base-row"><span id="lh-base-dot" style="width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle;background:var(--text3)"></span>${currentLeaderBase}</div>`
+      : '';
 
     hero.innerHTML = `
 <div id="leader-hero">
@@ -4625,7 +4622,8 @@ async function renderLeaderHero(name) {
   <div class="lh-info">
     <div class="lh-aspect" id="lh-aspect-display"></div>
     <div class="lh-name">${shortName(name)} <span class="lc-tier ${tier.cls}" style="position:static;display:inline-flex;vertical-align:middle;margin-left:8px">${tier.grade}</span></div>
-    <div class="lh-sub">${name} <button class="share-btn" onclick="shareLeader(this)" title="Copy link">&#128279; Share</button></div>
+    <div class="lh-sub">${subtitle} <button class="share-btn" onclick="shareLeader(this)" title="Copy link">&#128279; Share</button></div>
+    ${baseDot}
     <div class="lh-stats">
       <div class="lh-stat">
         <div class="lh-stat-val">${stats.total_decks != null ? Math.round(stats.total_decks).toLocaleString() : '—'}</div>
@@ -4661,6 +4659,10 @@ async function renderLeaderHero(name) {
       const aspEl = document.getElementById('lh-aspect-display');
       if (aspEl && d?.all_aspects?.length) {
         aspEl.innerHTML = aspectsDisplay(d.all_aspects, 18);
+      }
+      const dot = document.getElementById('lh-base-dot');
+      if (dot && d?.all_aspects?.length) {
+        dot.style.background = aspectColor(d.all_aspects[0]);
       }
     });
   } catch(e) {
