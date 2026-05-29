@@ -4181,7 +4181,6 @@ let currentDecay   = true;         // exponential decay for Full mode
 let currentMeta    = '';           // selected meta/era id, or '' for all
 let _stdMetaOpts   = '<option value="">All metas</option>';
 let _eternalMetaOpts = '<option value="">All eras</option>';
-let homeData       = [];
 let homeSort       = 'total_decks';
 let homeComboData  = [];
 let _homeGen       = 0;
@@ -4496,18 +4495,17 @@ async function loadHome() {
   const qs  = (set ? '&meta_id=' + encodeURIComponent(set) : '') + '&format=' + fmt + daysQS();
   try {
     const deckFilter = 'min_decks=1';
-    const [data, comboData, summary] = await Promise.all([
-      api('/api/leaders?' + deckFilter + qs),
+    const [comboData, summary] = await Promise.all([
       api('/api/leaders/by-base?' + deckFilter + qs),
       api('/api/summary?format=' + fmt + (set ? '&meta_id=' + encodeURIComponent(set) : '') + daysQS()),
     ]);
     if (gen !== _homeGen) return;
-    homeData      = data;
     homeComboData = comboData;
-    const total = data.reduce((s, r) => s + r.total_decks, 0);
+    const total = comboData.reduce((s, r) => s + r.total_decks, 0);
+    const uniqueLeaders = new Set(comboData.map(r => r.leader)).size;
     document.getElementById('mb-events').textContent  = (summary.total_events ?? '—').toLocaleString?.() ?? summary.total_events;
-    document.getElementById('mb-decks').textContent   = total.toLocaleString();
-    document.getElementById('mb-leaders').textContent = data.length;
+    document.getElementById('mb-decks').textContent   = Math.round(total).toLocaleString();
+    document.getElementById('mb-leaders').textContent = uniqueLeaders;
     document.getElementById('mb-matches').textContent = summary.total_matches != null ? summary.total_matches.toLocaleString() : '—';
     renderLeaderGrid();
   } catch(e) {
@@ -4625,10 +4623,10 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
     </div>`;
   } else {
     statsHtml = `<div class="lc-stats">
-      <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">${r.total_decks}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">Decks</div><div class="lc-stat-val">${Math.round(r.total_decks)}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">Meta</div><div class="lc-stat-val" style="color:var(--gold)">${mp}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">T8</div><div class="lc-stat-val" style="color:${r.t8_rate>=0.2?'var(--green)':r.t8_rate>=0.12?'var(--gold)':'var(--text2)'}">${t8p}</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${r.wins}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">Wins</div><div class="lc-stat-val">${Math.round(r.wins)}</div></div>
       <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${mwrColor}">${mwrVal}</div></div>
     </div>`;
   }

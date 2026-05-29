@@ -31,8 +31,8 @@ app = FastAPI(title="SWU Cards", version="1.0.0")
 # between 2025-04-11 and 2025-07-11, not all JTL events.
 
 # Exponential time-decay for "Full" (unfiltered) stats.
-# Half-life of 90 days: events from 3 months ago count ~50%, 1 year ago ~6%.
-_DECAY_LAMBDA = 0.693147 / 30.0  # ln(2) / 30  →  30d=50%, 60d=25%, 120d=6%
+# Half-life of 30 days: events from 30d ago count ~50%, 60d ~25%, 120d ~6%.
+_DECAY_LAMBDA = 0.693147 / 30.0  # ln(2) / 30
 
 def decay_weight(event_alias: str = "e") -> str:
     """SQL expression for per-row exponential decay weight by event date.
