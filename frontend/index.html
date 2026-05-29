@@ -133,92 +133,9 @@ body::before {
 .nav-btn:hover { color: var(--text2); }
 .nav-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
 
-.nav-days-wrapper {
-  position: relative;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-#nav-set {
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  color: var(--text2);
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 4px 24px 4px 10px;
-  height: 32px;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-}
-#nav-set:focus { border-color: var(--gold); }
-.nav-days-toggle {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  padding: 4px;
-}
-.days-intro-popup {
-  display: none;
-  position: fixed;
-  top: 62px;
-  right: 24px;
-  width: 270px;
-  background: var(--surface);
-  border: 1px solid rgba(212,175,55,0.45);
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
-  z-index: 500;
-  cursor: pointer;
-}
-.days-intro-popup::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: var(--arrow-left, 50%);
-  width: 10px;
-  height: 10px;
-  background: var(--surface);
-  border-left: 1px solid rgba(212,175,55,0.45);
-  border-top: 1px solid rgba(212,175,55,0.45);
-  transform: rotate(45deg);
-}
-.days-intro-popup-title {
-  font-weight: 700;
-  color: var(--gold);
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-.days-intro-popup-text {
-  font-size: 13px;
-  color: var(--text2);
-  line-height: 1.5;
-  margin-bottom: 10px;
-}
-.days-intro-popup-btn {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 12px;
-  border: 1px solid rgba(212,175,55,0.4);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--gold);
-  cursor: pointer;
-}
+.decay-info { font-size: 16px; cursor: default; opacity: 0.6; padding: 0 4px; }
 .nav-format-toggle {
-  margin-left: 8px;
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -247,29 +164,6 @@ body::before {
   color: var(--gold);
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
-.days-btn {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 5px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text3);
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: background 0.15s, color 0.15s;
-}
-.days-btn:hover { color: var(--text2); }
-.days-btn.active {
-  background: var(--surface2);
-  color: var(--gold);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-.decay-btn { display: none; opacity: 0.35; font-size: 14px; padding: 4px 7px; }
-.decay-btn.visible { display: inline-block; }
-.decay-btn.active { opacity: 1; color: var(--text1); }
 
 .nav-status {
   margin-left: 16px;
@@ -2320,15 +2214,6 @@ select option { background: var(--surface2); }
   border-top: 1px solid var(--border2);
 }
 
-/* ── Days toggle highlight (picks intro) ──────────────────── */
-@keyframes days-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212,175,55,0.5); }
-  50%       { box-shadow: 0 0 0 8px rgba(212,175,55,0); }
-}
-.nav-days-toggle.highlight {
-  border-color: var(--gold);
-  animation: days-pulse 1.2s ease infinite;
-}
 
 /* ── Picks page ───────────────────────────────────────────── */
 
@@ -3581,17 +3466,7 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
-  <div class="nav-days-wrapper">
-    <select id="nav-set" onchange="setNavMeta(this.value)">
-      <option value="">All metas</option>
-    </select>
-    <div class="nav-days-toggle">
-      <button class="days-btn active" id="days-14"  onclick="setDays(14)">2W</button>
-      <button class="days-btn"        id="days-28"  onclick="setDays(28)">4W</button>
-      <button class="days-btn"        id="days-all" onclick="setDays(null)">Full</button>
-      <button class="days-btn decay-btn" id="decay-toggle" onclick="toggleDecay()" title="Time-decay weighting (30-day half-life)">⏳</button>
-    </div>
-  </div>
+  <div class="decay-info" title="Recent events weighted more heavily — 30-day half-life. Events from 30 days ago count ~50%, 60 days ~25%, 4+ months ~6%. Keeps rankings relevant as the meta evolves.">⏳</div>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -4176,11 +4051,6 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
 
 // ── State ──────────────────────────────────────────────────────────────────
 let currentFormat  = 'standard';  // 'standard' | 'eternal'
-let currentDays    = 14;           // null | 28 | 14
-let currentDecay   = true;         // exponential decay for Full mode
-let currentMeta    = '';           // selected meta/era id, or '' for all
-let _stdMetaOpts   = '<option value="">All metas</option>';
-let _eternalMetaOpts = '<option value="">All eras</option>';
 let homeSort       = 'total_decks';
 let homeComboData  = [];
 let _homeGen       = 0;
@@ -4438,11 +4308,6 @@ function applyFormat(fmt) {
   document.body.classList.toggle('eternal-theme', fmt === 'eternal');
   document.getElementById('fmt-standard').classList.toggle('active', fmt === 'standard');
   document.getElementById('fmt-eternal').classList.toggle('active', fmt === 'eternal');
-  const navSet = document.getElementById('nav-set');
-  if (navSet) {
-    navSet.innerHTML = fmt === 'eternal' ? _eternalMetaOpts : _stdMetaOpts;
-    currentMeta = navSet.value;
-  }
 }
 function setFormat(fmt) {
   applyFormat(fmt);
@@ -4455,55 +4320,22 @@ function setFormat(fmt) {
   }
 }
 
-function setDays(d) {
-  currentDays = d;
-  document.getElementById('days-all').classList.toggle('active', d === null);
-  document.getElementById('days-28').classList.toggle('active', d === 28);
-  document.getElementById('days-14').classList.toggle('active', d === 14);
-  const btn = document.getElementById('decay-toggle');
-  btn.classList.toggle('visible', d === null);
-  btn.classList.toggle('active', d === null && currentDecay);
-  const activePage = document.querySelector('.page.active')?.id;
-  if (activePage === 'page-matrix') loadMatrix();
-  else if (activePage === 'page-picks') loadPicks();
-  else if (activePage === 'page-cards') loadCardsPage();
-  else if (currentLeader) {
-    renderLeaderHero(currentLeader);
-    if (leaderTab === 'cards') loadLeaderCards();
-    else if (leaderTab === 'matchups') loadLeaderMatchups();
-    else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
-  } else {
-    loadHome();
-  }
-}
-
-function toggleDecay() {
-  currentDecay = !currentDecay;
-  document.getElementById('decay-toggle').classList.toggle('active', currentDecay);
-  loadHome();
-}
-
-function daysQS() {
-  if (currentDays) return '&days=' + currentDays;
-  return currentDecay ? '' : '&decay=false';
-}
 
 async function loadHome() {
   const gen = ++_homeGen;
   const fmt = currentFormat;
-  const set = currentMeta;
-  const qs  = (set ? '&meta_id=' + encodeURIComponent(set) : '') + '&format=' + fmt + daysQS();
+  const qs  = '&format=' + fmt;
   try {
     const deckFilter = 'min_decks=1';
     const [comboData, summary] = await Promise.all([
       api('/api/leaders/by-base?' + deckFilter + qs),
-      api('/api/summary?format=' + fmt + (set ? '&meta_id=' + encodeURIComponent(set) : '') + daysQS()),
+      api('/api/summary?format=' + fmt),
     ]);
     if (gen !== _homeGen) return;
     homeComboData = comboData;
     const total = comboData.reduce((s, r) => s + r.total_decks, 0);
     const uniqueLeaders = new Set(comboData.map(r => r.leader)).size;
-    console.log('[loadHome] decay=' + currentDecay + ' rows=' + comboData.length + ' first.total_decks=' + (comboData[0]?.total_decks));
+    console.log('[loadHome] rows=' + comboData.length + ' first.total_decks=' + (comboData[0]?.total_decks));
     document.getElementById('mb-events').textContent  = (summary.total_events ?? '—').toLocaleString?.() ?? summary.total_events;
     document.getElementById('mb-decks').textContent   = Math.round(total).toLocaleString();
     document.getElementById('mb-leaders').textContent = uniqueLeaders;
@@ -4757,13 +4589,10 @@ async function renderLeaderHero(name) {
   const hero = document.getElementById('leader-hero');
   hero.innerHTML = '<div style="padding:24px;color:var(--text3);font-family:var(--mono)">loading…</div>';
   try {
-    const set  = currentMeta;
     const base = document.getElementById('lp-base').value;
     let statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats';
     const statsParams = ['format=' + currentFormat];
-    if (set)  statsParams.push('meta_id='    + encodeURIComponent(set));
     if (base) statsParams.push('base_group=' + encodeURIComponent(base));
-    if (currentDays) statsParams.push('days=' + currentDays);
     statsUrl += '?' + statsParams.join('&');
     const stats = await api(statsUrl);
     const asp  = aspect(name);
@@ -4824,11 +4653,10 @@ async function renderLeaderHero(name) {
 }
 
 async function loadLeaderBases(name, autoBase = null) {
-  const set    = currentMeta;
   const sel    = document.getElementById('lp-base');
   sel.innerHTML = '<option value="">All bases</option>';
   try {
-    const groups = await api('/api/leader/' + encodeURIComponent(name) + '/bases?format=' + currentFormat + (set ? '&meta_id='+encodeURIComponent(set) : '') + daysQS());
+    const groups = await api('/api/leader/' + encodeURIComponent(name) + '/bases?format=' + currentFormat);
     groups.forEach(g => {
       const opt = document.createElement('option');
       opt.value       = (g.bases || []).join(',');
@@ -4872,7 +4700,6 @@ function shareLeader(btn) {
 
 async function loadLeaderCards() {
   if (!currentLeader) return;
-  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
 
   // Refresh hero stats to reflect base filter
@@ -4894,10 +4721,8 @@ async function loadLeaderCards() {
   try {
     const minDecks = parseInt(document.getElementById('lp-min-decks')?.value) || 5;
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat;
-    if (set)                       url += '&meta_id=' + encodeURIComponent(set);
     if (base)                      url += '&base_group=' + encodeURIComponent(base);
     if (_eloFilterBucket !== null) url += '&elo_bucket=' + _eloFilterBucket;
-    url += daysQS();
     leaderData = await api(url) || [];
     filterCards();
   } catch(e) {
@@ -5150,13 +4975,10 @@ async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
-  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups';
   const muParams = ['format=' + currentFormat];
-  if (set)          muParams.push('meta_id='    + encodeURIComponent(set));
   if (base)         muParams.push('base_group=' + encodeURIComponent(base));
-  if (currentDays)  muParams.push('days='       + currentDays);
   url += '?' + muParams.join('&');
   try {
     const data = await api(url);
@@ -5261,15 +5083,12 @@ async function openMatchupDetail(matchup) {
   document.getElementById('mu-detail-wr').style.color = color;
   document.getElementById('mu-cards-grid').innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
 
-  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
     + '?opponent=' + encodeURIComponent(matchup.opponent)
     + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join(','))
     + '&format=' + currentFormat;
-  if (set)         url += '&meta_id='    + encodeURIComponent(set);
   if (base)        url += '&base_group=' + encodeURIComponent(base);
-  url += daysQS();
 
   try {
     const data = await api(url);
@@ -5355,13 +5174,10 @@ async function loadLeaderWeaknesses() {
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
   const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
-  const set  = currentMeta;
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
-  if (set)  url += '&meta_id='    + encodeURIComponent(set);
   if (base) url += '&base_group=' + encodeURIComponent(base);
-  url += daysQS();
   try {
     weaknessesData = await api(url);
     renderWeaknesses();
@@ -5442,9 +5258,7 @@ async function loadLeaderElo() {
   const base = document.getElementById('lp-base').value;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/elo-breakdown?format=' + currentFormat;
-  if (currentMeta) url += '&meta_id=' + encodeURIComponent(currentMeta);
   if (base)        url += '&base_group=' + encodeURIComponent(base);
-  url += daysQS();
 
   try {
     const rows = await api(url);
@@ -5546,12 +5360,9 @@ async function loadEvents() {
 
 function filterEvents() {
   const q     = document.getElementById('ev-search').value.toLowerCase();
-  const set   = currentMeta;
   const today = new Date().toISOString().slice(0, 10);
   let rows    = eventsData;
   if (q)   rows = rows.filter(e => e.name?.toLowerCase().includes(q));
-  // Upcoming events are always shown regardless of set filter
-  if (set) rows = rows.filter(e => !e.date || e.date > today || e.set_code === set);
   document.getElementById('events-sub').textContent = `${rows.length} events`;
   renderEvents(rows);
 }
@@ -5858,9 +5669,7 @@ function setModalTab(tab) {
 async function loadModalData() {
   document.getElementById('modal-body').innerHTML = '<div class="loading">loading…</div>';
   try {
-    const qs = `format=${currentFormat}`
-      + (currentMeta ? `&meta_id=${encodeURIComponent(currentMeta)}` : '')
-      + (currentDays ? `&days=${currentDays}` : '');
+    const qs = `format=${currentFormat}`;
     const [byLeader, matrix] = await Promise.all([
       api(`/api/card/${encodeURIComponent(modalCard)}/by-leader?${qs}`),
       api(`/api/card/${encodeURIComponent(modalCard)}/copy-matrix?${qs}`),
@@ -6178,16 +5987,13 @@ async function loadMatrix() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
 
-  const meta = currentMeta;
   // top_n uses max of rows/cols so we always have enough combos for both axes
   const topN = Math.max(matrixRows, matrixCols);
 
   const minDecks = currentFormat === 'eternal' ? 1 : 5;
   let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}`;
-  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
   if (matrixMinElo > 0)    url += `&min_elo=${matrixMinElo}`;
   if (matrixOppMinElo > 0) url += `&opp_min_elo=${matrixOppMinElo}`;
-  if (currentDays) url += `&days=${currentDays}`;
 
   try {
     const d = await api(url);
@@ -6390,12 +6196,9 @@ async function loadPlayers() {
   const wrap = document.getElementById('players-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const meta   = currentMeta;
   const search = document.getElementById('pl-search')?.value || '';
   let url = `/api/players?limit=200`;
-  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
   if (search)      url += `&search=${encodeURIComponent(search)}`;
-  if (currentDays) url += `&days=${currentDays}`;
   try {
     const res = await api(url);
     _playersData = res.players || [];
@@ -6487,10 +6290,7 @@ async function openPlayerDetail(playerId, playerName) {
   document.body.style.overflow = 'hidden';
 
   try {
-    const meta = currentMeta;
     let url = `/api/players/${encodeURIComponent(playerId)}`;
-    const playerQS = [meta ? `meta_id=${encodeURIComponent(meta)}` : '', currentDays ? `days=${currentDays}` : ''].filter(Boolean).join('&');
-    if (playerQS) url += `?${playerQS}`;
     const rows = await api(url);
 
     const events  = rows.length;
@@ -6647,10 +6447,7 @@ async function loadDecklists() {
   const wrap = document.getElementById('decklists-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const meta = currentMeta;
   let url = `/api/events/recent-top8?limit=${_decklistsN}`;
-  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
-  if (currentDays) url += `&days=${currentDays}`;
   try {
     const events = await api(url);
     // Flatten to rows
@@ -7181,79 +6978,11 @@ async function leagueDeleteMatch(matchId) {
 // ── Init ────────────────────────────────────────────────────────────────────
 (async () => {
   await checkStatus();
-  await populateMetaDropdowns();
   if (!routeFromHash()) loadHome();
   window.addEventListener('popstate', () => { if (!routeFromHash()) { showPage('home'); loadHome(); } });
   setInterval(checkStatus, 30000);
-
-  if (!localStorage.getItem('metacall_intro_seen')) {
-    const toggle = document.querySelector('.nav-days-toggle');
-    toggle?.classList.add('highlight');
-    const popup = document.getElementById('days-intro-popup');
-    if (popup && toggle) {
-      const rect = toggle.getBoundingClientRect();
-      const popupW = 270;
-      let left = rect.left + rect.width / 2 - popupW / 2;
-      left = Math.max(8, Math.min(left, window.innerWidth - popupW - 8));
-      popup.style.left = left + 'px';
-      popup.style.right = 'auto';
-      popup.style.top = (rect.bottom + 10) + 'px';
-      const arrowLeft = Math.round(rect.left + rect.width / 2 - left - 5);
-      popup.style.setProperty('--arrow-left', arrowLeft + 'px');
-      popup.style.display = 'block';
-    }
-  }
 })();
 
-async function populateMetaDropdowns() {
-  try {
-    const [{ options }, { options: eternalOptions }] = await Promise.all([
-      api('/api/metas/dropdown?format=premiere'),
-      api('/api/metas/dropdown?format=eternal'),
-    ]);
-
-    if (options?.length) {
-      _stdMetaOpts = '<option value="">All metas</option>'
-        + options.map(m =>
-            `<option value="${m.id}"${m.is_current ? ' selected' : ''}>${m.name}</option>`
-          ).join('');
-    }
-
-    if (eternalOptions?.length) {
-      _eternalMetaOpts = '<option value="">All eras</option>'
-        + eternalOptions.map(m =>
-            `<option value="${m.id}"${m.is_current ? ' selected' : ''}>${m.name}</option>`
-          ).join('');
-    }
-
-    const navSet = document.getElementById('nav-set');
-    if (navSet) {
-      navSet.innerHTML = currentFormat === 'eternal' ? _eternalMetaOpts : _stdMetaOpts;
-      currentMeta = navSet.value;
-    }
-  } catch(e) {
-    console.warn('Could not load meta eras:', e);
-  }
-}
-
-function setNavMeta(val) {
-  currentMeta = val;
-  const activePage = document.querySelector('.page.active')?.id;
-  if (activePage === 'page-matrix') loadMatrix();
-  else if (activePage === 'page-picks') loadPicks();
-  else if (activePage === 'page-events') { loadEvents(); }
-  else if (activePage === 'page-players') loadPlayers();
-  else if (activePage === 'page-decklists') loadDecklists();
-  else if (activePage === 'page-cards')     loadCardsPage();
-  else if (currentLeader) {
-    renderLeaderHero(currentLeader);
-    if (leaderTab === 'cards') loadLeaderCards();
-    else if (leaderTab === 'matchups') loadLeaderMatchups();
-    else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
-  } else {
-    loadHome();
-  }
-}
 
 // ══ GLOBAL CARDS PAGE ═══════════════════════════════════════════════════════
 
@@ -7303,8 +7032,6 @@ async function loadCardsPage() {
   wrap.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
   const minDecks = parseInt(document.getElementById('cp-min-decks')?.value) || 5;
   let url = `/api/cards/stats?format=${currentFormat}&min_decks=${minDecks}`;
-  if (currentMeta) url += `&meta_id=${encodeURIComponent(currentMeta)}`;
-  if (currentDays) url += `&days=${currentDays}`;
   try {
     _cpData = await api(url) || [];
     initCpCostFilters();
@@ -7361,12 +7088,8 @@ function renderGlobalCards(rows) {
 
   const sub = document.getElementById('cards-sub');
   if (sub) {
-    const navSet   = document.getElementById('nav-set');
-    const metaLabel = currentDays
-      ? `last ${currentDays} days`
-      : (navSet?.selectedOptions[0]?.text || (currentMeta || 'all metas'));
     sub.textContent = rows.length
-      ? `${rows.length} cards · ${metaLabel}`
+      ? `${rows.length} cards · all data`
       : 'no results';
   }
 
@@ -7471,11 +7194,8 @@ async function loadPicks() {
   const wrap = document.getElementById('picks-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const meta      = currentMeta;
   const minDecks  = currentFormat === 'eternal' ? 3 : 10;
   let url = `/api/meta-call?min_decks=${minDecks}&min_games=2&top_n=30&format=${currentFormat}`;
-  if (meta)        url += `&meta_id=${encodeURIComponent(meta)}`;
-  if (currentDays) url += `&days=${currentDays}`;
   try {
     const d = await api(url);
     _picksData = d.decks || [];
@@ -7488,12 +7208,6 @@ async function loadPicks() {
   }
 }
 
-function dismissPicksIntro() {
-  localStorage.setItem('metacall_intro_seen', '1');
-  document.querySelector('.nav-days-toggle')?.classList.remove('highlight');
-  const popup = document.getElementById('days-intro-popup');
-  if (popup) popup.style.display = 'none';
-}
 
 function renderPicks() {
   const wrap = document.getElementById('picks-wrap');
@@ -8111,10 +7825,5 @@ async function saveConfirm(poolId) {
   <button class="mob-nav-btn"        id="mob-players" onclick="showPage('players')">Players</button>
 </nav>
 
-<div class="days-intro-popup" id="days-intro-popup" onclick="dismissPicksIntro()">
-  <div class="days-intro-popup-title">Recent data, by default</div>
-  <div class="days-intro-popup-text">This toggle adjusts the time window used across all pages. Switch to Full for all-time data.</div>
-  <button class="days-intro-popup-btn" onclick="event.stopPropagation();dismissPicksIntro()">Got it</button>
-</div>
 </body>
 </html>
