@@ -4074,6 +4074,76 @@ def sealed_stats():
     }
 
 
+@app.get("/api/sealed/pool-stats")
+def sealed_pool_stats():
+    """Pool-based sealed stats using OCR data only (no melee match required)."""
+    total_pools = db.fetchone("SELECT COUNT(*) AS n FROM sealed_pools")["n"]
+
+    leaders = db.fetchall("""
+        SELECT
+            spc.card_name,
+            c.back_image_url   AS art_url,
+            c.aspects,
+            COUNT(DISTINCT CASE WHEN spc.pool_count > 0 OR spc.played_count > 0
+                           THEN spc.pool_id END)           AS times_in_pool,
+            COUNT(DISTINCT CASE WHEN spc.played_count > 0
+                           THEN spc.pool_id END)           AS times_chosen,
+            LEAST(
+              ROUND(100.0 *
+                COUNT(DISTINCT CASE WHEN spc.played_count > 0 THEN spc.pool_id END)::numeric /
+                NULLIF(COUNT(DISTINCT CASE WHEN spc.pool_count > 0 OR spc.played_count > 0
+                             THEN spc.pool_id END), 0), 1),
+              100
+            )                                              AS pick_rate
+        FROM sealed_pool_cards spc
+        LEFT JOIN cards c
+            ON c.is_leader = TRUE
+            AND c.set_code = 'LAW'
+            AND c.name = split_part(spc.card_name, ',', 1)
+        WHERE spc.section = 'leader'
+        GROUP BY spc.card_name, c.back_image_url, c.aspects
+        ORDER BY pick_rate DESC NULLS LAST, times_chosen DESC
+    """)
+
+    cards = db.fetchall("""
+        SELECT
+            spc.card_name,
+            spc.section,
+            MIN(spc.card_number)                                                     AS card_number,
+            COUNT(DISTINCT CASE WHEN spc.pool_count > 0 THEN spc.pool_id END)        AS pools_opened,
+            COUNT(DISTINCT CASE WHEN spc.played_count > 0 THEN spc.pool_id END)      AS pools_played,
+            ROUND(100.0 * COUNT(DISTINCT CASE WHEN spc.pool_count > 0
+                           THEN spc.pool_id END)::numeric / %s, 1)                   AS pool_rate,
+            LEAST(
+              ROUND(100.0 *
+                COUNT(DISTINCT CASE WHEN spc.played_count > 0 THEN spc.pool_id END)::numeric /
+                NULLIF(COUNT(DISTINCT CASE WHEN spc.pool_count > 0 THEN spc.pool_id END), 0), 1),
+              100
+            )                                                                         AS play_rate
+        FROM sealed_pool_cards spc
+        WHERE spc.section NOT IN ('leader', 'base')
+        GROUP BY spc.card_name, spc.section
+        ORDER BY play_rate DESC NULLS LAST, pools_played DESC
+    """, (total_pools,))
+
+    section_pools = {
+        r["section"]: r["pool_count"]
+        for r in db.fetchall("""
+            SELECT section, COUNT(DISTINCT pool_id) AS pool_count
+            FROM sealed_pool_cards
+            WHERE section NOT IN ('leader','base')
+            GROUP BY section
+        """)
+    }
+
+    return {
+        "total_pools":  total_pools,
+        "section_pools": section_pools,
+        "leaders":      [dict(r) for r in leaders],
+        "cards":        [dict(r) for r in cards],
+    }
+
+
 @app.get("/api/karabast/leader/{leader_id}/{base_id}/matchups")
 def karabast_leader_matchups(leader_id: str, base_id: str):
     return db.fetchall("""

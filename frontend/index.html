@@ -3294,13 +3294,48 @@ select option { background: var(--surface2); }
 .sealed-tab.active { color:var(--text); border-bottom-color:var(--accent); }
 .sealed-note { font-family:var(--mono); font-size:11px; color:var(--text3); padding:0 0 16px; }
 .sealed-aspect { font-size:10px; padding:1px 5px; border-radius:2px; font-family:var(--mono); }
-.asp-vigilance { background:rgba(100,149,237,0.15); color:#6495ed; }
-.asp-command   { background:rgba(60,179,113,0.15);  color:#3cb371; }
-.asp-multicolor{ background:rgba(180,130,60,0.15);  color:#c8963c; }
-.sealed-filter-row { display:flex; gap:8px; padding:0 0 16px; flex-wrap:wrap; }
+.asp-vigilance  { background:rgba(100,149,237,0.15); color:#6495ed; }
+.asp-command    { background:rgba(60,179,113,0.15);  color:#3cb371; }
+.asp-aggression { background:rgba(220,80,60,0.15);   color:#e06050; }
+.asp-cunning    { background:rgba(210,180,40,0.15);  color:#d4b03a; }
+.asp-heroism    { background:rgba(240,240,255,0.12); color:#c8c8e8; }
+.asp-villainy   { background:rgba(140,80,200,0.15);  color:#b07ad0; }
+.asp-multicolor { background:rgba(180,130,60,0.15);  color:#c8963c; }
+.asp-gray       { background:rgba(140,140,140,0.12); color:#a0a0a0; }
 .sealed-filter-btn { font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:3px;
   cursor:pointer; border:1px solid var(--border); background:var(--bg2); color:var(--text3); }
 .sealed-filter-btn.active { border-color:var(--accent); color:var(--accent); }
+/* sealed card table */
+.sl-table { width:100%; border-collapse:collapse; }
+.sl-table th { font-family:var(--mono); font-size:11px; color:var(--text3); text-align:left;
+  padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
+.sl-table th:hover { color:var(--text2); }
+.sl-table th.sort-asc::after  { content:' ↑'; }
+.sl-table th.sort-desc::after { content:' ↓'; }
+.sl-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); font-size:13px; vertical-align:middle; }
+.sl-table tr:hover td { background:rgba(255,255,255,0.02); }
+.sl-table .sl-num { font-family:var(--mono); font-size:13px; font-weight:600; }
+.sl-table .sl-num-good { color:var(--green); }
+.sl-table .sl-num-mid  { color:var(--text2); }
+.sl-table .sl-num-bad  { color:var(--red2); }
+.sl-bar-wrap { width:80px; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; display:inline-block; vertical-align:middle; }
+.sl-bar { height:6px; border-radius:3px; }
+/* sealed leader card */
+.sl-leader { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden;
+  display:flex; flex-direction:column; cursor:default; transition:border-color .15s; }
+.sl-leader:hover { border-color:var(--border2); }
+.sl-leader-art { height:110px; background-size:cover; background-position:center 20%; position:relative; }
+.sl-leader-art-overlay { position:absolute; inset:0; background:linear-gradient(to bottom, transparent 40%, var(--surface) 100%); }
+.sl-leader-body { padding:10px 12px 12px; }
+.sl-leader-name { font-size:13px; font-weight:600; line-height:1.2; margin-bottom:4px; }
+.sl-leader-sub  { font-size:11px; color:var(--text3); margin-bottom:8px; }
+.sl-pick-rate   { font-family:var(--display); font-size:28px; font-weight:700; line-height:1; margin-bottom:2px; }
+.sl-pick-label  { font-family:var(--mono); font-size:10px; color:var(--text3); margin-bottom:8px; letter-spacing:.06em; }
+.sl-pool-stats  { display:flex; gap:0; }
+.sl-ps { flex:1; text-align:center; border-right:1px solid var(--border); padding:4px 0; }
+.sl-ps:last-child { border-right:none; }
+.sl-psv { font-family:var(--mono); font-size:12px; font-weight:600; }
+.sl-psl { font-family:var(--mono); font-size:10px; color:var(--text3); margin-top:1px; }
 .sl-card { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:14px 12px; }
 .sl-card-name { font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px; line-height:1.25; }
 .sl-card-gwr { font-family:var(--display); font-size:26px; font-weight:700; line-height:1; margin-bottom:8px; }
@@ -3987,7 +4022,8 @@ select.sl-input { cursor: pointer; }
     <button class="sealed-tab active" id="sealed-tab-btn-leaders" onclick="sealedShowTab('leaders')">Leaders</button>
     <button class="sealed-tab" id="sealed-tab-btn-cards" onclick="sealedShowTab('cards')">Cards</button>
   </div>
-  <div id="sealed-body" style="padding:0 24px 48px">
+  <div id="sealed-controls" style="display:none;padding:16px 24px 0;gap:8px;flex-wrap:wrap"></div>
+  <div id="sealed-body" style="padding:16px 24px 48px">
     <div class="loading" style="padding:40px">loading…</div>
   </div>
 </div>
@@ -7457,15 +7493,19 @@ function closeKbDetail() {
 }
 
 // ══ SEALED STATS ════════════════════════════════════════════════════════════
-let _sealedData   = null;
-let _sealedTab    = 'leaders';
-let _sealedFilter = 'all';
+let _sealedData     = null;
+let _sealedTab      = 'leaders';
+let _sealedFilter   = 'all';
+let _sealedCardSort = 'play_rate';
+let _sealedCardDir  = -1;
+
+const SEALED_SECTIONS = ['all','vigilance','command','aggression','cunning','heroism','villainy','multicolor','gray'];
 
 async function loadSealed() {
   if (_sealedData) { renderSealed(); return; }
   document.getElementById('sealed-body').innerHTML = '<div class="loading" style="padding:40px">loading…</div>';
   try {
-    _sealedData = await api('/api/sealed/stats');
+    _sealedData = await api('/api/sealed/pool-stats');
     renderSealed();
   } catch(e) {
     document.getElementById('sealed-body').innerHTML = `<div class="empty-state" style="padding:40px">// ${e.message}</div>`;
@@ -7479,139 +7519,130 @@ function sealedShowTab(tab) {
   renderSealed();
 }
 
-function sealedGrade(gwr) {
-  if (gwr == null) return { grade: '?', cls: 'tier-c' };
-  return tierGrade(gwr * 2);  // baseline 50% → ratio 1.0 = B tier
+function sealedSetFilter(f) {
+  _sealedFilter = f;
+  renderSealed();
+}
+
+function sealedSortCards(col) {
+  if (_sealedCardSort === col) _sealedCardDir *= -1;
+  else { _sealedCardSort = col; _sealedCardDir = -1; }
+  renderSealed();
+}
+
+function sealedAspBadge(s) {
+  const cls = `asp-${s}`;
+  return `<span class="sealed-aspect ${cls}">${s}</span>`;
+}
+
+function sealedPickColor(rate) {
+  if (rate == null) return 'var(--text3)';
+  if (rate >= 75)   return 'var(--green)';
+  if (rate >= 50)   return 'var(--text2)';
+  return 'var(--red2)';
 }
 
 function renderSealed() {
-  const { leaders, cards, pool_count } = _sealedData;
-  document.getElementById('sealed-pool-count').textContent = `${pool_count} pools tracked`;
+  if (!_sealedData) return;
+  const { leaders, cards, total_pools, section_pools } = _sealedData;
+  document.getElementById('sealed-pool-count').textContent = `${total_pools} pools`;
 
-  const TIER_ORDER = ['S','A','B','C','D','F'];
-  const TIER_LABEL = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_RANGE = { S:'≥ 65% GWR', A:'55–64% GWR', B:'45–54% GWR', C:'35–44% GWR', D:'25–34% GWR', F:'< 25% GWR' };
-
-  const gwrColor = gwr => gwr >= 0.55 ? 'var(--green)' : gwr >= 0.45 ? 'var(--text2)' : 'var(--red2)';
-
-  function mkTierSections(items, mkItem) {
-    const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
-    const noData = [];
-    items.forEach(r => {
-      if (r.gwr == null || r.n === 0) { noData.push(r); return; }
-      const g = sealedGrade(r.gwr).grade;
-      byTier[g in byTier ? g : 'C'].push(r);
-    });
-
-    let html = '';
-    TIER_ORDER.forEach(t => {
-      const group = byTier[t];
-      if (!group.length) return;
-      html += `<div class="tier-section-header tier-${t.toLowerCase()}">` +
-        `<span class="tsh-grade" data-tooltip="${TIER_RANGE[t]}">${t}</span>` +
-        `<span class="tsh-label">${TIER_LABEL[t]} · ${TIER_RANGE[t]}</span>` +
-        `<span class="tsh-count">${group.length}</span></div>` +
-        `<div class="tier-section-grid">${group.map(mkItem).join('')}</div>`;
-    });
-
-    if (noData.length) {
-      html += `<div class="rogue-section-header" style="margin-top:32px">` +
-        `<span class="rogue-label">No Data</span>` +
-        `<span class="rogue-sub">no recorded games</span>` +
-        `<span class="tsh-count">${noData.length}</span></div>` +
-        `<div class="tier-section-grid">${noData.map(mkItem).join('')}</div>`;
-    }
-    return html;
-  }
+  const ctrl = document.getElementById('sealed-controls');
 
   if (_sealedTab === 'leaders') {
-    let imgIdx = 0;
-    const imgItems = [];  // { leader, i } for post-render image loading
+    ctrl.style.display = 'none';
+    ctrl.innerHTML = '';
 
-    const mkLeader = r => {
-      const i = imgIdx++;
-      imgItems.push({ leader: r.leader, i });
-      const tier = sealedGrade(r.gwr);
-      const gwr = r.gwr ?? 0;
-      const gwrTxt = r.gwr != null ? (gwr * 100).toFixed(1) + '%' : '—';
-      const gwrCls = r.gwr == null ? '' : gwr >= 0.55 ? 'good' : gwr >= 0.45 ? 'mid' : 'bad';
-      const mwrColor = r.gwr >= 0.52 ? 'var(--green)' : r.gwr > 0 ? 'var(--text2)' : 'var(--text3)';
-      return `<div class="leader-card asp-Unknown">` +
-        `<div class="lc-img-wrap" id="slimg-wrap-${i}"></div>` +
-        `<div class="lc-tier ${tier.cls}">${tier.grade}</div>` +
-        `<div class="lc-body">` +
-          `<div class="lc-rank" id="slimg-rank-${i}"></div>` +
-          `<div class="lc-name">${shortName(r.leader)}</div>` +
-          `<div class="lc-conversion ${gwrCls}">${gwrTxt} GWR</div>` +
-          `<div class="lc-stats ev-stats">` +
-            `<div class="lc-stat"><div class="lc-stat-label">Players</div><div class="lc-stat-val">${r.n}</div></div>` +
-            `<div class="lc-stat"><div class="lc-stat-label">GW</div><div class="lc-stat-val">${r.gw ?? '—'}</div></div>` +
-            `<div class="lc-stat"><div class="lc-stat-label">GL</div><div class="lc-stat-val">${r.gl ?? '—'}</div></div>` +
+    const sorted = [...leaders].sort((a,b) => (b.pick_rate ?? -1) - (a.pick_rate ?? -1));
+
+    const mkLeader = (r, rank) => {
+      const rate   = r.pick_rate;
+      const col    = sealedPickColor(rate);
+      const rateTxt = rate != null ? rate.toFixed(0) + '%' : '—';
+      const asps   = r.aspects || [];
+      const primary = asps.find(a => ['Heroism','Villainy'].includes(a)) || asps[0] || 'Unknown';
+      const subtitle = r.card_name.includes(',') ? r.card_name.slice(r.card_name.indexOf(',') + 2) : '';
+      const artStyle = r.art_url ? `background-image:url(${r.art_url})` : '';
+      return `<div class="sl-leader asp-${primary}">` +
+        `<div class="sl-leader-art" style="${artStyle}">` +
+          `<div class="sl-leader-art-overlay"></div>` +
+          `<div style="position:absolute;top:8px;left:8px;display:flex;gap:3px">${aspectIcons(asps, 18)}</div>` +
+          `<div style="position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:11px;color:var(--text3)">#${rank}</div>` +
+        `</div>` +
+        `<div class="sl-leader-body">` +
+          `<div class="sl-leader-name">${shortName(r.card_name)}</div>` +
+          (subtitle ? `<div class="sl-leader-sub">${subtitle}</div>` : '') +
+          `<div class="sl-pick-rate" style="color:${col}">${rateTxt}</div>` +
+          `<div class="sl-pick-label">PICK RATE</div>` +
+          `<div class="sl-pool-stats">` +
+            `<div class="sl-ps"><div class="sl-psv">${r.times_in_pool}</div><div class="sl-psl">In Pool</div></div>` +
+            `<div class="sl-ps"><div class="sl-psv">${r.times_chosen}</div><div class="sl-psl">Chosen</div></div>` +
           `</div>` +
         `</div></div>`;
     };
 
-    document.getElementById('sealed-body').innerHTML =
-      mkTierSections(leaders, mkLeader) ||
-      '<div class="empty-state" style="padding:40px">// no leader data</div>';
-
-    imgItems.forEach(({ leader, i }) => {
-      fetchLeaderCard(leader).then(d => {
-        const wrap = document.getElementById('slimg-wrap-' + i);
-        if (!wrap) return;
-        const url = d?.back_art_url || d?.front_art_url;
-        if (url) { wrap.style.backgroundImage = `url(${url})`; wrap.classList.add('loaded'); }
-        const leaderAsps = d?.all_aspects || [];
-        const rankEl = document.getElementById('slimg-rank-' + i);
-        if (rankEl && leaderAsps.length) {
-          rankEl.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center">${aspectIcons(leaderAsps, 20)}</span>`;
-          const primaryAsp = aspectFromArray(leaderAsps);
-          const cardEl = wrap?.closest('.leader-card');
-          if (cardEl && primaryAsp !== 'Unknown') {
-            cardEl.className = cardEl.className.replace(/asp-\S+/, 'asp-' + primaryAsp);
-          }
-        }
-      });
-    });
+    document.getElementById('sealed-body').innerHTML = sorted.length
+      ? `<div class="tier-section-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px">${sorted.map((r,i) => mkLeader(r, i+1)).join('')}</div>`
+      : '<div class="empty-state" style="padding:40px">// no leader data</div>';
 
   } else {
-    const aspBadge = s => {
-      if (s === 'vigilance') return `<span class="sealed-aspect asp-vigilance">vigilance</span>`;
-      if (s === 'command')   return `<span class="sealed-aspect asp-command">command</span>`;
-      return `<span class="sealed-aspect asp-multicolor">${s}</span>`;
-    };
-    const filterBtns = ['all','vigilance','command']
-      .map(f => `<button class="sealed-filter-btn${_sealedFilter===f?' active':''}" onclick="sealedSetFilter('${f}')">${f}</button>`)
+    // Cards tab
+    const sectionCounts = section_pools || {};
+    const filterBtns = SEALED_SECTIONS
+      .map(f => {
+        const cnt = f === 'all' ? '' : (sectionCounts[f] ? ` <span style="color:var(--text3)">${sectionCounts[f]}p</span>` : '');
+        return `<button class="sealed-filter-btn${_sealedFilter===f?' active':''}" onclick="sealedSetFilter('${f}')">${f}${cnt}</button>`;
+      })
       .join('');
+    ctrl.style.display = 'flex';
+    ctrl.innerHTML = filterBtns;
+
     const filtered = _sealedFilter === 'all' ? cards : cards.filter(c => c.section === _sealedFilter);
 
-    const mkCardItem = r => {
-      const gwr = r.gwr ?? 0;
-      const gwrTxt = r.gwr != null ? (gwr * 100).toFixed(1) + '%' : '—';
-      const col = r.gwr != null ? gwrColor(gwr) : 'var(--text3)';
-      return `<div class="sl-card">` +
-        `<div class="sl-card-name">${r.card_name}</div>` +
-        `<div style="margin-bottom:6px">${aspBadge(r.section)}</div>` +
-        `<div class="sl-card-gwr" style="color:${col}">${gwrTxt}</div>` +
-        `<div class="sl-stats-row">` +
-          `<div class="sl-stat"><div class="sl-sv">${r.n}</div><div class="sl-sl">In Deck</div></div>` +
-          `<div class="sl-stat"><div class="sl-sv">${r.pool_n ?? '—'}</div><div class="sl-sl">In Pool</div></div>` +
-          `<div class="sl-stat"><div class="sl-sv">${r.gw ?? '—'}</div><div class="sl-sl">GW</div></div>` +
-          `<div class="sl-stat"><div class="sl-sv">${r.gl ?? '—'}</div><div class="sl-sl">GL</div></div>` +
-        `</div></div>`;
+    const sortKey = _sealedCardSort;
+    const dir     = _sealedCardDir;
+    const sorted  = [...filtered].sort((a,b) => {
+      const av = a[sortKey] ?? -1, bv = b[sortKey] ?? -1;
+      return dir * (bv - av);
+    });
+
+    const mkTh = (col, label) => {
+      const cls = _sealedCardSort === col ? (_sealedCardDir > 0 ? 'sort-asc' : 'sort-desc') : '';
+      return `<th class="${cls}" onclick="sealedSortCards('${col}')">${label}</th>`;
     };
 
-    document.getElementById('sealed-body').innerHTML =
-      `<div class="sealed-filter-row" style="padding-top:24px">${filterBtns}</div>` +
-      `<div class="sealed-note">Game win rate when included in deck. Front-side data only (Vigilance + Command).</div>` +
-      (mkTierSections(filtered, mkCardItem) ||
-        '<div class="empty-state" style="padding:24px">// no card data</div>');
-  }
-}
+    const mkBar = (val, max, color) => {
+      const w = Math.min(100, Math.round((val / max) * 100));
+      return `<span class="sl-bar-wrap"><span class="sl-bar" style="width:${w}%;background:${color}"></span></span>`;
+    };
 
-function sealedSetFilter(f) {
-  _sealedFilter = f;
-  renderSealed();
+    const rows = sorted.map(r => {
+      const playRate = r.play_rate ?? 0;
+      const poolRate = r.pool_rate ?? 0;
+      const playCls  = playRate >= 75 ? 'sl-num-good' : playRate >= 40 ? 'sl-num-mid' : 'sl-num-bad';
+      const playTxt  = r.play_rate != null ? playRate.toFixed(0) + '%' : '—';
+      const poolTxt  = r.pool_rate != null ? poolRate.toFixed(0) + '%' : '—';
+      return `<tr>` +
+        `<td style="font-size:13px;max-width:220px">${r.card_name}</td>` +
+        `<td>${sealedAspBadge(r.section)}</td>` +
+        `<td><span class="sl-num ${playCls}">${playTxt}</span> ${mkBar(playRate, 100, playRate >= 75 ? 'var(--green)' : playRate >= 40 ? 'var(--yellow)' : 'var(--red2)')}</td>` +
+        `<td><span class="sl-num" style="color:var(--text2)">${poolTxt}</span> ${mkBar(poolRate, 100, 'rgba(255,255,255,0.25)')}</td>` +
+        `<td class="sl-num" style="color:var(--text2);text-align:right">${r.pools_played}</td>` +
+        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.pools_opened}</td>` +
+        `</tr>`;
+    }).join('');
+
+    document.getElementById('sealed-body').innerHTML = sorted.length
+      ? `<table class="sl-table"><thead><tr>` +
+          `<th>Card</th><th>Section</th>` +
+          mkTh('play_rate', 'Play Rate') +
+          mkTh('pool_rate', 'Pool Rate') +
+          mkTh('pools_played', 'Played') +
+          mkTh('pools_opened', 'Opened') +
+          `</tr></thead><tbody>${rows}</tbody></table>` +
+          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">Play rate = % of pools that opened this card and included it in their deck. Pool rate = % of all ${total_pools} pools where the card appeared.</div>`
+      : '<div class="empty-state" style="padding:40px">// no card data</div>';
+  }
 }
 
 // ══ SEALED CONFIRM ══════════════════════════════════════════════════════════
