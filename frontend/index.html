@@ -136,20 +136,28 @@ body::before {
 .decay-toast {
   display: none;
   position: fixed;
-  top: 62px;
-  right: 20px;
-  width: 280px;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 560px;
+  max-width: calc(100vw - 32px);
   background: var(--surface);
   border: 1px solid var(--border2);
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  border-radius: 12px;
+  padding: 28px 32px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
   z-index: 900;
   cursor: pointer;
 }
 .decay-toast.visible { display: block; }
-.decay-toast-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-.decay-toast-body { font-size: 12px; color: var(--text2); line-height: 1.55; }
+.decay-toast-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+.decay-toast-body { font-size: 14px; color: var(--text2); line-height: 1.65; }
+.decay-toast-body strong { color: var(--text); }
+.decay-toast-table { width: 100%; border-collapse: collapse; margin: 12px 0 14px; font-size: 13px; font-family: var(--mono); }
+.decay-toast-table td { padding: 4px 0; color: var(--text2); }
+.decay-toast-table td:first-child { color: var(--text3); width: 130px; }
+.decay-toast-table td:last-child { color: var(--gold); }
+.decay-toast-dismiss { font-size: 12px; color: var(--text3); margin-top: 14px; }
 .nav-format-toggle {
   margin-left: auto;
   display: flex;
@@ -7844,8 +7852,18 @@ async function saveConfirm(poolId) {
 
 <!-- Decay weighting intro toast (shown once) -->
 <div class="decay-toast" id="decay-toast">
-  <div class="decay-toast-title">⏳ Rankings are time-weighted</div>
-  <div class="decay-toast-body">Recent events count more — 30-day half-life keeps data relevant as the meta evolves. Click anywhere to dismiss.</div>
+  <div class="decay-toast-title">⏳ Rankings use time-decay weighting</div>
+  <div class="decay-toast-body">
+    Not all results are equal — a tournament from last week tells you more about the current meta than one from six months ago. Every event is weighted using an <strong>exponential decay</strong> based on how long ago it was played:
+    <table class="decay-toast-table">
+      <tr><td>1 week ago</td><td>~85% weight</td></tr>
+      <tr><td>1 month ago</td><td>~50% weight</td></tr>
+      <tr><td>2 months ago</td><td>~25% weight</td></tr>
+      <tr><td>4 months ago</td><td>~6% weight</td></tr>
+    </table>
+    This means the leaderboard naturally shifts as new sets release and the meta evolves, without needing manual date filters.
+  </div>
+  <div class="decay-toast-dismiss">Click anywhere to dismiss</div>
 </div>
 
 <!-- Mobile bottom nav (hidden on desktop via CSS) -->
