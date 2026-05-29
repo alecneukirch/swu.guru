@@ -4070,8 +4070,10 @@ let currentFormat  = 'standard';  // 'standard' | 'eternal'
 let homeSort       = 'total_decks';
 let homeComboData  = [];
 let _homeGen       = 0;
-let currentLeader  = '';
-let currentLeaderBase = null;
+let currentLeader           = '';
+let currentLeaderBase       = null;
+let currentLeaderBaseAspect = null;
+let currentLeaderBaseGroup  = null;
 let leaderData     = [];
 let _eloFilterBucket = null;
 let cardSort       = 'inclusion_rate';
@@ -4250,11 +4252,13 @@ function showPage(name) {
 function goHome() {
   showPage('home');
 }
-function openLeader(name, base = null) {
+function openLeader(name, base = null, baseAspect = null, baseGroup = null) {
   pendingMatchupOpponent = null;
   _eloFilterBucket = null;
   currentLeader = name;
   currentLeaderBase = base || null;
+  currentLeaderBaseAspect = baseAspect || null;
+  currentLeaderBaseGroup  = baseGroup  || null;
   history.pushState(null, '', buildLeaderHash());
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
@@ -4285,7 +4289,9 @@ function openLeader(name, base = null) {
 
 function buildLeaderHash() {
   let h = '#leader=' + encodeURIComponent(currentLeader);
-  if (currentLeaderBase) h += '&base=' + encodeURIComponent(currentLeaderBase);
+  if (currentLeaderBase)      h += '&base='        + encodeURIComponent(currentLeaderBase);
+  if (currentLeaderBaseAspect) h += '&base_aspect=' + encodeURIComponent(currentLeaderBaseAspect);
+  if (currentLeaderBaseGroup)  h += '&base_group='  + encodeURIComponent(currentLeaderBaseGroup);
   if (currentFormat === 'eternal') h += '&fmt=eternal';
   if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
   return h;
@@ -4297,7 +4303,7 @@ function routeFromHash() {
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
   if (params.leader) {
     if (params.fmt === 'eternal') applyFormat('eternal');
-    openLeader(params.leader, params.base || null);
+    openLeader(params.leader, params.base || null, params.base_aspect || null, params.base_group || null);
     if (params.tab && params.tab !== 'cards') {
       if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
       setLeaderTab(params.tab);
@@ -4437,8 +4443,9 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   const cc  = convClass(conv);
   const barW = Math.round((r.total_decks / maxD) * 100);
   const safe      = r.leader.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-  const safeKey   = (r.base_key || '').replace(/"/g,'&quot;');
-  const safeBases = (r.bases || []).join(',').replace(/"/g,'&quot;');
+  const safeKey    = (r.base_key || '').replace(/"/g,'&quot;');
+  const safeBases  = (r.bases || []).join(',').replace(/"/g,'&quot;');
+  const safeAspect = (r.aspect || 'none').replace(/"/g,'&quot;');
   const eloColor = r.avg_hri_rating >= 1700 ? 'var(--green)' : r.avg_hri_rating >= 1550 ? 'var(--gold)' : 'var(--text2)';
   const eloBadge = r.avg_hri_rating
     ? `<div class="lc-elo-badge" data-tooltip="Avg Glicko-2 Premier rating (hri.gg) of players who piloted this leader"><div class="lc-elo-label">Avg ELO</div><div style="color:${eloColor}">${r.avg_hri_rating}</div></div>`
@@ -4476,7 +4483,7 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
       <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${mwrColor}">${mwrVal}</div></div>
     </div>`;
   }
-  return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}">
+  return `<div class="leader-card asp-${asp}" data-leader="${safe}" data-base-key="${safeKey}" data-bases="${safeBases}" data-base-aspect="${safeAspect}" data-base-group="${(r.base_group||'').replace(/"/g,'&quot;')}">
   <div class="lc-img-wrap" id="${pfx}-wrap-${i}"></div>
   ${eloBadge}${top8Badge}${skillBadge}
   <div class="lc-body">
@@ -4570,7 +4577,7 @@ function renderLeaderGrid() {
 
   grid.onclick = e => {
     const card = e.target.closest('.leader-card[data-leader]');
-    if (card) openLeader(card.dataset.leader, card.dataset.bases || null);
+    if (card) openLeader(card.dataset.leader, card.dataset.bases || null, card.dataset.baseAspect || null, card.dataset.baseGroup || null);
   };
 
   allRows.forEach(({ r, i }) => {
@@ -4610,20 +4617,24 @@ async function renderLeaderHero(name) {
     const tier = tierGrade(stats.conversion);
 
     const pctColor = v => v == null ? 'var(--text3)' : v >= 1.1 ? 'var(--green)' : v >= 0.9 ? 'var(--gold)' : 'var(--red2)';
-    const comma = name.indexOf(',');
+    const comma    = name.indexOf(',');
     const subtitle = comma > 0 ? name.slice(comma + 1).trim() : '';
-    const baseDot = currentLeaderBase
-      ? `<div class="pick-base" id="lh-base-row"><span id="lh-base-dot" style="width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle;background:var(--text3)"></span>${currentLeaderBase}</div>`
+    const baseAsp  = currentLeaderBaseAspect && currentLeaderBaseAspect !== 'none' ? currentLeaderBaseAspect : null;
+    const baseIcon = baseAsp
+      ? `<span style="margin-left:6px">${aspectIcon(baseAsp, 18)}<span style="color:${aspectColor(baseAsp)};font-size:11px;margin-left:3px;vertical-align:middle">${baseAsp.toUpperCase()}</span></span>`
+      : '';
+    const baseLine = currentLeaderBaseGroup
+      ? `<div class="lh-sub" style="margin-bottom:4px">${currentLeaderBaseGroup}</div>`
       : '';
 
     hero.innerHTML = `
 <div id="leader-hero">
   <div class="lh-art" id="lh-art-img"></div>
   <div class="lh-info">
-    <div class="lh-aspect" id="lh-aspect-display"></div>
+    <div class="lh-aspect" id="lh-aspect-display">${baseIcon}</div>
+    ${baseLine}
     <div class="lh-name">${shortName(name)} <span class="lc-tier ${tier.cls}" style="position:static;display:inline-flex;vertical-align:middle;margin-left:8px">${tier.grade}</span></div>
     <div class="lh-sub">${subtitle} <button class="share-btn" onclick="shareLeader(this)" title="Copy link">&#128279; Share</button></div>
-    ${baseDot}
     <div class="lh-stats">
       <div class="lh-stat">
         <div class="lh-stat-val">${stats.total_decks != null ? Math.round(stats.total_decks).toLocaleString() : '—'}</div>
@@ -4658,11 +4669,7 @@ async function renderLeaderHero(name) {
       }
       const aspEl = document.getElementById('lh-aspect-display');
       if (aspEl && d?.all_aspects?.length) {
-        aspEl.innerHTML = aspectsDisplay(d.all_aspects, 18);
-      }
-      const dot = document.getElementById('lh-base-dot');
-      if (dot && d?.all_aspects?.length) {
-        dot.style.background = aspectColor(d.all_aspects[0]);
+        aspEl.innerHTML = aspectsDisplay(d.all_aspects, 18) + aspEl.innerHTML;
       }
     });
   } catch(e) {
@@ -5574,7 +5581,7 @@ function renderEventGrid() {
 
   grid.onclick = e => {
     const card = e.target.closest('.leader-card[data-leader]');
-    if (card) openLeader(card.dataset.leader, card.dataset.bases || null);
+    if (card) openLeader(card.dataset.leader, card.dataset.bases || null, card.dataset.baseAspect || null, card.dataset.baseGroup || null);
   };
 
   allRows.forEach(({ r, i }) => {
