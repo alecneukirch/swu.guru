@@ -133,7 +133,44 @@ body::before {
 .nav-btn:hover { color: var(--text2); }
 .nav-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
 
-.decay-info { font-size: 16px; cursor: default; opacity: 0.6; padding: 0 4px; }
+.decay-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 900;
+  align-items: center;
+  justify-content: center;
+}
+.decay-modal-overlay.visible { display: flex; }
+.decay-modal {
+  background: var(--surface);
+  border: 1px solid rgba(240,180,41,0.35);
+  border-radius: 14px;
+  padding: 28px 32px;
+  max-width: 420px;
+  width: calc(100% - 48px);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  text-align: center;
+}
+.decay-modal-icon { font-size: 36px; margin-bottom: 12px; }
+.decay-modal-title { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--gold); margin-bottom: 10px; letter-spacing: 0.04em; }
+.decay-modal-body { font-size: 14px; color: var(--text2); line-height: 1.65; margin-bottom: 20px; }
+.decay-modal-body strong { color: var(--text); }
+.decay-modal-btn {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 28px;
+  border: 1px solid rgba(240,180,41,0.5);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gold);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: background 0.15s, color 0.15s;
+}
+.decay-modal-btn:hover { background: rgba(240,180,41,0.12); }
 .nav-format-toggle {
   margin-left: auto;
   display: flex;
@@ -3466,7 +3503,6 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
-  <div class="decay-info" title="Recent events weighted more heavily — 30-day half-life. Events from 30 days ago count ~50%, 60 days ~25%, 4+ months ~6%. Keeps rankings relevant as the meta evolves.">⏳</div>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -6981,7 +7017,15 @@ async function leagueDeleteMatch(matchId) {
   if (!routeFromHash()) loadHome();
   window.addEventListener('popstate', () => { if (!routeFromHash()) { showPage('home'); loadHome(); } });
   setInterval(checkStatus, 30000);
+  if (!localStorage.getItem('decay_intro_seen')) {
+    document.getElementById('decay-modal-overlay').classList.add('visible');
+  }
 })();
+
+function dismissDecayModal() {
+  localStorage.setItem('decay_intro_seen', '1');
+  document.getElementById('decay-modal-overlay').classList.remove('visible');
+}
 
 
 // ══ GLOBAL CARDS PAGE ═══════════════════════════════════════════════════════
@@ -7814,6 +7858,19 @@ async function saveConfirm(poolId) {
   }
 }
 </script>
+
+<!-- Decay weighting intro modal (shown once) -->
+<div class="decay-modal-overlay" id="decay-modal-overlay" onclick="dismissDecayModal()">
+  <div class="decay-modal" onclick="event.stopPropagation()">
+    <div class="decay-modal-icon">⏳</div>
+    <div class="decay-modal-title">Data stays current</div>
+    <div class="decay-modal-body">
+      Rankings use <strong>time-decay weighting</strong> so recent results matter more.<br><br>
+      Events from <strong>30 days ago</strong> count ~50%, <strong>60 days</strong> ~25%, and <strong>4+ months</strong> ~6% — keeping the meta picture accurate as the game evolves.
+    </div>
+    <button class="decay-modal-btn" onclick="dismissDecayModal()">Got it</button>
+  </div>
+</div>
 
 <!-- Mobile bottom nav (hidden on desktop via CSS) -->
 <nav id="mobile-nav">
