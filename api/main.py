@@ -793,7 +793,7 @@ def leader_stats(
         base_filter = ""
         base_params = []
 
-    if date_sql or base_names:
+    if date_sql:
         row = db.fetchone(f"""
             SELECT
                 s.leader,
@@ -838,8 +838,9 @@ def leader_stats(
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+              {base_filter}
             GROUP BY s.leader
-        """, [leader])
+        """, [leader] + base_params)
 
         meta = db.fetchone(f"""
             SELECT SUM({w}) AS all_decks,
@@ -1032,7 +1033,7 @@ def leader_cards(
                 JOIN player_identities pi ON pi.id = pm.identity_id"""
         elo_filter = f"AND (FLOOR(pi.hri_rating / {int(bucket)}::float) * {int(bucket)})::INT = {int(elo_bucket)}"
 
-    if date_sql or base_names or top8_only or elo_bucket is not None:
+    if date_sql:
         rows = db.fetchall(f"""
             WITH leader_totals AS (
                 SELECT
@@ -1106,9 +1107,7 @@ def leader_cards(
         """, [leader] + date_params + base_params + [leader] + date_params + base_params + [min_decks])
 
     elif decay:
-        # Decay-weighted path — no date filter, no special filters
         w = decay_weight()
-        sb_f = sb_filter  # already set above
         rows = db.fetchall(f"""
             WITH leader_totals AS (
                 SELECT
@@ -1120,7 +1119,9 @@ def leader_cards(
                 JOIN {t['events']} e ON e.id = s.event_id
                 JOIN (SELECT DISTINCT standing_id FROM {t['decklist_cards']}) dc_any
                     ON dc_any.standing_id = s.id
+                {elo_join}
                 WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+                  {base_filter} {t8_filter} {elo_filter}
             ),
             card_stats AS (
                 SELECT
@@ -1135,8 +1136,9 @@ def leader_cards(
                 FROM {t['decklist_cards']} dc
                 JOIN {t['standings']} s ON s.id = dc.standing_id
                 JOIN {t['events']} e ON e.id = s.event_id
+                {elo_join}
                 WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
-                      {sb_f}
+                  {base_filter} {sb_filter} {t8_filter} {elo_filter}
                 GROUP BY dc.card_name, dc.is_sideboard
                 HAVING COUNT(DISTINCT s.id) >= %s
             )
@@ -1148,7 +1150,7 @@ def leader_cards(
                 ROUND(cs.t8_count::numeric, 1)                                            AS t8_count,
                 lt.leader_total_decks,
                 lt.leader_total_t8s,
-                ROUND((cs.deck_count / NULLIF(lt.leader_total_decks, 0))::numeric, 4)       AS inclusion_rate,
+                ROUND((cs.deck_count / NULLIF(lt.leader_total_decks, 0))::numeric, 4)     AS inclusion_rate,
                 ROUND((cs.t8_count   / NULLIF(cs.deck_count, 0))::numeric, 4)             AS card_t8_rate,
                 ROUND((lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0))::numeric, 4) AS baseline_t8_rate,
                 ROUND(
@@ -1175,7 +1177,7 @@ def leader_cards(
                 )
             WHERE c.type IS NOT NULL
             ORDER BY inclusion_rate DESC, deck_count DESC
-        """, [leader, leader, min_decks])
+        """, [leader] + base_params + [leader] + base_params + [min_decks])
 
     else:
         # Fast path: serve from materialized view (no decay)
