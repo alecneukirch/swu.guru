@@ -2,8 +2,12 @@
 ocr_sealed.py — OCR sealed deck registration sheets via Claude Vision,
                  insert results into sealed_pools + sealed_pool_cards.
 
+PDF page layout: pages alternate front/back per pool.
+  Page 1 = Pool 1 front, Page 2 = Pool 1 back,
+  Page 3 = Pool 2 front, Page 4 = Pool 2 back, etc.
+
 Usage:
-    python3 ocr_sealed.py [--scans-dir ../scans] [--dry-run] [--pages 1-5] [--reprocess]
+    python3 ocr_sealed.py [--scans-dir ../scans] [--dry-run] [--pools 1-5] [--reprocess]
 """
 
 import argparse
@@ -14,8 +18,6 @@ import re
 import sys
 import time
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "app" if (Path(__file__).parent.parent / "app").exists() else Path(__file__).parent.parent))
 
 import anthropic
 
@@ -31,7 +33,7 @@ if _env_path.exists():
             os.environ.setdefault(k.strip(), v.strip())
 
 # ---------------------------------------------------------------------------
-# DB connection (reuse app db.py if available, else psycopg2 direct)
+# DB connection
 # ---------------------------------------------------------------------------
 try:
     sys.path.insert(0, "/app")
@@ -73,7 +75,7 @@ except ImportError:
     print("Using direct psycopg2")
 
 # ---------------------------------------------------------------------------
-# Card reference data (from blank form)
+# Card reference data
 # ---------------------------------------------------------------------------
 LEADERS = {
     1:  "Saw Gerrera, Bring Down the Empire",
@@ -201,7 +203,7 @@ AGGRESSION_RED = {
     176: "Sebulba's Podracer, Taking the Lead",
     177: "Son-tuul Berserkers",
     172: "Storm Raider",
-    187: '"Staccato Lightning" Repeater',
+    187: "Staccato Lightning Repeater",
     184: "Aerie, Cloud-Rider Dropship",
     183: "B-Wing Skirmisher",
     185: "Ben Solo, Facing the Light",
@@ -303,7 +305,7 @@ MULTICOLOR = {
     56: "Cassian Andor, Everything For the Reb...",
     55: "Chopper, Spectre Three",
     61: "Asajj Ventress, Reluctant Hunter",
-    57: "Benthic \"Two Tubes\", The War Has J...",
+    57: "Benthic Two Tubes, The War Has J...",
     62: "Defiant Hammerhead",
     59: "Highsinger, Deadly Droid",
     58: "Honor-Bound Partisan",
@@ -369,39 +371,26 @@ NO_ASPECT_GRAY = {
     261: "Street Gang Recruiter",
 }
 
-ALL_SECTIONS = {
-    "leader":     LEADERS,
-    "vigilance":  VIGILANCE_BLUE,
-    "command":    COMMAND_GREEN,
-    "aggression": AGGRESSION_RED,
-    "cunning":    CUNNING_YELLOW,
-    "multicolor": MULTICOLOR,
-    "villainy":   VILLAINY_BLACK,
-    "heroism":    HEROISM_WHITE,
-    "gray":       NO_ASPECT_GRAY,
-}
-
 # ---------------------------------------------------------------------------
-# Prompt
+# Prompts — front side
 # ---------------------------------------------------------------------------
-SYSTEM_PROMPT = """You are an expert at reading handwritten forms. You are given a scanned Star Wars: Unlimited sealed deck registration sheet. Your task is to extract the data exactly as written.
+SYSTEM_PROMPT_FRONT = """You are an expert at reading handwritten forms. You are given a scanned Star Wars: Unlimited sealed deck registration sheet (FRONT SIDE).
 
-The form has these sections on the FRONT side:
+The form has these sections:
 - Header: Table #, Player (First Name, Last Name, SWU ID), Verifier (First Name, Last Name, SWU ID), Event, Date
 - LEADER section: each row has two handwritten boxes (PLAYED | TOTAL) then a pre-printed card name
-- BASE section: each row has two handwritten boxes (PLAYED | TOTAL) then a pre-printed base name (no collector number)
+- BASE section: each row has two handwritten boxes (PLAYED | TOTAL) then a pre-printed base name
 - VIGILANCE (BLUE) section: two columns (PLAYED | TOTAL) then collector number then card name
 - COMMAND (GREEN) section: two columns (PLAYED | TOTAL) then collector number then card name
 
 IMPORTANT notes:
 - PLAYED = copies in main deck (left column)
 - TOTAL = copies in sealed pool (right column)
-- Blank / empty boxes mean 0 (player has 0 copies)
-- Numbers are typically 1, 2, or 3 — rarely higher
-- Some fields may be blank if the player left them empty
-- For the Base section, only 1 base is played but the pool may have multiple
+- Blank / empty boxes mean 0
+- Numbers are typically 1, 2, or 3
+- Only 1 leader is played; only 1 base is played
 
-Respond with ONLY valid JSON, no markdown, no explanation. Use this exact schema:
+Respond with ONLY valid JSON, no markdown, no explanation:
 {
   "table_num": <int or null>,
   "player_first_name": <string or null>,
@@ -410,42 +399,29 @@ Respond with ONLY valid JSON, no markdown, no explanation. Use this exact schema
   "verifier_first_name": <string or null>,
   "verifier_last_name": <string or null>,
   "verifier_swu_id": <string or null>,
-  "ocr_notes": <string — note anything unclear, e.g. "table_num illegible", "played/total reversed?", "">,
+  "ocr_notes": <string>,
   "sections": {
-    "leader": [
-      {"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>},
-      ...
-    ],
-    "base": [
-      {"card_name": <string>, "played": <int or null>, "total": <int or null>},
-      ...
-    ],
-    "vigilance": [
-      {"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>},
-      ...
-    ],
-    "command": [
-      {"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>},
-      ...
-    ]
+    "leader": [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "base":   [{"card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "vigilance": [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "command":   [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...]
   }
 }
 
-Only include rows where played > 0 OR total > 0. Skip rows where both are 0 or blank."""
+Only include rows where played > 0 OR total > 0."""
 
-def build_user_prompt(page_num: int) -> str:
+
+def build_front_prompt(pool_num: int) -> str:
     leader_list = "\n".join(f"  {n}. {name}" for n, name in sorted(LEADERS.items()))
     base_list   = "\n".join(f"  - {name}" for name in BASES)
     vig_list    = "\n".join(f"  {n}. {name}" for n, name in sorted(VIGILANCE_BLUE.items()))
     cmd_list    = "\n".join(f"  {n}. {name}" for n, name in sorted(COMMAND_GREEN.items()))
-    return f"""This is page {page_num} of a sealed deck registration sheet.
+    return f"""This is the FRONT side of pool #{pool_num}.
 
-Pre-printed card reference for this front side:
-
-LEADER cards (by collector number):
+LEADER cards:
 {leader_list}
 
-BASE options (no collector number):
+BASE options:
 {base_list}
 
 VIGILANCE (BLUE) cards:
@@ -454,72 +430,165 @@ VIGILANCE (BLUE) cards:
 COMMAND (GREEN) cards:
 {cmd_list}
 
-Please extract all data from this scan. Remember: PLAYED is the left column, TOTAL is the right column."""
+Extract all data. PLAYED is the left column, TOTAL is the right column."""
+
 
 # ---------------------------------------------------------------------------
-# OCR one image
+# Prompts — back side
+# ---------------------------------------------------------------------------
+SYSTEM_PROMPT_BACK = """You are an expert at reading handwritten forms. You are given a scanned Star Wars: Unlimited sealed deck registration sheet (BACK SIDE).
+
+The back side has these sections only (no header info):
+- AGGRESSION (RED) section: two columns (PLAYED | TOTAL) then collector number then card name
+- CUNNING (YELLOW) section: two columns (PLAYED | TOTAL) then collector number then card name
+- MULTICOLOR section: two columns (PLAYED | TOTAL) then collector number then card name
+- VILLAINY (BLACK) section: two columns (PLAYED | TOTAL) then collector number then card name
+- HEROISM (WHITE) section: two columns (PLAYED | TOTAL) then collector number then card name
+- NO ASPECT (GRAY) section: two columns (PLAYED | TOTAL) then collector number then card name
+
+IMPORTANT notes:
+- PLAYED = copies in main deck (left column)
+- TOTAL = copies in sealed pool (right column)
+- Blank / empty boxes mean 0
+- Numbers are typically 1, 2, or 3
+
+Respond with ONLY valid JSON, no markdown, no explanation:
+{
+  "ocr_notes": <string>,
+  "sections": {
+    "aggression": [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "cunning":    [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "multicolor": [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "villainy":   [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "heroism":    [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...],
+    "gray":       [{"card_number": <int>, "card_name": <string>, "played": <int or null>, "total": <int or null>}, ...]
+  }
+}
+
+Only include rows where played > 0 OR total > 0."""
+
+
+def build_back_prompt(pool_num: int) -> str:
+    agg_list  = "\n".join(f"  {n}. {name}" for n, name in sorted(AGGRESSION_RED.items()))
+    cun_list  = "\n".join(f"  {n}. {name}" for n, name in sorted(CUNNING_YELLOW.items()))
+    mul_list  = "\n".join(f"  {n}. {name}" for n, name in sorted(MULTICOLOR.items()))
+    vil_list  = "\n".join(f"  {n}. {name}" for n, name in sorted(VILLAINY_BLACK.items()))
+    her_list  = "\n".join(f"  {n}. {name}" for n, name in sorted(HEROISM_WHITE.items()))
+    gray_list = "\n".join(f"  {n}. {name}" for n, name in sorted(NO_ASPECT_GRAY.items()))
+    return f"""This is the BACK side of pool #{pool_num}.
+
+AGGRESSION (RED) cards:
+{agg_list}
+
+CUNNING (YELLOW) cards:
+{cun_list}
+
+MULTICOLOR cards:
+{mul_list}
+
+VILLAINY (BLACK) cards:
+{vil_list}
+
+HEROISM (WHITE) cards:
+{her_list}
+
+NO ASPECT (GRAY) cards:
+{gray_list}
+
+Extract all data. PLAYED is the left column, TOTAL is the right column."""
+
+
+# ---------------------------------------------------------------------------
+# Image helpers
 # ---------------------------------------------------------------------------
 def _resize_image(image_path: Path, max_bytes: int = 4_500_000) -> tuple[bytes, str]:
-    """Resize image to fit under max_bytes, return (bytes, media_type)."""
     from PIL import Image
     import io
     img = Image.open(image_path).convert("RGB")
-    # Cap max dimension at 2400px — preserves readability for text/handwriting
     max_dim = 2400
     w, h = img.size
     if max(w, h) > max_dim:
         scale = max_dim / max(w, h)
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-    # Try progressively lower quality until it fits
     for quality in (85, 75, 65, 55):
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality)
         if buf.tell() <= max_bytes:
             return buf.getvalue(), "image/jpeg"
-    # Last resort: scale down further
     w, h = img.size
     img = img.resize((int(w * 0.7), int(h * 0.7)), Image.LANCZOS)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=70)
     return buf.getvalue(), "image/jpeg"
 
-def ocr_image(client: anthropic.Anthropic, image_path: Path, page_num: int) -> dict:
-    img_bytes, media_type = _resize_image(image_path)
-    b64 = base64.standard_b64encode(img_bytes).decode()
 
-    resp = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
-                {"type": "text",  "text": build_user_prompt(page_num)},
-            ]
-        }]
-    )
-
-    raw = resp.content[0].text.strip()
-    # Strip markdown code fences if present
+def _fix_json(raw: str) -> str:
+    """Best-effort repair of common Claude JSON issues."""
+    # Strip code fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
-    return json.loads(raw)
+    raw = raw.strip()
+    # Remove trailing commas before } or ]
+    raw = re.sub(r",\s*([}\]])", r"\1", raw)
+    # Truncate at last complete top-level object
+    depth = 0
+    last_close = -1
+    for i, ch in enumerate(raw):
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                last_close = i
+                break
+    if last_close > 0:
+        raw = raw[:last_close + 1]
+    return raw
+
+
+def ocr_image(client: anthropic.Anthropic, image_path: Path, system: str, user: str, retries: int = 3) -> dict:
+    img_bytes, media_type = _resize_image(image_path)
+    b64 = base64.standard_b64encode(img_bytes).decode()
+    last_err = None
+    for attempt in range(retries):
+        if attempt > 0:
+            time.sleep(2)
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=8192,
+            system=system,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+                    {"type": "text",  "text": user},
+                ]
+            }]
+        )
+        raw = resp.content[0].text.strip()
+        try:
+            raw = _fix_json(raw)
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            last_err = e
+            if attempt < retries - 1:
+                print(f" (retry {attempt+1})", end="", flush=True)
+    raise last_err
+
 
 # ---------------------------------------------------------------------------
-# Insert to DB
+# DB helpers
 # ---------------------------------------------------------------------------
-def insert_pool(data: dict, page_num: int, dry_run: bool) -> int | None:
+def insert_pool(data: dict, front_page: int, dry_run: bool) -> int | None:
     if dry_run:
-        print(f"  [dry-run] Would insert pool for page {page_num}: {data.get('player_first_name')} {data.get('player_last_name')}")
+        print(f"  [dry-run] Would insert pool for page {front_page}: {data.get('player_first_name')} {data.get('player_last_name')}")
         return None
-
     row = db_fetchone(
         "INSERT INTO sealed_pools (scan_page, table_num, player_first_name, player_last_name, "
         "player_swu_id, verifier_first_name, verifier_last_name, verifier_swu_id, ocr_notes) "
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
         (
-            page_num,
+            front_page,
             data.get("table_num"),
             data.get("player_first_name"),
             data.get("player_last_name"),
@@ -532,7 +601,8 @@ def insert_pool(data: dict, page_num: int, dry_run: bool) -> int | None:
     )
     return row["id"]
 
-def insert_cards(pool_id: int, sections: dict, dry_run: bool):
+
+def insert_cards(pool_id: int, sections: dict, dry_run: bool) -> int:
     rows = []
     for section_name, cards in sections.items():
         for card in cards:
@@ -540,35 +610,39 @@ def insert_cards(pool_id: int, sections: dict, dry_run: bool):
             total  = card.get("total")  or 0
             if played == 0 and total == 0:
                 continue
-            rows.append((
-                pool_id,
-                section_name,
-                card.get("card_number"),
-                card.get("card_name", ""),
-                total,   # pool_count
-                played,  # played_count
-            ))
-
+            rows.append((pool_id, section_name, card.get("card_number"), card.get("card_name", ""), total, played))
     if dry_run:
         print(f"  [dry-run] Would insert {len(rows)} card rows")
-        return
-
+        return len(rows)
     for r in rows:
         db_execute(
             "INSERT INTO sealed_pool_cards (pool_id, section, card_number, card_name, pool_count, played_count) "
             "VALUES (%s,%s,%s,%s,%s,%s)",
             r
         )
+    return len(rows)
+
+
+def append_back_notes(pool_id: int, notes: str, dry_run: bool):
+    if dry_run or not notes:
+        return
+    db_execute(
+        "UPDATE sealed_pools SET ocr_notes = ocr_notes || %s WHERE id = %s",
+        (f" | BACK: {notes}", pool_id)
+    )
+
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scans-dir", default=str(Path(__file__).parent.parent / "scans"))
-    parser.add_argument("--dry-run",   action="store_true")
-    parser.add_argument("--pages",     help="e.g. 1-10 or 5")
-    parser.add_argument("--reprocess", action="store_true", help="Re-process pages already in DB")
+    parser.add_argument("--scans-dir",  default=str(Path(__file__).parent.parent / "scans"))
+    parser.add_argument("--dry-run",    action="store_true")
+    parser.add_argument("--pools",      help="Pool range to process, e.g. 1-10 or 5")
+    parser.add_argument("--reprocess",  action="store_true")
+    parser.add_argument("--back-only",  action="store_true",
+                        help="Only process back sides for pools missing back-side sections")
     args = parser.parse_args()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -578,58 +652,135 @@ def main():
     client = anthropic.Anthropic(api_key=api_key)
     scans_dir = Path(args.scans_dir)
 
-    # Determine page range
-    all_pages = sorted(
-        int(p.stem.replace("scan-", ""))
-        for p in scans_dir.glob("scan-*.png")
-    )
-    if args.pages:
-        if "-" in args.pages:
-            lo, hi = args.pages.split("-")
-            all_pages = [p for p in all_pages if int(lo) <= p <= int(hi)]
+    # Pool numbers 1..45; front page = 2*pool-1, back page = 2*pool
+    all_pools = list(range(1, 46))
+    if args.pools:
+        if "-" in args.pools:
+            lo, hi = args.pools.split("-")
+            all_pools = [p for p in all_pools if int(lo) <= p <= int(hi)]
         else:
-            all_pages = [int(args.pages)]
+            all_pools = [int(args.pools)]
 
-    # Skip already-processed unless --reprocess
+    BACK_SECTIONS = {"aggression", "cunning", "multicolor", "villainy", "heroism", "gray"}
+
+    if args.back_only:
+        # Find pools that exist but have no back-side card rows
+        rows = db_fetchall("""
+            SELECT sp.id, sp.scan_page
+            FROM sealed_pools sp
+            WHERE NOT EXISTS (
+                SELECT 1 FROM sealed_pool_cards spc
+                WHERE spc.pool_id = sp.id
+                AND spc.section = ANY(ARRAY['aggression','cunning','multicolor','villainy','heroism','gray'])
+            )
+            ORDER BY sp.scan_page
+        """)
+        # Map scan_page (front page) → pool_num
+        back_only_pools = []
+        for r in rows:
+            front_page = r["scan_page"]
+            # front_page should be odd: 1,3,5,...
+            pool_num = (front_page + 1) // 2
+            if pool_num in all_pools:
+                back_only_pools.append((pool_num, r["id"], front_page))
+        print(f"Back-only mode: {len(back_only_pools)} pools need back-side data")
+        for pool_num, pool_id, front_page in back_only_pools:
+            back_page = front_page + 1
+            back_img  = scans_dir / f"scan-{back_page:02d}.png"
+            if not back_img.exists():
+                print(f"  Pool {pool_num}: back image {back_img.name} not found, skipping")
+                continue
+            print(f"\nPool {pool_num} (back page {back_page}): ...", end="", flush=True)
+            try:
+                back_data = ocr_image(client, back_img, SYSTEM_PROMPT_BACK, build_back_prompt(pool_num))
+                back_sections = back_data.get("sections", {})
+                back_card_count = sum(len(v) for v in back_sections.values())
+                print(f" OK — ~{back_card_count} card rows")
+                if back_data.get("ocr_notes"):
+                    print(f"  BACK NOTE: {back_data['ocr_notes']}")
+                if not args.dry_run:
+                    insert_cards(pool_id, back_sections, args.dry_run)
+                    append_back_notes(pool_id, back_data.get("ocr_notes", ""), args.dry_run)
+            except json.JSONDecodeError as e:
+                print(f" JSON PARSE ERROR: {e}")
+                Path(f"/tmp/ocr_pool_{pool_num}_back_error.txt").write_text(str(e))
+            except Exception as e:
+                print(f" ERROR: {e}")
+            time.sleep(0.5)
+        print("\nDone.")
+        return
+
+    # Skip already-processed front pages unless --reprocess
     if not args.reprocess and not args.dry_run:
-        existing = {r["scan_page"] for r in db_fetchall("SELECT scan_page FROM sealed_pools")}
-        skipped = [p for p in all_pages if p in existing]
-        all_pages = [p for p in all_pages if p not in existing]
+        existing_front_pages = {r["scan_page"] for r in db_fetchall("SELECT scan_page FROM sealed_pools")}
+        skipped = [p for p in all_pools if (2 * p - 1) in existing_front_pages]
+        all_pools = [p for p in all_pools if (2 * p - 1) not in existing_front_pages]
         if skipped:
-            print(f"Skipping {len(skipped)} already-processed pages: {skipped}")
+            print(f"Skipping {len(skipped)} already-processed pools: {skipped}")
 
-    print(f"Processing {len(all_pages)} pages: {all_pages}")
+    print(f"Processing {len(all_pools)} pools: {all_pools}")
 
-    for page_num in all_pages:
-        img_path = scans_dir / f"scan-{page_num:02d}.png"
-        if not img_path.exists():
-            print(f"  Page {page_num}: file not found, skipping")
+    for pool_num in all_pools:
+        front_page = 2 * pool_num - 1
+        back_page  = 2 * pool_num
+        front_img  = scans_dir / f"scan-{front_page:02d}.png"
+        back_img   = scans_dir / f"scan-{back_page:02d}.png"
+
+        if not front_img.exists():
+            print(f"\nPool {pool_num}: front image {front_img.name} not found, skipping")
             continue
 
-        print(f"\nPage {page_num}: {img_path.name} ...", end="", flush=True)
+        print(f"\nPool {pool_num} (pages {front_page}/{back_page}): front ...", end="", flush=True)
         try:
-            data = ocr_image(client, img_path, page_num)
-            print(f" OK — {data.get('player_first_name')} {data.get('player_last_name')} table={data.get('table_num')}")
-            if data.get("ocr_notes"):
-                print(f"  NOTE: {data['ocr_notes']}")
+            front_data = ocr_image(client, front_img, SYSTEM_PROMPT_FRONT, build_front_prompt(pool_num))
+            print(f" OK — {front_data.get('player_first_name')} {front_data.get('player_last_name')} table={front_data.get('table_num')}")
+            if front_data.get("ocr_notes"):
+                print(f"  FRONT NOTE: {front_data['ocr_notes']}")
 
-            pool_id = insert_pool(data, page_num, args.dry_run)
+            pool_id = insert_pool(front_data, front_page, args.dry_run)
+            card_count = 0
             if pool_id is not None:
-                insert_cards(pool_id, data.get("sections", {}), args.dry_run)
-                card_count = sum(len(v) for v in data.get("sections", {}).values())
-                print(f"  Inserted pool_id={pool_id}, ~{card_count} card rows")
+                card_count += insert_cards(pool_id, front_data.get("sections", {}), args.dry_run)
 
         except json.JSONDecodeError as e:
             print(f" JSON PARSE ERROR: {e}")
-            print(f"  Raw response saved to /tmp/ocr_page_{page_num}_error.txt")
-            Path(f"/tmp/ocr_page_{page_num}_error.txt").write_text(str(e))
+            Path(f"/tmp/ocr_pool_{pool_num}_front_error.txt").write_text(str(e))
+            continue
         except Exception as e:
             print(f" ERROR: {e}")
+            continue
 
-        # Rate limit headroom
         time.sleep(0.5)
 
+        # Back side
+        if not back_img.exists():
+            print(f"  back image {back_img.name} not found, skipping back side")
+        else:
+            print(f"  back ...", end="", flush=True)
+            try:
+                back_data = ocr_image(client, back_img, SYSTEM_PROMPT_BACK, build_back_prompt(pool_num))
+                back_sections = back_data.get("sections", {})
+                back_card_count = sum(len(v) for v in back_sections.values())
+                print(f" OK — ~{back_card_count} card rows")
+                if back_data.get("ocr_notes"):
+                    print(f"  BACK NOTE: {back_data['ocr_notes']}")
+
+                if pool_id is not None:
+                    card_count += insert_cards(pool_id, back_sections, args.dry_run)
+                    append_back_notes(pool_id, back_data.get("ocr_notes", ""), args.dry_run)
+
+            except json.JSONDecodeError as e:
+                print(f" JSON PARSE ERROR: {e}")
+                Path(f"/tmp/ocr_pool_{pool_num}_back_error.txt").write_text(str(e))
+            except Exception as e:
+                print(f" ERROR: {e}")
+
+            time.sleep(0.5)
+
+        print(f"  pool_id={pool_id}, ~{card_count} total card rows")
+
     print("\nDone.")
+
 
 if __name__ == "__main__":
     main()
