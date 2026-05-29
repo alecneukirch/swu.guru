@@ -3554,13 +3554,6 @@ select.sl-input { cursor: pointer; }
   <div class="leader-top-row">
     <div class="leader-top-left">
       <div id="leader-hero"></div>
-      <!-- Shared filters (apply to all tabs) -->
-      <div class="controls lp-shared-controls" style="padding-top:12px;padding-bottom:0">
-        <span class="ctrl-label">Base</span>
-        <select id="lp-base" onchange="onLeaderFilterChange()">
-          <option value="">All bases</option>
-        </select>
-      </div>
     </div>
     <div id="leader-elo-chart" class="leader-top-right">
       <div class="loading" style="padding:24px">loading…</div>
@@ -4256,12 +4249,11 @@ function showPage(name) {
 function goHome() {
   showPage('home');
 }
-function openLeader(name, autoBase = null) {
+function openLeader(name) {
   pendingMatchupOpponent = null;
   _eloFilterBucket = null;
   currentLeader = name;
-  const h = '#leader=' + encodeURIComponent(name) + (autoBase ? '&base=' + encodeURIComponent(autoBase) : '');
-  history.pushState(null, '', h);
+  history.pushState(null, '', '#leader=' + encodeURIComponent(name));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-leader').classList.add('active');
@@ -4275,7 +4267,6 @@ function openLeader(name, autoBase = null) {
   document.getElementById('bc-base-sep').style.display = 'none';
   document.getElementById('bc-base').style.display = 'none';
   document.getElementById('breadcrumb').classList.add('visible');
-  document.getElementById('lp-base').innerHTML = '<option value="">All bases</option>';
   matchupData    = [];
   weaknessesData = [];
   weaknessSort   = 'count';
@@ -4286,15 +4277,12 @@ function openLeader(name, autoBase = null) {
   leaderTab    = 'cards';
   setLeaderTab('cards');
   renderLeaderHero(name);
-  loadLeaderBases(name, autoBase);
   loadLeaderCards();
   loadLeaderElo();
 }
 
 function buildLeaderHash() {
   let h = '#leader=' + encodeURIComponent(currentLeader);
-  const base = document.getElementById('lp-base')?.value;
-  if (base) h += '&base=' + encodeURIComponent(base);
   if (currentFormat === 'eternal') h += '&fmt=eternal';
   if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
   return h;
@@ -4306,7 +4294,7 @@ function routeFromHash() {
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
   if (params.leader) {
     if (params.fmt === 'eternal') applyFormat('eternal');
-    openLeader(params.leader, params.base || null);
+    openLeader(params.leader);
     if (params.tab && params.tab !== 'cards') {
       if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
       setLeaderTab(params.tab);
@@ -4358,7 +4346,6 @@ async function loadHome() {
     homeComboData = comboData;
     const total = comboData.reduce((s, r) => s + r.total_decks, 0);
     const uniqueLeaders = new Set(comboData.map(r => r.leader)).size;
-    console.log('[loadHome] rows=' + comboData.length + ' first.total_decks=' + (comboData[0]?.total_decks));
     document.getElementById('mb-events').textContent  = (summary.total_events ?? '—').toLocaleString?.() ?? summary.total_events;
     document.getElementById('mb-decks').textContent   = Math.round(total).toLocaleString();
     document.getElementById('mb-leaders').textContent = uniqueLeaders;
@@ -4503,8 +4490,6 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
 function renderLeaderGrid() {
   const search = document.getElementById('home-search').value.toLowerCase();
   const grid   = document.getElementById('leader-grid');
-  console.log('[renderLeaderGrid] grid=' + !!grid + ' rows=' + homeComboData.length + ' first.total_decks=' + (homeComboData[0]?.total_decks));
-
   grid.classList.add('tier-grouped');
   let rows = [...homeComboData];
   if (search) rows = rows.filter(r => r.leader?.toLowerCase().includes(search) || r.base_group?.toLowerCase().includes(search));
@@ -4612,11 +4597,7 @@ async function renderLeaderHero(name) {
   const hero = document.getElementById('leader-hero');
   hero.innerHTML = '<div style="padding:24px;color:var(--text3);font-family:var(--mono)">loading…</div>';
   try {
-    const base = document.getElementById('lp-base').value;
-    let statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats';
-    const statsParams = ['format=' + currentFormat];
-    if (base) statsParams.push('base_group=' + encodeURIComponent(base));
-    statsUrl += '?' + statsParams.join('&');
+    const statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats?format=' + currentFormat;
     const stats = await api(statsUrl);
     const asp  = aspect(name);
     const cc   = convClass(stats.conversion);
@@ -4675,32 +4656,6 @@ async function renderLeaderHero(name) {
   }
 }
 
-async function loadLeaderBases(name, autoBase = null) {
-  const sel    = document.getElementById('lp-base');
-  sel.innerHTML = '<option value="">All bases</option>';
-  try {
-    const groups = await api('/api/leader/' + encodeURIComponent(name) + '/bases?format=' + currentFormat);
-    groups.forEach(g => {
-      const opt = document.createElement('option');
-      opt.value       = (g.bases || []).join(',');
-      opt.textContent = `${g.label} (${g.decks})`;
-      sel.appendChild(opt);
-    });
-    // If we have an autoBase (opened from combo view), find and select the matching option
-    if (autoBase) {
-      const autoBaseNorm = autoBase.split(',').map(s => s.trim()).sort().join(',');
-      for (const opt of sel.options) {
-        const optNorm = opt.value.split(',').map(s => s.trim()).sort().join(',');
-        if (optNorm === autoBaseNorm || autoBase.split(',').some(b => optNorm.includes(b.trim()))) {
-          sel.value = opt.value;
-          break;
-        }
-      }
-      // Trigger a reload with the pre-selected base
-      if (sel.value) onLeaderFilterChange();
-    }
-  } catch {}
-}
 
 function onLeaderFilterChange() {
   history.replaceState(null, '', buildLeaderHash());
@@ -4723,28 +4678,13 @@ function shareLeader(btn) {
 
 async function loadLeaderCards() {
   if (!currentLeader) return;
-  const base = document.getElementById('lp-base').value;
 
-  // Refresh hero stats to reflect base filter
   renderLeaderHero(currentLeader);
-
-  if (base) {
-    // Show a friendlier label from the dropdown
-    const sel = document.getElementById('lp-base');
-    const selectedText = sel.options[sel.selectedIndex]?.text || base;
-    document.getElementById('bc-base').textContent = selectedText.replace(/\s*\(\d+\)$/, '');
-    document.getElementById('bc-base').style.display = '';
-    document.getElementById('bc-base-sep').style.display = '';
-  } else {
-    document.getElementById('bc-base').style.display = 'none';
-    document.getElementById('bc-base-sep').style.display = 'none';
-  }
 
   document.getElementById('leader-cards-tbody').innerHTML = '<tr><td colspan="6" class="loading">loading…</td></tr>';
   try {
     const minDecks = parseInt(document.getElementById('lp-min-decks')?.value) || 5;
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat;
-    if (base)                      url += '&base_group=' + encodeURIComponent(base);
     if (_eloFilterBucket !== null) url += '&elo_bucket=' + _eloFilterBucket;
     leaderData = await api(url) || [];
     filterCards();
@@ -4998,11 +4938,7 @@ async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
-  const base = document.getElementById('lp-base').value;
-  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups';
-  const muParams = ['format=' + currentFormat];
-  if (base)         muParams.push('base_group=' + encodeURIComponent(base));
-  url += '?' + muParams.join('&');
+  const url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups?format=' + currentFormat;
   try {
     const data = await api(url);
     if (gen !== _matchupGen) return;
@@ -5106,12 +5042,10 @@ async function openMatchupDetail(matchup) {
   document.getElementById('mu-detail-wr').style.color = color;
   document.getElementById('mu-cards-grid').innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
 
-  const base = document.getElementById('lp-base').value;
-  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
+  const url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
     + '?opponent=' + encodeURIComponent(matchup.opponent)
     + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join(','))
     + '&format=' + currentFormat;
-  if (base)        url += '&base_group=' + encodeURIComponent(base);
 
   try {
     const data = await api(url);
@@ -5197,10 +5131,8 @@ async function loadLeaderWeaknesses() {
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
   const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
-  const base = document.getElementById('lp-base').value;
-  let url = '/api/leader/' + encodeURIComponent(currentLeader)
+  const url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
-  if (base) url += '&base_group=' + encodeURIComponent(base);
   try {
     weaknessesData = await api(url);
     renderWeaknesses();
@@ -5278,10 +5210,8 @@ async function loadLeaderElo() {
   if (!currentLeader) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
 
-  const base = document.getElementById('lp-base').value;
-  let url = '/api/leader/' + encodeURIComponent(currentLeader)
+  const url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/elo-breakdown?format=' + currentFormat;
-  if (base)        url += '&base_group=' + encodeURIComponent(base);
 
   try {
     const rows = await api(url);

@@ -779,6 +779,7 @@ def leader_stats(
     base_group: Optional[str] = Query(None, description="Comma-separated base names to filter by"),
     format:     str            = Query("standard"),
     days:       Optional[int]  = Query(None),
+    decay:      bool           = Query(True),
 ):
     """Hero stats for the leader page header. Supports base group filtering."""
     t = _tnames(format)
@@ -792,7 +793,6 @@ def leader_stats(
         base_filter = ""
         base_params = []
 
-    # Always use live query when base filter is active (matview doesn't store base)
     if date_sql or base_names:
         row = db.fetchone(f"""
             SELECT
@@ -812,7 +812,6 @@ def leader_stats(
             GROUP BY s.leader
         """, [leader] + date_params + base_params)
 
-        # Meta rate: all leaders, same date range but NOT base-filtered (conversion is vs global meta)
         meta = db.fetchone(f"""
             SELECT COUNT(DISTINCT s.id) AS all_decks,
                    COUNT(DISTINCT s.id) FILTER (
@@ -823,6 +822,34 @@ def leader_stats(
             WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL
               {date_sql}
         """, date_params)
+    elif decay:
+        w = decay_weight()
+        row = db.fetchone(f"""
+            SELECT
+                s.leader,
+                SUM({w})                                                              AS total_decks,
+                COALESCE(SUM({w}) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                ), 0)                                                                 AS top8_count,
+                COALESCE(SUM({w}) FILTER (
+                    WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.16)::INT, 1)
+                ), 0)                                                                 AS top16_count,
+                COALESCE(SUM({w}) FILTER (WHERE s.placement = 1), 0)                 AS wins
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+            GROUP BY s.leader
+        """, [leader])
+
+        meta = db.fetchone(f"""
+            SELECT SUM({w}) AS all_decks,
+                   COALESCE(SUM({w}) FILTER (
+                       WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                   ), 0) AS all_t8s
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+        """)
     else:
         row = db.fetchone(f"""
             SELECT leader,
@@ -982,6 +1009,7 @@ def leader_cards(
     bucket:       int             = Query(100,  description="ELO bucket size used when elo_bucket is set"),
     format:       str             = Query("standard"),
     days:         Optional[int]   = Query(None),
+    decay:        bool            = Query(True),
 ):
     """
     Card list for a leader with inclusion %, avg copies, T8 conversion.
@@ -1077,8 +1105,80 @@ def leader_cards(
             ORDER BY inclusion_rate DESC, deck_count DESC
         """, [leader] + date_params + base_params + [leader] + date_params + base_params + [min_decks])
 
+    elif decay:
+        # Decay-weighted path — no date filter, no special filters
+        w = decay_weight()
+        sb_f = sb_filter  # already set above
+        rows = db.fetchall(f"""
+            WITH leader_totals AS (
+                SELECT
+                    SUM({w})                                                              AS leader_total_decks,
+                    COALESCE(SUM({w}) FILTER (
+                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                    ), 0)                                                                 AS leader_total_t8s
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                JOIN (SELECT DISTINCT standing_id FROM {t['decklist_cards']}) dc_any
+                    ON dc_any.standing_id = s.id
+                WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+            ),
+            card_stats AS (
+                SELECT
+                    dc.card_name,
+                    dc.is_sideboard,
+                    COUNT(DISTINCT s.id)                                                  AS raw_deck_count,
+                    SUM({w})                                                              AS deck_count,
+                    SUM(dc.quantity * {w}) / NULLIF(SUM({w}), 0)                         AS avg_copies,
+                    COALESCE(SUM({w}) FILTER (
+                        WHERE s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
+                    ), 0)                                                                 AS t8_count
+                FROM {t['decklist_cards']} dc
+                JOIN {t['standings']} s ON s.id = dc.standing_id
+                JOIN {t['events']} e ON e.id = s.event_id
+                WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+                      {sb_f}
+                GROUP BY dc.card_name, dc.is_sideboard
+                HAVING COUNT(DISTINCT s.id) >= %s
+            )
+            SELECT
+                cs.card_name,
+                cs.is_sideboard,
+                ROUND(cs.deck_count::numeric, 1)                                          AS deck_count,
+                ROUND(cs.avg_copies::numeric, 2)                                          AS avg_copies,
+                ROUND(cs.t8_count::numeric, 1)                                            AS t8_count,
+                lt.leader_total_decks,
+                lt.leader_total_t8s,
+                ROUND(cs.deck_count / NULLIF(lt.leader_total_decks, 0), 4)                AS inclusion_rate,
+                ROUND(cs.t8_count   / NULLIF(cs.deck_count, 0), 4)                       AS card_t8_rate,
+                ROUND(lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0), 4)          AS baseline_t8_rate,
+                ROUND(
+                    (cs.t8_count / NULLIF(cs.deck_count, 0))
+                    / NULLIF(lt.leader_total_t8s / NULLIF(lt.leader_total_decks, 0), 0),
+                4)                                                                         AS conversion,
+                COALESCE(c.type, 'Unit') AS card_type,
+                COALESCE(c.cost, 0)      AS cost,
+                c.arena                  AS arena
+            FROM card_stats cs
+            CROSS JOIN leader_totals lt
+            LEFT JOIN (
+                SELECT DISTINCT ON (name, COALESCE(subtitle,''))
+                    name, subtitle, type, cost, arena
+                FROM cards
+                WHERE variant_type = 'Standard'
+                  AND is_leader = false
+                  AND is_base   = false
+                ORDER BY name, COALESCE(subtitle,''), set_code DESC
+            ) c ON c.name = SPLIT_PART(cs.card_name, ' | ', 1)
+                AND (
+                    SPLIT_PART(cs.card_name, ' | ', 2) = ''
+                    OR c.subtitle = SPLIT_PART(cs.card_name, ' | ', 2)
+                )
+            WHERE c.type IS NOT NULL
+            ORDER BY inclusion_rate DESC, deck_count DESC
+        """, [leader, leader, min_decks])
+
     else:
-        # Fast path: serve from materialized view
+        # Fast path: serve from materialized view (no decay)
         params: list = [leader, min_decks]
         filters = "AND leader = %s AND deck_count >= %s"
         if is_sideboard is not None:
