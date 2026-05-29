@@ -4621,7 +4621,7 @@ async function renderLeaderHero(name) {
     const subtitle = comma > 0 ? name.slice(comma + 1).trim() : '';
     const baseAsp  = currentLeaderBaseAspect && currentLeaderBaseAspect !== 'none' ? currentLeaderBaseAspect : null;
     const baseIcon = baseAsp
-      ? `<span style="margin-left:6px">${aspectIcon(baseAsp, 18)}<span style="color:${aspectColor(baseAsp)};font-size:11px;margin-left:3px;vertical-align:middle">${baseAsp.toUpperCase()}</span></span>`
+      ? `<span style="color:var(--text3);margin:0 4px">·</span>${aspectIcon(baseAsp, 18)}<span style="color:${aspectColor(baseAsp)}">${baseAsp.toUpperCase()}</span>`
       : '';
     const baseLine = currentLeaderBaseGroup
       ? `<div class="lh-sub" style="margin-bottom:4px">${currentLeaderBaseGroup}</div>`
