@@ -4036,6 +4036,7 @@ select.sl-input { cursor: pointer; }
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <span id="confirm-progress" style="font-family:var(--mono);font-size:12px;color:var(--text3)"></span>
+      <button class="btn" id="apply-guesses-btn" onclick="applyAllGuesses()">Apply Guesses</button>
       <button class="btn" onclick="loadConfirm()">↺ Refresh</button>
     </div>
   </div>
@@ -7737,10 +7738,7 @@ function renderConfirm() {
     }
   </td>
   <td>${badge}</td>
-  <td>
-    <button class="confirm-save-btn" id="csave-${p.pool_id}"
-      onclick="saveConfirm(${p.pool_id})" disabled>Save</button>
-  </td>
+  <td id="csave-status-${p.pool_id}" style="font-family:var(--mono);font-size:11px;color:var(--text3)"></td>
 </tr>`;
   }).join('');
 
@@ -7786,11 +7784,34 @@ function renderConfirm() {
 }
 
 function onConfirmChange(poolId) {
-  document.getElementById(`csave-${poolId}`).disabled = false;
+  saveConfirm(poolId);
 }
 
 function onLeaderChange(poolId) {
   document.getElementById(`lsave-${poolId}`).disabled = false;
+}
+
+async function applyAllGuesses() {
+  const btn = document.getElementById('apply-guesses-btn');
+  if (!btn) return;
+  btn.textContent = '…';
+  btn.disabled = true;
+  const pools = _confirmData?.pools || [];
+  const toSave = pools.filter(p => !p.melee_player_id && p.guess_melee_id);
+  let saved = 0;
+  for (const p of toSave) {
+    try {
+      await api('/api/sealed/confirm', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ pool_id: p.pool_id, melee_player_id: p.guess_melee_id })
+      });
+      saved++;
+    } catch(e) { /* skip */ }
+  }
+  btn.textContent = `Applied ${saved}`;
+  _confirmData = await api('/api/sealed/confirm-data');
+  renderConfirm();
 }
 
 async function saveLeader(poolId) {
@@ -7815,23 +7836,20 @@ async function saveLeader(poolId) {
 
 async function saveConfirm(poolId) {
   const sel = document.getElementById(`csel-${poolId}`);
-  const btn = document.getElementById(`csave-${poolId}`);
+  const status = document.getElementById(`csave-status-${poolId}`);
   const val = sel.value;
-  btn.textContent = '…';
-  btn.disabled = true;
+  if (status) status.textContent = '…';
   try {
     await api('/api/sealed/confirm', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ pool_id: poolId, melee_player_id: val ? parseInt(val) : null })
     });
-    // Reload to refresh assigned marks
     _confirmData = await api('/api/sealed/confirm-data');
     renderConfirm();
   } catch(e) {
-    btn.textContent = 'Error';
-    btn.disabled = false;
-    alert(e.message);
+    if (status) status.textContent = 'err';
+    console.error(e);
   }
 }
 </script>
