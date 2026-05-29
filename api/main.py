@@ -1751,9 +1751,9 @@ def leader_matchups(
             WITH as_p1 AS (
                 SELECT m.p2_leader AS opponent,
                        m.p2_base   AS opponent_base,
-                       SUM({w})                                        AS matches,
-                       SUM({w}) FILTER (WHERE m.winner = 'p1')        AS wins,
-                       SUM({w}) FILTER (WHERE m.winner = 'p2')        AS losses
+                       SUM({w})                                             AS matches,
+                       COALESCE(SUM({w}) FILTER (WHERE m.winner = 'p1'), 0) AS wins,
+                       COALESCE(SUM({w}) FILTER (WHERE m.winner = 'p2'), 0) AS losses
                 FROM {t['matches']} m
                 JOIN {t['events']} e ON e.id = m.event_id
                 {top8_join}
@@ -1765,9 +1765,9 @@ def leader_matchups(
             as_p2 AS (
                 SELECT m.p1_leader AS opponent,
                        m.p1_base   AS opponent_base,
-                       SUM({w})                                        AS matches,
-                       SUM({w}) FILTER (WHERE m.winner = 'p2')        AS wins,
-                       SUM({w}) FILTER (WHERE m.winner = 'p1')        AS losses
+                       SUM({w})                                             AS matches,
+                       COALESCE(SUM({w}) FILTER (WHERE m.winner = 'p2'), 0) AS wins,
+                       COALESCE(SUM({w}) FILTER (WHERE m.winner = 'p1'), 0) AS losses
                 FROM {t['matches']} m
                 JOIN {t['events']} e ON e.id = m.event_id
                 {top8_join}
