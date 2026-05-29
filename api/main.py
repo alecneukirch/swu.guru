@@ -1717,6 +1717,7 @@ def leader_matchups(
     top8_only:  bool           = Query(False),
     format:     str            = Query("standard"),
     days:       Optional[int]  = Query(None),
+    decay:      bool           = Query(True),
 ):
     """
     Win/loss record for a leader against each opponent leader+base combo.
@@ -1744,46 +1745,89 @@ def leader_matchups(
                 s2t.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
             )"""
 
-    rows = db.fetchall(f"""
-        WITH as_p1 AS (
-            SELECT m.p2_leader AS opponent,
-                   m.p2_base   AS opponent_base,
-                   COUNT(*)::INT AS matches,
-                   COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS wins,
-                   COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS losses
-            FROM {t['matches']} m
-            JOIN {t['events']} e ON e.id = m.event_id
-            {top8_join}
-            WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
-              AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
-              AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {top8_where}
-            GROUP BY m.p2_leader, m.p2_base
-        ),
-        as_p2 AS (
-            SELECT m.p1_leader AS opponent,
-                   m.p1_base   AS opponent_base,
-                   COUNT(*)::INT AS matches,
-                   COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS wins,
-                   COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS losses
-            FROM {t['matches']} m
-            JOIN {t['events']} e ON e.id = m.event_id
-            {top8_join}
-            WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
-              AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
-              AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where}
-            GROUP BY m.p1_leader, m.p1_base
-        )
-        SELECT t.opponent, t.opponent_base,
-               br.label     AS base_group,
-               br.group_key AS base_key,
-               SUM(t.matches)::INT AS matches,
-               SUM(t.wins)::INT    AS wins,
-               SUM(t.losses)::INT  AS losses
-        FROM (SELECT * FROM as_p1 UNION ALL SELECT * FROM as_p2) t
-        LEFT JOIN base_reference br ON br.name = t.opponent_base
-        GROUP BY t.opponent, t.opponent_base, br.label, br.group_key
-        ORDER BY SUM(t.matches) DESC
-    """, [leader] + date_params + own_param + [leader] + date_params + own_param)
+    if decay and not date_sql:
+        w = decay_weight()
+        rows = db.fetchall(f"""
+            WITH as_p1 AS (
+                SELECT m.p2_leader AS opponent,
+                       m.p2_base   AS opponent_base,
+                       SUM({w})                                        AS matches,
+                       SUM({w}) FILTER (WHERE m.winner = 'p1')        AS wins,
+                       SUM({w}) FILTER (WHERE m.winner = 'p2')        AS losses
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                {top8_join}
+                WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
+                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {own_as_p1} {top8_where}
+                GROUP BY m.p2_leader, m.p2_base
+            ),
+            as_p2 AS (
+                SELECT m.p1_leader AS opponent,
+                       m.p1_base   AS opponent_base,
+                       SUM({w})                                        AS matches,
+                       SUM({w}) FILTER (WHERE m.winner = 'p2')        AS wins,
+                       SUM({w}) FILTER (WHERE m.winner = 'p1')        AS losses
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                {top8_join}
+                WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
+                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {own_as_p2} {top8_where}
+                GROUP BY m.p1_leader, m.p1_base
+            )
+            SELECT t.opponent, t.opponent_base,
+                   br.label     AS base_group,
+                   br.group_key AS base_key,
+                   SUM(t.matches) AS matches,
+                   SUM(t.wins)    AS wins,
+                   SUM(t.losses)  AS losses
+            FROM (SELECT * FROM as_p1 UNION ALL SELECT * FROM as_p2) t
+            LEFT JOIN base_reference br ON br.name = t.opponent_base
+            GROUP BY t.opponent, t.opponent_base, br.label, br.group_key
+            ORDER BY SUM(t.matches) DESC
+        """, [leader] + own_param + [leader] + own_param)
+    else:
+        rows = db.fetchall(f"""
+            WITH as_p1 AS (
+                SELECT m.p2_leader AS opponent,
+                       m.p2_base   AS opponent_base,
+                       COUNT(*)::INT AS matches,
+                       COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS wins,
+                       COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS losses
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                {top8_join}
+                WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
+                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {top8_where}
+                GROUP BY m.p2_leader, m.p2_base
+            ),
+            as_p2 AS (
+                SELECT m.p1_leader AS opponent,
+                       m.p1_base   AS opponent_base,
+                       COUNT(*)::INT AS matches,
+                       COUNT(*) FILTER (WHERE m.winner = 'p2')::INT AS wins,
+                       COUNT(*) FILTER (WHERE m.winner = 'p1')::INT AS losses
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                {top8_join}
+                WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
+                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where}
+                GROUP BY m.p1_leader, m.p1_base
+            )
+            SELECT t.opponent, t.opponent_base,
+                   br.label     AS base_group,
+                   br.group_key AS base_key,
+                   SUM(t.matches)::INT AS matches,
+                   SUM(t.wins)::INT    AS wins,
+                   SUM(t.losses)::INT  AS losses
+            FROM (SELECT * FROM as_p1 UNION ALL SELECT * FROM as_p2) t
+            LEFT JOIN base_reference br ON br.name = t.opponent_base
+            GROUP BY t.opponent, t.opponent_base, br.label, br.group_key
+            ORDER BY SUM(t.matches) DESC
+        """, [leader] + date_params + own_param + [leader] + date_params + own_param)
 
     if not rows:
         return []
@@ -1815,6 +1859,9 @@ def leader_matchups(
         if total >= min_games:
             result.append({
                 **g,
+                'matches': round(g['matches']),
+                'wins':    round(g['wins']),
+                'losses':  round(g['losses']),
                 'win_rate': round(g['wins'] / total, 4) if total > 0 else None,
             })
 
@@ -2084,6 +2131,7 @@ def leader_weaknesses(
     limit:      int           = Query(60),
     sort:       str           = Query("count"),  # "count" | "delta"
     days:       Optional[int] = Query(None),
+    decay:      bool          = Query(True),
 ):
     """
     Cards with the highest win rates when played against this leader+base combo,
@@ -2097,59 +2145,116 @@ def leader_weaknesses(
     base_as_p2 = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
     base_param = [base_names] if base_names else []
 
-    rows = db.fetchall(f"""
-        WITH target_matches AS (
-            SELECT m.p2_standing_id AS standing_id,
-                   (m.winner = 'p2') AS won
-            FROM {t['matches']} m
-            JOIN {t['events']} e ON e.id = m.event_id
-            WHERE m.p1_leader = %s AND m.winner IS NOT NULL
-              AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
-            UNION ALL
-            SELECT m.p1_standing_id AS standing_id,
-                   (m.winner = 'p1') AS won
-            FROM {t['matches']} m
-            JOIN {t['events']} e ON e.id = m.event_id
-            WHERE m.p2_leader = %s AND m.winner IS NOT NULL
-              AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
-        ),
-        totals AS (
-            SELECT COUNT(*)::INT AS total_games,
-                   SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT AS total_wins
-            FROM target_matches
-        ),
-        card_stats AS (
-            SELECT dc.card_name,
-                   COUNT(*)::INT AS game_count,
-                   SUM(CASE WHEN tm.won THEN 1 ELSE 0 END)::INT AS wins
-            FROM target_matches tm
-            JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
-            WHERE dc.is_sideboard = false
-              AND NOT EXISTS (
-                  SELECT 1 FROM cards c
-                  WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
-                    AND (c.is_leader = true OR c.is_base = true)
-              )
-            GROUP BY dc.card_name
-            HAVING COUNT(*) >= %s
-        )
-        SELECT cs.card_name,
-               cs.game_count,
-               cs.wins,
-               ROUND(cs.wins::numeric / NULLIF(cs.game_count, 0), 4) AS win_rate,
-               t.total_games,
-               t.total_wins,
-               ROUND(t.total_wins::numeric / NULLIF(t.total_games, 0), 4) AS baseline_win_rate,
-               ROUND(
-                   cs.wins::numeric / NULLIF(cs.game_count, 0)
-                   - t.total_wins::numeric / NULLIF(t.total_games, 0),
-               4) AS delta
-        FROM card_stats cs, totals t
-        ORDER BY {'game_count DESC' if sort == 'count' else 'win_rate ASC'}, game_count DESC
-        LIMIT %s
-    """, [leader] + date_params + base_param +
-         [leader] + date_params + base_param +
-         [min_games, limit])
+    if decay and not date_sql:
+        w = decay_weight()
+        rows = db.fetchall(f"""
+            WITH target_matches AS (
+                SELECT m.p2_standing_id AS standing_id,
+                       {w}              AS weight,
+                       (m.winner = 'p2') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p1_leader = %s AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {base_as_p1}
+                UNION ALL
+                SELECT m.p1_standing_id AS standing_id,
+                       {w}              AS weight,
+                       (m.winner = 'p1') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p2_leader = %s AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {base_as_p2}
+            ),
+            totals AS (
+                SELECT SUM(weight) AS total_games,
+                       SUM(weight) FILTER (WHERE won) AS total_wins
+                FROM target_matches
+            ),
+            card_stats AS (
+                SELECT dc.card_name,
+                       COUNT(*)          AS raw_game_count,
+                       SUM(tm.weight)    AS game_count,
+                       SUM(tm.weight) FILTER (WHERE tm.won) AS wins
+                FROM target_matches tm
+                JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
+                WHERE dc.is_sideboard = false
+                  AND NOT EXISTS (
+                      SELECT 1 FROM cards c
+                      WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
+                        AND (c.is_leader = true OR c.is_base = true)
+                  )
+                GROUP BY dc.card_name
+                HAVING COUNT(*) >= %s
+            )
+            SELECT cs.card_name,
+                   ROUND(cs.game_count::numeric, 1) AS game_count,
+                   ROUND(cs.wins::numeric, 1)       AS wins,
+                   ROUND((cs.wins / NULLIF(cs.game_count, 0))::numeric, 4) AS win_rate,
+                   ROUND(t.total_games::numeric, 1) AS total_games,
+                   ROUND(t.total_wins::numeric, 1)  AS total_wins,
+                   ROUND((t.total_wins / NULLIF(t.total_games, 0))::numeric, 4) AS baseline_win_rate,
+                   ROUND(
+                       (cs.wins / NULLIF(cs.game_count, 0)
+                       - t.total_wins / NULLIF(t.total_games, 0))::numeric,
+                   4) AS delta
+            FROM card_stats cs, totals t
+            ORDER BY {'cs.game_count DESC' if sort == 'count' else 'win_rate ASC'}, cs.game_count DESC
+            LIMIT %s
+        """, [leader] + base_param + [leader] + base_param + [min_games, limit])
+    else:
+        rows = db.fetchall(f"""
+            WITH target_matches AS (
+                SELECT m.p2_standing_id AS standing_id,
+                       (m.winner = 'p2') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p1_leader = %s AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
+                UNION ALL
+                SELECT m.p1_standing_id AS standing_id,
+                       (m.winner = 'p1') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p2_leader = %s AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
+            ),
+            totals AS (
+                SELECT COUNT(*)::INT AS total_games,
+                       SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT AS total_wins
+                FROM target_matches
+            ),
+            card_stats AS (
+                SELECT dc.card_name,
+                       COUNT(*)::INT AS game_count,
+                       SUM(CASE WHEN tm.won THEN 1 ELSE 0 END)::INT AS wins
+                FROM target_matches tm
+                JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
+                WHERE dc.is_sideboard = false
+                  AND NOT EXISTS (
+                      SELECT 1 FROM cards c
+                      WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
+                        AND (c.is_leader = true OR c.is_base = true)
+                  )
+                GROUP BY dc.card_name
+                HAVING COUNT(*) >= %s
+            )
+            SELECT cs.card_name,
+                   cs.game_count,
+                   cs.wins,
+                   ROUND(cs.wins::numeric / NULLIF(cs.game_count, 0), 4) AS win_rate,
+                   t.total_games,
+                   t.total_wins,
+                   ROUND(t.total_wins::numeric / NULLIF(t.total_games, 0), 4) AS baseline_win_rate,
+                   ROUND(
+                       cs.wins::numeric / NULLIF(cs.game_count, 0)
+                       - t.total_wins::numeric / NULLIF(t.total_games, 0),
+                   4) AS delta
+            FROM card_stats cs, totals t
+            ORDER BY {'game_count DESC' if sort == 'count' else 'win_rate ASC'}, game_count DESC
+            LIMIT %s
+        """, [leader] + date_params + base_param +
+             [leader] + date_params + base_param +
+             [min_games, limit])
 
     return rows
 
