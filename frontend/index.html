@@ -3554,6 +3554,7 @@ select.sl-input { cursor: pointer; }
   <div class="leader-top-row">
     <div class="leader-top-left">
       <div id="leader-hero"></div>
+      <div id="lp-base-label" style="display:none;padding:8px 0 0;font-size:12px;color:var(--text3);font-family:var(--mono)"></div>
     </div>
     <div id="leader-elo-chart" class="leader-top-right">
       <div class="loading" style="padding:24px">loading…</div>
@@ -4071,6 +4072,7 @@ let homeSort       = 'total_decks';
 let homeComboData  = [];
 let _homeGen       = 0;
 let currentLeader  = '';
+let currentLeaderBase = null;
 let leaderData     = [];
 let _eloFilterBucket = null;
 let cardSort       = 'inclusion_rate';
@@ -4249,11 +4251,12 @@ function showPage(name) {
 function goHome() {
   showPage('home');
 }
-function openLeader(name) {
+function openLeader(name, base = null) {
   pendingMatchupOpponent = null;
   _eloFilterBucket = null;
   currentLeader = name;
-  history.pushState(null, '', '#leader=' + encodeURIComponent(name));
+  currentLeaderBase = base || null;
+  history.pushState(null, '', buildLeaderHash());
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-leader').classList.add('active');
@@ -4267,6 +4270,13 @@ function openLeader(name) {
   document.getElementById('bc-base-sep').style.display = 'none';
   document.getElementById('bc-base').style.display = 'none';
   document.getElementById('breadcrumb').classList.add('visible');
+  const baseLabel = document.getElementById('lp-base-label');
+  if (currentLeaderBase) {
+    baseLabel.textContent = '// base: ' + currentLeaderBase;
+    baseLabel.style.display = '';
+  } else {
+    baseLabel.style.display = 'none';
+  }
   matchupData    = [];
   weaknessesData = [];
   weaknessSort   = 'count';
@@ -4283,6 +4293,7 @@ function openLeader(name) {
 
 function buildLeaderHash() {
   let h = '#leader=' + encodeURIComponent(currentLeader);
+  if (currentLeaderBase) h += '&base=' + encodeURIComponent(currentLeaderBase);
   if (currentFormat === 'eternal') h += '&fmt=eternal';
   if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
   return h;
@@ -4294,7 +4305,7 @@ function routeFromHash() {
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
   if (params.leader) {
     if (params.fmt === 'eternal') applyFormat('eternal');
-    openLeader(params.leader);
+    openLeader(params.leader, params.base || null);
     if (params.tab && params.tab !== 'cards') {
       if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
       setLeaderTab(params.tab);
@@ -4597,7 +4608,8 @@ async function renderLeaderHero(name) {
   const hero = document.getElementById('leader-hero');
   hero.innerHTML = '<div style="padding:24px;color:var(--text3);font-family:var(--mono)">loading…</div>';
   try {
-    const statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats?format=' + currentFormat;
+    let statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats?format=' + currentFormat;
+    if (currentLeaderBase) statsUrl += '&base_group=' + encodeURIComponent(currentLeaderBase);
     const stats = await api(statsUrl);
     const asp  = aspect(name);
     const cc   = convClass(stats.conversion);
@@ -4685,6 +4697,7 @@ async function loadLeaderCards() {
   try {
     const minDecks = parseInt(document.getElementById('lp-min-decks')?.value) || 5;
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat;
+    if (currentLeaderBase)         url += '&base_group=' + encodeURIComponent(currentLeaderBase);
     if (_eloFilterBucket !== null) url += '&elo_bucket=' + _eloFilterBucket;
     leaderData = await api(url) || [];
     filterCards();
@@ -4938,7 +4951,8 @@ async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
-  const url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups?format=' + currentFormat;
+  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups?format=' + currentFormat;
+  if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
   try {
     const data = await api(url);
     if (gen !== _matchupGen) return;
@@ -5042,10 +5056,11 @@ async function openMatchupDetail(matchup) {
   document.getElementById('mu-detail-wr').style.color = color;
   document.getElementById('mu-cards-grid').innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
 
-  const url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
+  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
     + '?opponent=' + encodeURIComponent(matchup.opponent)
     + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join(','))
     + '&format=' + currentFormat;
+  if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
 
   try {
     const data = await api(url);
@@ -5131,8 +5146,9 @@ async function loadLeaderWeaknesses() {
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
   const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
-  const url = '/api/leader/' + encodeURIComponent(currentLeader)
+  let url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
+  if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
   try {
     weaknessesData = await api(url);
     renderWeaknesses();
@@ -5210,8 +5226,9 @@ async function loadLeaderElo() {
   if (!currentLeader) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
 
-  const url = '/api/leader/' + encodeURIComponent(currentLeader)
+  let url = '/api/leader/' + encodeURIComponent(currentLeader)
     + '/elo-breakdown?format=' + currentFormat;
+  if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
 
   try {
     const rows = await api(url);
