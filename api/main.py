@@ -4154,3 +4154,40 @@ def karabast_leader_matchups(leader_id: str, base_id: str):
         WHERE week_num = 0 AND leader_id = %s AND base_id = %s AND num_plays > 0
         ORDER BY num_plays DESC
     """, (leader_id, base_id))
+
+
+@app.get("/api/winrate")
+def get_winrate(format: str = "standard", min_decks: int = 10, min_card_decks: int = 30):
+    t = _tnames(format)
+
+    leaders = db.fetchall(f"""
+        SELECT
+            s.leader,
+            SUM(s.game_wins)::INT                                                        AS game_wins,
+            SUM(s.game_losses)::INT                                                      AS game_losses,
+            COUNT(s.id)::INT                                                             AS deck_count,
+            ROUND(SUM(s.game_wins)::numeric /
+                  NULLIF(SUM(s.game_wins) + SUM(s.game_losses), 0) * 100, 1)            AS game_win_rate
+        FROM {t['standings']} s
+        WHERE s.leader IS NOT NULL
+          AND s.game_wins IS NOT NULL
+        GROUP BY s.leader
+        HAVING COUNT(s.id) >= %s
+        ORDER BY game_win_rate DESC NULLS LAST
+    """, [min_decks])
+
+    cards = db.fetchall(f"""
+        SELECT
+            dc.card_name,
+            COUNT(DISTINCT dc.standing_id)::INT                                          AS deck_count,
+            ROUND(AVG(s.game_win_rate) * 100, 1)                                         AS win_rate
+        FROM {t['decklist_cards']} dc
+        JOIN {t['standings']} s ON s.id = dc.standing_id
+        WHERE s.game_win_rate IS NOT NULL
+          AND NOT dc.is_sideboard
+        GROUP BY dc.card_name
+        HAVING COUNT(DISTINCT dc.standing_id) >= %s
+        ORDER BY win_rate DESC NULLS LAST
+    """, [min_card_decks])
+
+    return {"leaders": [dict(r) for r in leaders], "cards": [dict(r) for r in cards]}

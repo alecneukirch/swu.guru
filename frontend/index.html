@@ -3525,6 +3525,7 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
+  <button class="nav-btn"        id="nav-winrate" onclick="showPage('winrate')">Win Rates</button>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -4007,23 +4008,23 @@ select.sl-input { cursor: pointer; }
 
 <!-- ══ KARABAST PAGE ══ -->
 <!-- ══ SEALED CONFIRM PAGE (hidden — access via #confirm) ══ -->
-<!-- ══ SEALED STATS PAGE (access via #sealed) ══ -->
-<div class="page" id="page-sealed">
+<!-- ══ WIN RATES PAGE (access via #winrate) ══ -->
+<div class="page" id="page-winrate">
   <div class="page-header">
     <div>
-      <div class="page-title">SEALED</div>
-      <div class="page-sub" id="sealed-sub">A Lawless Time · Planetary Qualifier</div>
+      <div class="page-title">WIN RATES</div>
+      <div class="page-sub">game win rate from melee tournament data</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <span id="sealed-pool-count" style="font-family:var(--mono);font-size:12px;color:var(--text3)"></span>
+      <span id="winrate-count" style="font-family:var(--mono);font-size:12px;color:var(--text3)"></span>
     </div>
   </div>
   <div class="sealed-tabs">
-    <button class="sealed-tab active" id="sealed-tab-btn-leaders" onclick="sealedShowTab('leaders')">Leaders</button>
-    <button class="sealed-tab" id="sealed-tab-btn-cards" onclick="sealedShowTab('cards')">Cards</button>
+    <button class="sealed-tab active" id="winrate-tab-btn-leaders" onclick="winrateShowTab('leaders')">Leaders</button>
+    <button class="sealed-tab" id="winrate-tab-btn-cards" onclick="winrateShowTab('cards')">Cards</button>
   </div>
-  <div id="sealed-controls" style="display:none;padding:16px 24px 0;gap:8px;flex-wrap:wrap"></div>
-  <div id="sealed-body" style="padding:16px 24px 48px">
+  <div id="winrate-controls" style="display:flex;padding:16px 24px 0;gap:8px;flex-wrap:wrap;align-items:center"></div>
+  <div id="winrate-body" style="padding:16px 24px 48px">
     <div class="loading" style="padding:40px">loading…</div>
   </div>
 </div>
@@ -4284,7 +4285,7 @@ function showPage(name) {
   if (name === 'league')    loadLeague();
   if (name === 'karabast') loadKarabast();
   if (name === 'confirm')  loadConfirm();
-  if (name === 'sealed')   loadSealed();
+  if (name === 'winrate')  loadWinrate();
 }
 function goHome() {
   showPage('home');
@@ -7494,155 +7495,117 @@ function closeKbDetail() {
 }
 
 // ══ SEALED STATS ════════════════════════════════════════════════════════════
-let _sealedData     = null;
-let _sealedTab      = 'leaders';
-let _sealedFilter   = 'all';
-let _sealedCardSort = 'play_rate';
-let _sealedCardDir  = -1;
+let _winrateData    = null;
+let _winrateTab     = 'leaders';
+let _winrateSort    = { leaders: 'game_win_rate', cards: 'win_rate' };
+let _winrateDir     = { leaders: -1, cards: -1 };
+let _winrateFormat  = 'standard';
 
-const SEALED_SECTIONS = ['all','vigilance','command','aggression','cunning','heroism','villainy','multicolor','gray'];
-
-async function loadSealed() {
-  if (_sealedData) { renderSealed(); return; }
-  document.getElementById('sealed-body').innerHTML = '<div class="loading" style="padding:40px">loading…</div>';
+async function loadWinrate() {
+  if (_winrateData && _winrateData._fmt === _winrateFormat) { renderWinrate(); return; }
+  document.getElementById('winrate-body').innerHTML = '<div class="loading" style="padding:40px">loading…</div>';
   try {
-    _sealedData = await api('/api/sealed/pool-stats');
-    renderSealed();
+    const data = await api(`/api/winrate?format=${_winrateFormat}`);
+    data._fmt = _winrateFormat;
+    _winrateData = data;
+    renderWinrate();
   } catch(e) {
-    document.getElementById('sealed-body').innerHTML = `<div class="empty-state" style="padding:40px">// ${e.message}</div>`;
+    document.getElementById('winrate-body').innerHTML = `<div class="empty-state" style="padding:40px">// ${e.message}</div>`;
   }
 }
 
-function sealedShowTab(tab) {
-  _sealedTab = tab;
+function winrateShowTab(tab) {
+  _winrateTab = tab;
   document.querySelectorAll('.sealed-tab').forEach(b => b.classList.remove('active'));
-  document.getElementById(`sealed-tab-btn-${tab}`)?.classList.add('active');
-  renderSealed();
+  document.getElementById(`winrate-tab-btn-${tab}`)?.classList.add('active');
+  renderWinrate();
 }
 
-function sealedSetFilter(f) {
-  _sealedFilter = f;
-  renderSealed();
+function winrateSortBy(tab, col) {
+  if (_winrateSort[tab] === col) _winrateDir[tab] *= -1;
+  else { _winrateSort[tab] = col; _winrateDir[tab] = -1; }
+  renderWinrate();
 }
 
-function sealedSortCards(col) {
-  if (_sealedCardSort === col) _sealedCardDir *= -1;
-  else { _sealedCardSort = col; _sealedCardDir = -1; }
-  renderSealed();
-}
-
-function sealedAspBadge(s) {
-  const cls = `asp-${s}`;
-  return `<span class="sealed-aspect ${cls}">${s}</span>`;
-}
-
-function sealedPickColor(rate) {
+function winrateColor(rate) {
   if (rate == null) return 'var(--text3)';
-  if (rate >= 75)   return 'var(--green)';
+  if (rate >= 54)   return 'var(--green)';
   if (rate >= 50)   return 'var(--text2)';
+  if (rate >= 46)   return 'var(--yellow)';
   return 'var(--red2)';
 }
 
-function renderSealed() {
-  if (!_sealedData) return;
-  const { leaders, cards, total_pools, section_pools } = _sealedData;
-  document.getElementById('sealed-pool-count').textContent = `${total_pools} pools`;
+function renderWinrate() {
+  if (!_winrateData) return;
+  const { leaders, cards } = _winrateData;
 
-  const ctrl = document.getElementById('sealed-controls');
+  const ctrl = document.getElementById('winrate-controls');
+  ctrl.innerHTML = '';
 
-  if (_sealedTab === 'leaders') {
-    ctrl.style.display = 'none';
-    ctrl.innerHTML = '';
+  const tab  = _winrateTab;
+  const sort = _winrateSort[tab];
+  const dir  = _winrateDir[tab];
 
-    const sorted = [...leaders].sort((a,b) => (b.pick_rate ?? -1) - (a.pick_rate ?? -1));
+  const mkTh = (col, label, tab) => {
+    const cls = _winrateSort[tab] === col ? (_winrateDir[tab] > 0 ? 'sort-asc' : 'sort-desc') : '';
+    return `<th class="${cls}" style="cursor:pointer" onclick="winrateSortBy('${tab}','${col}')">${label}</th>`;
+  };
 
-    const mkLeader = (r, rank) => {
-      const rate   = r.pick_rate;
-      const col    = sealedPickColor(rate);
-      const rateTxt = rate != null ? rate.toFixed(0) + '%' : '—';
-      const asps   = r.aspects || [];
-      const primary = asps.find(a => ['Heroism','Villainy'].includes(a)) || asps[0] || 'Unknown';
-      const subtitle = r.card_name.includes(',') ? r.card_name.slice(r.card_name.indexOf(',') + 2) : '';
-      const artStyle = r.art_url ? `background-image:url(${r.art_url})` : '';
-      return `<div class="sl-leader asp-${primary}">` +
-        `<div class="sl-leader-art" style="${artStyle}">` +
-          `<div class="sl-leader-art-overlay"></div>` +
-          `<div style="position:absolute;top:8px;left:8px;display:flex;gap:3px">${aspectIcons(asps, 18)}</div>` +
-          `<div style="position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:11px;color:var(--text3)">#${rank}</div>` +
-        `</div>` +
-        `<div class="sl-leader-body">` +
-          `<div class="sl-leader-name">${shortName(r.card_name)}</div>` +
-          (subtitle ? `<div class="sl-leader-sub">${subtitle}</div>` : '') +
-          `<div class="sl-pick-rate" style="color:${col}">${rateTxt}</div>` +
-          `<div class="sl-pick-label">PICK RATE</div>` +
-          `<div class="sl-pool-stats">` +
-            `<div class="sl-ps"><div class="sl-psv">${r.times_in_pool}</div><div class="sl-psl">In Pool</div></div>` +
-            `<div class="sl-ps"><div class="sl-psv">${r.times_chosen}</div><div class="sl-psl">Chosen</div></div>` +
-          `</div>` +
-        `</div></div>`;
-    };
+  const mkBar = (val, lo, hi, color) => {
+    const w = Math.min(100, Math.max(0, Math.round(((val - lo) / (hi - lo)) * 100)));
+    return `<span class="sl-bar-wrap"><span class="sl-bar" style="width:${w}%;background:${color}"></span></span>`;
+  };
 
-    document.getElementById('sealed-body').innerHTML = sorted.length
-      ? `<div class="tier-section-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px">${sorted.map((r,i) => mkLeader(r, i+1)).join('')}</div>`
-      : '<div class="empty-state" style="padding:40px">// no leader data</div>';
-
-  } else {
-    // Cards tab
-    const sectionCounts = section_pools || {};
-    const filterBtns = SEALED_SECTIONS
-      .map(f => {
-        const cnt = f === 'all' ? '' : (sectionCounts[f] ? ` <span style="color:var(--text3)">${sectionCounts[f]}p</span>` : '');
-        return `<button class="sealed-filter-btn${_sealedFilter===f?' active':''}" onclick="sealedSetFilter('${f}')">${f}${cnt}</button>`;
-      })
-      .join('');
-    ctrl.style.display = 'flex';
-    ctrl.innerHTML = filterBtns;
-
-    const filtered = _sealedFilter === 'all' ? cards : cards.filter(c => c.section === _sealedFilter);
-
-    const sortKey = _sealedCardSort;
-    const dir     = _sealedCardDir;
-    const sorted  = [...filtered].sort((a,b) => {
-      const av = a[sortKey] ?? -1, bv = b[sortKey] ?? -1;
-      return dir * (bv - av);
-    });
-
-    const mkTh = (col, label) => {
-      const cls = _sealedCardSort === col ? (_sealedCardDir > 0 ? 'sort-asc' : 'sort-desc') : '';
-      return `<th class="${cls}" onclick="sealedSortCards('${col}')">${label}</th>`;
-    };
-
-    const mkBar = (val, max, color) => {
-      const w = Math.min(100, Math.round((val / max) * 100));
-      return `<span class="sl-bar-wrap"><span class="sl-bar" style="width:${w}%;background:${color}"></span></span>`;
-    };
-
+  if (tab === 'leaders') {
+    document.getElementById('winrate-count').textContent = `${leaders.length} leaders`;
+    const sorted = [...leaders].sort((a,b) => dir * ((b[sort] ?? -999) - (a[sort] ?? -999)));
     const rows = sorted.map(r => {
-      const playRate = r.play_rate ?? 0;
-      const poolRate = r.pool_rate ?? 0;
-      const playCls  = playRate >= 75 ? 'sl-num-good' : playRate >= 40 ? 'sl-num-mid' : 'sl-num-bad';
-      const playTxt  = r.play_rate != null ? playRate.toFixed(0) + '%' : '—';
-      const poolTxt  = r.pool_rate != null ? poolRate.toFixed(0) + '%' : '—';
-      return `<tr>` +
-        `<td style="font-size:13px;max-width:220px">${r.card_name}</td>` +
-        `<td>${sealedAspBadge(r.section)}</td>` +
-        `<td><span class="sl-num ${playCls}">${playTxt}</span> ${mkBar(playRate, 100, playRate >= 75 ? 'var(--green)' : playRate >= 40 ? 'var(--yellow)' : 'var(--red2)')}</td>` +
-        `<td><span class="sl-num" style="color:var(--text2)">${poolTxt}</span> ${mkBar(poolRate, 100, 'rgba(255,255,255,0.25)')}</td>` +
-        `<td class="sl-num" style="color:var(--text2);text-align:right">${r.pools_played}</td>` +
-        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.pools_opened}</td>` +
+      const gwr = r.game_win_rate;
+      const col = winrateColor(gwr);
+      const gwrTxt = gwr != null ? gwr.toFixed(1) + '%' : '—';
+      const games = (r.game_wins ?? 0) + (r.game_losses ?? 0);
+      return `<tr onclick="openLeader('${r.leader.replace(/'/g,"\\'")}',null,null,null)" style="cursor:pointer">` +
+        `<td style="font-size:13px">${shortName(r.leader)}</td>` +
+        `<td class="sl-num" style="color:${col};text-align:right">${gwrTxt}</td>` +
+        `<td style="min-width:120px">${mkBar(gwr ?? 50, 44, 58, col)}</td>` +
+        `<td class="sl-num" style="color:var(--text2);text-align:right">${games.toLocaleString()}</td>` +
+        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.deck_count.toLocaleString()}</td>` +
         `</tr>`;
     }).join('');
-
-    document.getElementById('sealed-body').innerHTML = sorted.length
+    document.getElementById('winrate-body').innerHTML = sorted.length
       ? `<table class="sl-table"><thead><tr>` +
-          `<th>Card</th><th>Section</th>` +
-          mkTh('play_rate', 'Play Rate') +
-          mkTh('pool_rate', 'Pool Rate') +
-          mkTh('pools_played', 'Played') +
-          mkTh('pools_opened', 'Opened') +
+          `<th>Leader</th>` +
+          mkTh('game_win_rate','GWR','leaders') +
+          `<th></th>` +
+          mkTh('game_wins','Games','leaders') +
+          mkTh('deck_count','Decks','leaders') +
           `</tr></thead><tbody>${rows}</tbody></table>` +
-          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">Play rate = % of pools that opened this card and included it in their deck. Pool rate = % of all ${total_pools} pools where the card appeared.</div>`
-      : '<div class="empty-state" style="padding:40px">// no card data</div>';
+          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">GWR = game win rate (game wins ÷ games played). Click a row to open leader detail.</div>`
+      : '<div class="empty-state" style="padding:40px">// no data</div>';
+
+  } else {
+    document.getElementById('winrate-count').textContent = `${cards.length} cards`;
+    const sorted = [...cards].sort((a,b) => dir * ((b[sort] ?? -999) - (a[sort] ?? -999)));
+    const rows = sorted.map(r => {
+      const wr = r.win_rate;
+      const col = winrateColor(wr);
+      const wrTxt = wr != null ? wr.toFixed(1) + '%' : '—';
+      return `<tr>` +
+        `<td style="font-size:13px">${r.card_name}</td>` +
+        `<td class="sl-num" style="color:${col};text-align:right">${wrTxt}</td>` +
+        `<td style="min-width:120px">${mkBar(wr ?? 50, 44, 58, col)}</td>` +
+        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.deck_count.toLocaleString()}</td>` +
+        `</tr>`;
+    }).join('');
+    document.getElementById('winrate-body').innerHTML = sorted.length
+      ? `<table class="sl-table"><thead><tr>` +
+          `<th>Card</th>` +
+          mkTh('win_rate','Avg GWR','cards') +
+          `<th></th>` +
+          mkTh('deck_count','Decks','cards') +
+          `</tr></thead><tbody>${rows}</tbody></table>` +
+          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">Avg GWR = average game win rate of decks that included this card (mainboard only, min 30 decks).</div>`
+      : '<div class="empty-state" style="padding:40px">// no data</div>';
   }
 }
 
@@ -7878,6 +7841,7 @@ async function saveConfirm(poolId) {
   <button class="mob-nav-btn"        id="mob-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="mob-nav-btn"        id="mob-events"  onclick="showPage('events')">Events</button>
   <button class="mob-nav-btn"        id="mob-players" onclick="showPage('players')">Players</button>
+  <button class="mob-nav-btn"        id="mob-winrate" onclick="showPage('winrate')">Win %</button>
 </nav>
 
 </body>
