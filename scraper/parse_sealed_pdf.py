@@ -1,0 +1,682 @@
+"""
+scraper/parse_sealed_pdf.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+OCR pipeline for SWU Planetary Qualifier sealed pool decklists.
+
+Reads sealedPQLists.pdf (2 pages per pool), renders each pair as images,
+sends them to the Claude vision API for structured extraction, and writes
+results to the sealed_pools and sealed_pool_cards tables.
+
+Usage:
+    python -m scraper.parse_sealed_pdf                  # all unprocessed pools
+    python -m scraper.parse_sealed_pdf --pool 3         # pool #3 only (1-based)
+    python -m scraper.parse_sealed_pdf --pool 1-10      # pools 1 through 10
+    python -m scraper.parse_sealed_pdf --dry-run        # print extracted data, no DB writes
+    python -m scraper.parse_sealed_pdf --reprocess 5    # reprocess pool 5 even if in DB
+"""
+
+import argparse
+import base64
+import json
+import sys
+import time
+from pathlib import Path
+
+import fitz  # PyMuPDF
+import anthropic
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+import db
+
+PDF_PATH = Path(__file__).parent.parent / "sealedPQLists.pdf"
+MODEL = "claude-sonnet-4-6"
+DPI_SCALE = 3.0  # renders at ~216 dpi from a 72 dpi base
+
+# ── Complete card list from the digital blank template ──────────────────────
+
+LEADERS = [
+    (1,  "Saw Gerrera, Bring Down the Empire"),
+    (2,  "Tobias Beckett, People are Predictable"),
+    (3,  "Agent Kallus, Reconsider Your Allegiance"),
+    (4,  "Aurra Sing, Assassin"),
+    (5,  "Jyn Erso, Time to Fight"),
+    (6,  "Vel Sartha, Aldhani Insurgent"),
+    (7,  "Boba Fett, Krayt's Claw Commander"),
+    (8,  "Director Krennic, Amidst My Achievement"),
+    (9,  "Hera Syndulla, Not Fighting Alone"),
+    (10, "Leia Organa, Someone Who Loves You"),
+    (11, "Darth Vader, Unstoppable"),
+    (12, "Sebulba, Especially Dangerous Dug"),
+    (13, "Chewbacca, Hero of Kessel"),
+    (14, "Enfys Nest, Until We Can Go No Higher"),
+    (15, "Jabba the Hutt, Crime Boss"),
+    (16, "The Client, Please Lower Your Blaster"),
+    (17, "Han Solo, I Got a Really Good Feeling"),
+    (18, "Lando Calrissian, Full Sabacc"),
+]
+
+BASES = [
+    "Alliance Outpost (Blue)",
+    "Daimyo's Palace (Blue)",
+    "Coaxium Mine (Blue)",
+    "Aldhani Garrison (Green)",
+    "Great Pit of Carkoon (Green)",
+    "Imperial Commend Complex (Green)",
+    "Contested Caverns (Red)",
+    "Shipbreaking Yard (Red)",
+    "Stygeon Spire (Red)",
+    "Canto Bight (Yellow)",
+    "Citadel Research Center (Yellow)",
+    "Partisan Hideout (Yellow)",
+]
+
+VIGILANCE = [
+    (97,  "Imperial Door Technician"),
+    (98,  "Vandor Range Troopers"),
+    (99,  "Governor's Shuttle"),
+    (100, "IGV-55 Listener"),
+    (101, "Lawbringer, Shadow Over Lothal"),
+    (102, "Choke on Aspirations"),
+    (103, "Display Piece"),
+    (104, "Bodhi Rook, Creating a Diversion"),
+    (105, "Cinta Kaz, Stone Cold and Fearless"),
+    (106, "Defiant Scrapper"),
+    (107, "Swoop Bike Marauder"),
+    (108, "Lando Calrissian, Eyes Open"),
+    (109, "Tantive IV, Carrying Hope"),
+    (110, "Phoenix Squadron Fighters"),
+    (111, "Leia's Disguise"),
+    (112, "Boonta Eve Flagbearer"),
+    (113, "Shield Drive Outfitter"),
+    (114, "Alkenzi Patroller"),
+    (115, "Rickety Quadjumper"),
+    (116, "Rodian Bondsman"),
+    (117, "Conveyex Security Captain"),
+    (118, "Droid Laser Turret"),
+    (119, "Rogue One, At Any Cost"),
+    (120, "Vigilant Scouts"),
+    (121, "Canto Bight Security"),
+    (122, "Shielded Hauler"),
+    (123, "Syndicate Security"),
+    (124, "Industrious Team"),
+    (125, "Watchful"),
+    (126, "Adventurer Sniper Rifle"),
+    (127, "Kill Switch"),
+    (128, "Veiled Strength"),
+    (129, "Mastery"),
+    (130, "Betrayed Trust"),
+    (131, "Incapacitate"),
+    (132, "The Tree Remembers"),
+    (133, "Lost and Forgotten"),
+]
+
+COMMAND = [
+    (134, "Bib Fortuna, Die Wanna Wanga?"),
+    (135, "Pirate Snub Fighter"),
+    (136, "Syndicate Spice Runner"),
+    (137, "Ruthless Duo"),
+    (138, "Undercity Hunting Team"),
+    (139, "Admiral Motti, Chain of Command"),
+    (140, "Intimidator, Citadel Overwatch"),
+    (141, "Targeted For Removal"),
+    (142, "Scarif Lieutenant"),
+    (143, "Liberated Wookiee"),
+    (144, "Phantom, Spectre Shuttle"),
+    (145, "R2-D2, Part of the Plan"),
+    (146, "Massassi Group Marines"),
+    (147, "Jaunty Light Freighter"),
+    (148, "Smuggler's YT-2400"),
+    (149, "Rey, Skywalker"),
+    (150, "Fulcrum"),
+    (151, "Profiteering Hunter"),
+    (152, "C-3PO, Translation Protocol"),
+    (153, "Follower of the Code"),
+    (154, "Partisan Infantry"),
+    (155, "Getaway Freighter"),
+    (156, "Hunter For Hire"),
+    (157, "Target Tagger"),
+    (158, "Khetanna, Upon the Dune Sea"),
+    (159, "Expendable Mercenary"),
+    (160, "Hidden Hunters"),
+    (161, "Partisan U-Wing"),
+    (162, "Beach Patrol AT-ACT"),
+    (163, "The Sarlacc of Carkoon, Horror of the Desert"),
+    (164, "Mercenary Fleet"),
+    (165, "Combat Exercise"),
+    (166, "Putting a Team Together"),
+    (167, "Common Cause"),
+    (168, "Haymaker"),
+    (169, "Payroll Heist"),
+    (170, "Double-Cross"),
+    (171, "Stockpile"),
+]
+
+AGGRESSION = [
+    (172, "Storm Raider"),
+    (173, "BT-1, Blastomech"),
+    (174, "0-0-0, Translation and Torture"),
+    (175, "Prototype TIE Advanced"),
+    (176, "Sebulba's Podracer, Taking the Lead"),
+    (177, "Son-tuul Berserkers"),
+    (178, "Persecutor, Fire Over Scarif"),
+    (179, "Fear and Dead Men"),
+    (180, "Inspired Recruit"),
+    (181, "Cloud-Rider Veteran"),
+    (182, "Weazel, Fighting Back"),
+    (183, "B-Wing Skirmisher"),
+    (184, "Aerie, Cloud-Rider Dropship"),
+    (185, "Ben Solo, Facing the Light"),
+    (186, "Enfys Nest's Helmet"),
+    (187, '"Staccato Lightning" Repeater'),
+    (188, "Savareen Survivor"),
+    (189, "Cavern Angels X-Wing"),
+    (190, "Haxion Aggressor"),
+    (191, "Arvel Skeen, Win and Walk Away"),
+    (192, "Bracca Shipbreaker"),
+    (193, "Mid Rim Sharpshooter"),
+    (194, "Doctor Aphra, Digging For Answers"),
+    (195, "Overcharged Transport"),
+    (196, "Relentless Hunters"),
+    (197, "Shifty Suspects"),
+    (198, "Dogged Pursuers"),
+    (199, "Ohnaka Gang Bandits"),
+    (200, "Salvaged Blaster"),
+    (201, "Thermal Detonator"),
+    (202, "Commence the Festivities"),
+    (203, "Daring Delve"),
+    (204, "Every Day, More Lies"),
+    (205, "Flash the Vents"),
+    (206, "That's a Rock"),
+    (207, "Attack From All Sides"),
+    (208, "Collateral Damage"),
+]
+
+CUNNING = [
+    (209, "Nihil Stormsower"),
+    (210, "Salacious Crumb, Cackling Companion"),
+    (211, "Black Sun Patroller"),
+    (212, "Malakili, Keeper of the Menagerie"),
+    (213, "Cutthroat Podracer"),
+    (214, "Boba Fett, For a Price"),
+    (215, "Vermillion, Qi'ra's Auction House"),
+    (216, "Jabba's Rancor, Snack Time!"),
+    (217, "Hold For Questioning"),
+    (218, "Artful Pickpocket"),
+    (219, "Anakin's Podracer, So Wizard!"),
+    (220, "Wookiee Guerilla"),
+    (221, "Lieutenant Gorn, I Deserve Worse"),
+    (222, "Rebel Blockade Runner"),
+    (223, "Rose Tico, Now It's Worth It"),
+    (224, "Liberty, Draw Their Fire!"),
+    (225, "Han's Golden Dice"),
+    (226, "Secret Battle of Pretend"),
+    (227, "Rookie Rocket-Jumper"),
+    (228, "Canyon Frontrunner"),
+    (229, "The Master Codebreaker, High Stakes"),
+    (230, "Ohnaka Gang Starhopper"),
+    (231, "Weequay Pirate"),
+    (232, "Champion's KT9 Podracer"),
+    (233, "Galen Erso, Destroying His Creation"),
+    (234, "Kage Elite"),
+    (235, "Lady Proxima, Where's the Money?"),
+    (236, "Bix Caleen, Selling Scrap"),
+    (237, "Qui-Gon Jinn, Influencing Chance"),
+    (238, "Scavenging Sandcrawler"),
+    (239, "Guild Ambush Team"),
+    (240, "Milodon Rider"),
+    (241, "The Blade Wing, The Secret of Shantipole"),
+    (242, "Improvise"),
+    (243, "Transmission Jamming"),
+    (244, "Unmarked Credits"),
+    (245, "Salvaged Materials"),
+    (246, "The Axe Forgets"),
+    (247, "Backed by the Hutts"),
+    (248, "Windfall"),
+]
+
+VILLAINY = [
+    (249, "Black Sun Cabalist"),
+    (250, "Callous Bounty Hunter"),
+    (251, "Night Wind Assailants"),
+    (252, "Fett's Firespray, In Pursuit"),
+]
+
+HEROISM = [
+    (253, "Alliance X-Wing"),
+    (254, "Stalwart Fleet Trooper"),
+    (255, "Circuit Challenger"),
+    (256, "Fire Across The Galaxy"),
+]
+
+GRAY = [
+    (257, "Hidden Hand Supplier"),
+    (258, "Criminal Contact"),
+    (259, "Cartel Heavy Fighter"),
+    (260, "Seasoned Tracker"),
+    (261, "Street Gang Recruiter"),
+    (262, "Bank Job Fugitives"),
+    (263, "Kessel Hulk"),
+    (264, "From a Certain Point of View"),
+]
+
+MULTICOLOR = [
+    (31,  "Bossk, Join Our Merry Band"),
+    (32,  "Cad Bane, Now It's My Turn"),
+    (33,  "Hound's Tooth, Hunters' Approach"),
+    (34,  "Chewbacca, Mighty Rescuer"),
+    (35,  "Ezra Bridger, Spectre Six"),
+    (36,  "Obi-Wan Kenobi, Protector of Felucia"),
+    (37,  "Han Solo, Hibernation Sick"),
+    (38,  "Lepi Lookout"),
+    (39,  "Latts Razzi, Deadly Whipmaster"),
+    (40,  "Taramyn Barcona, Eyes Front!"),
+    (41,  "Nothing Left to Fear"),
+    (42,  "IG-88, Programmed to Kill"),
+    (43,  "Shadow Cloaking"),
+    (44,  "Single Reactor Ignition"),
+    (45,  "Zeb Orellios, Spectre Four"),
+    (46,  "Chirrut Imwe, I Don't Need Luck"),
+    (47,  "Baze Malbus, Good Luck"),
+    (48,  "Chio Fain, Four-Armed Slicer"),
+    (49,  "Bith Brute"),
+    (50,  "Honnah, OINK! SQUEE!"),
+    (51,  "Beilert Valance, Target: Vader"),
+    (52,  "The Mandalorian, Let's See the Puck"),
+    (53,  "Dengar, Take Your Shot"),
+    (54,  "Maul, Master of the Shadow Collective"),
+    (55,  "Chopper, Spectre Three"),
+    (56,  "Cassian Andor, Everything For the Rebellion"),
+    (57,  "Benthic Two Tubes, The War Has Just Begun"),
+    (58,  "Honor-Bound Partisan"),
+    (59,  "Highsinger, Deadly Droid"),
+    (60,  "Quarren Contractor"),
+    (61,  "Asajj Ventress, Reluctant Hunter"),
+    (62,  "Defiant Hammerhead"),
+    (63,  "L3-37, Radical Instigator"),
+    (64,  "Zuckuss, Dangerous"),
+    (65,  "4-LOM, Devious"),
+    (66,  "Tear This Ship Apart"),
+    (67,  "Jyn Erso, Take the Next Chance"),
+    (68,  "Millennium Falcon, Dodging Patrols"),
+    (69,  "The Ghost, Home of the Spectres"),
+    (70,  "Devaronian Doorbuster"),
+    (71,  "The Max Rebo Band, Jatz-Wailers"),
+    (72,  "Max Rebo, Encore!"),
+    (73,  "Patient Hunter"),
+    (74,  "Maz Kanata, Where's My Boyfriend?"),
+    (75,  "Interrogation Droid"),
+    (76,  "Vult Skerris's Defender, Secret Project"),
+    (77,  "Shadow of Stygeon Prime"),
+    (78,  "Sabine Wren, Spectre Five"),
+    (79,  "K-2SO, Locking the Vault"),
+    (80,  "Luke Skywalker, Profit or Be Destroyed"),
+    (81,  "Sullustan Sapper"),
+    (82,  "Urrr'k, Elite Sharpshooter"),
+    (83,  "Broken Horn, Vizago's Pride"),
+    (84,  "Krrsantan, Hit and Run"),
+    (85,  "You Hold This"),
+    (86,  "The Stranger, No Survivors"),
+    (87,  "Jango Fett, Wily Mercenary"),
+    (88,  "Anakin Skywalker, Prescient Podracer"),
+    (89,  "Kanan Jarrus, Spectre One"),
+    (90,  "Toydarian Technician"),
+    (91,  "Val, It's Been a Ride, Babe"),
+    (92,  "Two-Faced Troig"),
+    (93,  "Rio Durant, Beckett's Right Hands"),
+    (94,  "Hondo Ohnaka, Plays By His Own Rules"),
+    (95,  "Finn, Looking Closer"),
+    (96,  "Rhydonium Detonation"),
+]
+
+SECTION_CARDS = {
+    "vigilance": VIGILANCE,
+    "command":   COMMAND,
+    "aggression": AGGRESSION,
+    "cunning":   CUNNING,
+    "villainy":  VILLAINY,
+    "heroism":   HEROISM,
+    "gray":      GRAY,
+    "multicolor": MULTICOLOR,
+}
+
+# ── Extraction prompts (two per pool: front page, back page) ─────────────────
+
+SYSTEM_PROMPT = """You are a data extractor reading Star Wars: Unlimited sealed deck registration forms.
+
+Each card row has: [PLAYED box] [TOTAL box] [large printed card number] [card name]
+- PLAYED box = small handwritten box (leftmost): copies in player's deck (0, 1, 2, or rarely 3)
+- TOTAL box = small handwritten box (second from left): copies in sealed pool (0, 1, 2, or rarely 3)
+- The large printed number after the boxes is the CARD COLLECTOR NUMBER — ignore it for TOTAL/PLAYED values
+- For leaders/bases: a checkmark or X = 1, blank = 0
+
+CRITICAL: TOTAL and PLAYED values are ALWAYS small numbers: 0, 1, 2, or at most 3.
+Never report a TOTAL or PLAYED value larger than 3. If you read a larger number, it's the card collector number — set that row's values to 0.
+
+Be exhaustive: read EVERY row in every section top to bottom. Return ONLY compact JSON."""
+
+FRONT_PROMPT = """This is PAGE 1 (front) of a sealed deck form.
+
+REMINDER: TOTAL and PLAYED box values are always 0, 1, 2, or at most 3.
+The large printed numbers on each row are card collector numbers — do NOT use those as TOTAL/PLAYED values.
+Only read the small handwritten boxes immediately to the left of the large card number.
+
+Extract:
+
+1. Player info (top of page): first name, last name, SWU ID, verifier names/IDs, table number
+2. LEADER section (left column, rows 1-18): which rows have marks in TOTAL (in pool), which single row has a mark in PLAYED (deck leader)
+3. BASE section (small section): which base is marked as selected
+4. VIGILANCE (BLUE) section (middle column): all cards with non-zero TOTAL or PLAYED
+5. COMMAND (GREEN) section (right column): all cards with non-zero TOTAL or PLAYED
+
+Leader row reference:
+1=Saw Gerrera  2=Tobias Beckett  3=Agent Kallus  4=Aurra Sing  5=Jyn Erso
+6=Vel Sartha  7=Boba Fett  8=Director Krennic  9=Hera Syndulla  10=Leia Organa
+11=Darth Vader  12=Sebulba  13=Chewbacca  14=Enfys Nest  15=Jabba the Hutt
+16=The Client  17=Han Solo  18=Lando Calrissian
+
+Return ONLY this JSON (omit zero entries from cards arrays):
+{
+  "player_first_name": "...",
+  "player_last_name": "...",
+  "player_swu_id": "...",
+  "verifier_first_name": "...",
+  "verifier_last_name": "...",
+  "verifier_swu_id": "...",
+  "table_num": null,
+  "leaders_in_pool": [4, 11, 14],
+  "leader_played": 4,
+  "base": "Partisan Hideout (Yellow)",
+  "vigilance": [{"n": 102, "t": 1, "p": 1}, {"n": 108, "t": 1, "p": 0}],
+  "command": [{"n": 139, "t": 1, "p": 1}]
+}"""
+
+BACK_PROMPT = """This is PAGE 2 (back) of a sealed deck form.
+
+REMINDER: TOTAL and PLAYED values are always 0, 1, 2, or at most 3.
+The large printed numbers in each row are card collector numbers — do NOT use those as TOTAL/PLAYED values.
+Only read the small handwritten boxes immediately to the left of the large card number.
+
+Extract all non-zero cards from every section.
+
+Sections on this page:
+- AGGRESSION (RED): left column, card numbers 172-208
+- CUNNING (YELLOW): middle column, card numbers 209-248
+- MULTICOLOR: right column, card numbers 31-96
+- VILLAINY (BLACK): lower left, card numbers 249-252
+- HEROISM (WHITE): lower left below Villainy, card numbers 253-256
+- NO ASPECT (GRAY): lower middle, card numbers 257-264
+
+For each card with any non-zero value, include: {"n": <card_number>, "t": <TOTAL>, "p": <PLAYED>}
+TOTAL is the second box from left (how many in pool); PLAYED is the leftmost box (how many in deck).
+Read ALL rows in each section — scan from top to bottom completely before moving to next section.
+
+Return ONLY this JSON (section arrays contain only non-zero entries):
+{
+  "aggression": [{"n": 172, "t": 1, "p": 0}],
+  "cunning":    [{"n": 211, "t": 1, "p": 1}],
+  "multicolor": [{"n": 31,  "t": 1, "p": 0}],
+  "villainy":   [],
+  "heroism":    [],
+  "gray":       [{"n": 258, "t": 1, "p": 1}]
+}"""
+
+
+def render_page(doc: fitz.Document, page_idx: int) -> str:
+    """Render a PDF page to base64-encoded JPEG."""
+    page = doc[page_idx]
+    mat = fitz.Matrix(DPI_SCALE, DPI_SCALE)
+    pix = page.get_pixmap(matrix=mat)
+    return base64.standard_b64encode(pix.tobytes("jpeg", jpg_quality=92)).decode()
+
+
+def _parse_json_response(text: str) -> dict:
+    raw = text.strip()
+    if "```" in raw:
+        after = raw.split("```", 1)[1]
+        if after.startswith("json"):
+            after = after[4:]
+        raw = after.rsplit("```", 1)[0].strip()
+    elif not raw.startswith("{"):
+        start = raw.find("{")
+        if start >= 0:
+            raw = raw[start:]
+    if not raw:
+        raise ValueError("Empty JSON in response")
+    return json.loads(raw)
+
+
+def extract_pool(doc: fitz.Document, pool_num: int) -> dict:
+    """Two API calls (one per page) to extract pool data."""
+    client = anthropic.Anthropic()
+    front_b64 = render_page(doc, (pool_num - 1) * 2)
+    back_b64  = render_page(doc, (pool_num - 1) * 2 + 1)
+
+    def call(image_b64: str, prompt: str) -> dict:
+        r = client.messages.create(
+            model=MODEL,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        return _parse_json_response(r.content[0].text)
+
+    front = call(front_b64, FRONT_PROMPT)
+    back  = call(back_b64,  BACK_PROMPT)
+
+    # Merge: front has player info + leaders + base + vigilance + command
+    # back has aggression + cunning + multicolor + villainy + heroism + gray
+    merged = {**front}
+    for sec in ("aggression", "cunning", "multicolor", "villainy", "heroism", "gray"):
+        merged[sec] = back.get(sec, [])
+
+    # Flatten all card sections into a single list and apply sanity fixes
+    cards = []
+    for sec in ("vigilance", "command", "aggression", "cunning", "villainy", "heroism", "gray", "multicolor"):
+        for entry in merged.get(sec, []):
+            t = entry.get("t") or 0
+            p = entry.get("p") or 0
+            # Values >3 are card collector numbers read by mistake — discard
+            if t > 3:
+                t, p = 0, 0
+            elif p > t:
+                # Fix swapped columns: played can't exceed total
+                t, p = p, t
+            p = min(p, t)
+            if t > 0 or p > 0:
+                cards.append({"s": sec, "n": entry.get("n"), "t": t, "p": p})
+    merged["cards"] = cards
+
+    return merged
+
+
+def validate_pool(data: dict) -> list[str]:
+    """Return list of validation warnings (non-blocking)."""
+    warnings = []
+
+    n_leaders = len(data.get("leaders_in_pool") or [])
+    if n_leaders != 6:
+        warnings.append(f"Expected 6 leaders in pool, got {n_leaders}")
+
+    if not data.get("leader_played"):
+        warnings.append("No played leader detected")
+
+    total_cards = sum((c.get("t") or 0) for c in data.get("cards") or [])
+    if total_cards != 96:
+        warnings.append(f"Expected 96 cards in pool, got {total_cards}")
+
+    played_cards = sum((c.get("p") or 0) for c in data.get("cards") or [])
+    if played_cards < 30:
+        warnings.append(f"Expected ≥30 cards played, got {played_cards}")
+
+    if not data.get("base"):
+        warnings.append("No base found")
+
+    return warnings
+
+
+def save_pool(data: dict, pool_num: int, dry_run: bool) -> int | None:
+    """Insert pool into DB. Returns pool_id or None if dry_run."""
+    warnings = validate_pool(data)
+    ocr_notes = "; ".join(warnings) if warnings else None
+
+    # Resolve leader names from row numbers
+    leaders_in_pool = data.get("leaders_in_pool") or []
+    leader_played_row = data.get("leader_played")
+    leader_names_in_pool = [LEADERS[r - 1][1] for r in leaders_in_pool if 1 <= r <= 18]
+    leader_played_name = LEADERS[leader_played_row - 1][1] if leader_played_row and 1 <= leader_played_row <= 18 else None
+
+    cards = data.get("cards") or []
+    total_cards = sum((c.get("t") or 0) for c in cards)
+    played_cards = sum((c.get("p") or 0) for c in cards)
+
+    if dry_run:
+        print(f"\n[Pool {pool_num}] DRY RUN")
+        print(f"  Player: {data.get('player_first_name')} {data.get('player_last_name')} (SWU: {data.get('player_swu_id')})")
+        print(f"  Table: {data.get('table_num')}")
+        print(f"  Base: {data.get('base')}")
+        print(f"  Leaders in pool ({len(leader_names_in_pool)}): {leader_names_in_pool}")
+        print(f"  Leader played: {leader_played_name}")
+        print(f"  Cards in pool: {total_cards}  Cards played: {played_cards}")
+        if warnings:
+            print(f"  WARNINGS: {warnings}")
+        return None
+
+    pool_id = db.fetchone(
+        """INSERT INTO sealed_pools
+           (scan_page, table_num,
+            player_first_name, player_last_name, player_swu_id,
+            verifier_first_name, verifier_last_name, verifier_swu_id,
+            front_scanned, back_scanned, ocr_notes)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,true,true,%s)
+           RETURNING id""",
+        (
+            pool_num,
+            data.get("table_num"),
+            data.get("player_first_name"),
+            data.get("player_last_name"),
+            data.get("player_swu_id"),
+            data.get("verifier_first_name"),
+            data.get("verifier_last_name"),
+            data.get("verifier_swu_id"),
+            ocr_notes,
+        ),
+    )["id"]
+
+    # Card lookup by number
+    num_to_name = {num: name for sec in SECTION_CARDS.values() for num, name in sec}
+
+    # Insert leaders (all in pool get pool_count=1; played leader gets played_count=1)
+    for row_num in leaders_in_pool:
+        if not (1 <= row_num <= 18):
+            continue
+        _, name = LEADERS[row_num - 1]
+        played = 1 if row_num == leader_played_row else 0
+        db.execute(
+            "INSERT INTO sealed_pool_cards (pool_id,section,card_number,card_name,pool_count,played_count) VALUES (%s,'leader',%s,%s,1,%s)",
+            (pool_id, row_num, name, played),
+        )
+
+    # Insert base
+    base_name = data.get("base")
+    if base_name:
+        db.execute(
+            "INSERT INTO sealed_pool_cards (pool_id,section,card_number,card_name,pool_count,played_count) VALUES (%s,'base',NULL,%s,1,1)",
+            (pool_id, base_name),
+        )
+
+    # Insert regular cards (only non-zero entries)
+    valid_sections = {"vigilance", "command", "aggression", "cunning",
+                      "villainy", "heroism", "gray", "multicolor"}
+    for entry in cards:
+        section = entry.get("s", "")
+        if section not in valid_sections:
+            continue
+        num = entry.get("n")
+        total = entry.get("t") or 0
+        played = entry.get("p") or 0
+        if total > 0 or played > 0:
+            name = num_to_name.get(num, f"Unknown #{num}")
+            db.execute(
+                "INSERT INTO sealed_pool_cards (pool_id,section,card_number,card_name,pool_count,played_count) VALUES (%s,%s,%s,%s,%s,%s)",
+                (pool_id, section, num, name, total, played),
+            )
+
+    print(f"[Pool {pool_num}] saved → pool_id={pool_id}", end="")
+    if warnings:
+        print(f"  WARN: {warnings}", end="")
+    print()
+    return pool_id
+
+
+def already_processed(pool_num: int) -> bool:
+    row = db.fetchone("SELECT id FROM sealed_pools WHERE scan_page=%s", (pool_num,))
+    return row is not None
+
+
+def delete_pool(pool_num: int):
+    db.execute("DELETE FROM sealed_pools WHERE scan_page=%s", (pool_num,))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="OCR sealed PQ pool decklists into DB")
+    parser.add_argument("--pool", help="Pool number or range (e.g. 3 or 1-10)")
+    parser.add_argument("--dry-run", action="store_true", help="Print extracted data, no DB writes")
+    parser.add_argument("--reprocess", type=int, help="Reprocess pool N even if already in DB")
+    args = parser.parse_args()
+
+    doc = fitz.open(str(PDF_PATH))
+    total_pools = len(doc) // 2
+    print(f"PDF: {len(doc)} pages = {total_pools} pools")
+
+    # Determine which pools to process
+    if args.reprocess:
+        pools = [args.reprocess]
+    elif args.pool:
+        if "-" in args.pool:
+            a, b = args.pool.split("-")
+            pools = list(range(int(a), int(b) + 1))
+        else:
+            pools = [int(args.pool)]
+    else:
+        pools = list(range(1, total_pools + 1))
+
+    for pool_num in pools:
+        if pool_num < 1 or pool_num > total_pools:
+            print(f"[Pool {pool_num}] out of range (1-{total_pools}), skipping")
+            continue
+
+        if not args.dry_run and not args.reprocess:
+            if already_processed(pool_num):
+                print(f"[Pool {pool_num}] already in DB, skipping")
+                continue
+
+        if args.reprocess == pool_num:
+            print(f"[Pool {pool_num}] deleting existing records for reprocess")
+            delete_pool(pool_num)
+
+        print(f"[Pool {pool_num}] extracting...", end=" ", flush=True)
+        try:
+            data = extract_pool(doc, pool_num)
+            print("OK")
+        except Exception as e:
+            print(f"ERROR: {e}")
+            continue
+
+        try:
+            save_pool(data, pool_num, args.dry_run)
+        except Exception as e:
+            print(f"[Pool {pool_num}] DB error: {e}")
+            continue
+
+        if not args.dry_run and len(pools) > 1:
+            time.sleep(1)  # brief pause between API calls
+
+
+if __name__ == "__main__":
+    main()
