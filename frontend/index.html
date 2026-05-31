@@ -7501,8 +7501,8 @@ let _winrateTab  = 'leaders';
 let _winrateSort = { leaders: 'gwr', cards: 'gwr' };
 let _winrateDir  = { leaders: -1, cards: -1 };
 
-async function loadWinrate() {
-  if (_winrateData) { renderWinrate(); return; }
+async function loadWinrate(force) {
+  if (_winrateData && !force) { renderWinrate(); return; }
   document.getElementById('winrate-body').innerHTML = '<div class="loading" style="padding:40px">loading…</div>';
   try {
     _winrateData = await api('/api/sealed/stats');
