@@ -4157,7 +4157,7 @@ def karabast_leader_matchups(leader_id: str, base_id: str):
 
 
 @app.get("/api/winrate")
-def get_winrate(format: str = "standard", min_decks: int = 10, min_card_decks: int = 30):
+def get_winrate(format: str = "standard", min_decks: int = 0, min_card_decks: int = 0):
     t = _tnames(format)
 
     leaders = db.fetchall(f"""

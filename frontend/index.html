@@ -4355,6 +4355,7 @@ function routeFromHash() {
     return true;
   }
   const page = hash.replace(/^#/, '');
+  if (page === 'sealed') { showPage('winrate'); return true; }
   const el = document.getElementById('page-' + page);
   if (el) { showPage(page); return true; }
   return false;
@@ -7604,7 +7605,7 @@ function renderWinrate() {
           `<th></th>` +
           mkTh('deck_count','Decks','cards') +
           `</tr></thead><tbody>${rows}</tbody></table>` +
-          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">Avg GWR = average game win rate of decks that included this card (mainboard only, min 30 decks).</div>`
+          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">Avg GWR = average game win rate of decks that included this card (mainboard only).</div>`
       : '<div class="empty-state" style="padding:40px">// no data</div>';
   }
 }
