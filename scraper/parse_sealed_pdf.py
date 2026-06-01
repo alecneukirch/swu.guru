@@ -29,8 +29,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import db
 
 PDF_PATH = Path(__file__).parent.parent / "sealedPQLists.pdf"
-MODEL = "claude-sonnet-4-6"
-DPI_SCALE = 5.0  # renders at ~360 dpi from a 72 dpi base
+MODEL_POOL   = "claude-sonnet-4-6"
+MODEL_PLAYED = "claude-opus-4-7"
+DPI_SCALE    = 5.0  # ~360 dpi
+
+# PDF point coordinates (pt) of the TOTAL (pool) box column per section.
+# Each section has [PLAYED box][TOTAL box][card no.][card name].
+# We white out only the TOTAL box strips on the played-detection render
+# so the model can't confuse the two adjacent columns.
+# Coordinates measured by direct pixel-level border detection on sealedPQLists.pdf at DPI_SCALE=5.
+# Front page sections: LEADER (0-203.6pt), VIGILANCE (203.6-428.7pt), COMMAND (428.7-612pt).
+# Back page sections: AGG/VIL/HER (0-235pt), CUNNING/GRAY (235-401pt), MULTICOLOR (401-612pt).
+# Within each section layout: [PLAYED box][TOTAL box][NO.#][CARD NAME].
+# TOTAL box ranges measured from header-row scans on sealedPQLists.pdf at DPI_SCALE=5:
+#   Front: LEADER=28.5-51.9pt, VIGILANCE≈225-240pt, COMMAND=449-467pt
+#   Back:  sect1≈28-46pt, sect2=255.6-273.4pt, sect3=424.8-445.4pt
+_FRONT_TOTAL_STRIPS_PT = [(28, 53), (216, 242), (448, 468)]   # leader, vigilance, command
+_BACK_TOTAL_STRIPS_PT  = [(22, 47), (255, 274), (424, 446)]   # aggression+vil+her, cunning+gray, multicolor
 
 # ── Complete card list from the digital blank template ──────────────────────
 
@@ -351,13 +366,20 @@ Each card row has: [PLAYED box] [TOTAL box] [large printed card number] [card na
 
 CRITICAL — COLUMN SEPARATION:
 The two small boxes before each card form a pair: [PLAYED][TOTAL]
-  □☑  →  total=1, played=0   (card is in the sealed pool but NOT in the deck — the common case)
-  ☑☑  →  total=1, played=1   (card is in pool AND chosen for the deck — rare)
-  □□  →  total=0, played=0   (card not in pool)
+- Players write a number (1, 2, 3) in the TOTAL box for cards they opened in their pool
+- Players write a number in the PLAYED box ONLY for cards they put in their deck (same number as total, or 1 if total≥2 and they only play 1 copy)
+- A blank PLAYED box means played=0, even if the TOTAL box has a number
 
-A mark in the TOTAL (right) box does NOT mean PLAYED (left) is also marked.
-The left box must have its OWN visible mark, independent of the right box, for PLAYED > 0.
-MOST cards will be □☑ (total=1, played=0).
+Examples:
+  [blank][1]  →  total=1, played=0  (in pool, not in deck — the COMMON case)
+  [1][1]      →  total=1, played=1  (in pool AND in deck)
+  [blank][2]  →  total=2, played=0  (2 copies in pool, neither played)
+  [1][2]      →  total=2, played=1  (2 copies in pool, 1 played)
+  [blank][blank] → total=0, played=0
+
+A number in the TOTAL (right) box does NOT mean PLAYED (left) is also filled.
+The left box must have its OWN written digit for PLAYED > 0.
+MOST cards will be [blank][1] (total=1, played=0).
 
 DECK STRUCTURE — use this to self-check your work:
 - Exactly 1 leader played, exactly 1 base played
@@ -402,23 +424,27 @@ Return ONLY this JSON (omit cards with t=0):
   "command": [{"n": 139, "t": 1, "p": 0}]
 }"""
 
-FRONT_PLAYED_PROMPT = """This is PAGE 1 (front) of a sealed deck form.
+def make_front_played_prompt(leaders_in_pool: list, vig_nums: list, cmd_nums: list) -> str:
+    return f"""This is PAGE 1 (front) of a sealed deck form.
 
-Your task: identify which cards are in the player's DECK (played). Look ONLY at the LEFTMOST of the two small boxes before each card number. Ignore the second box entirely.
+Your task: for each card number listed below, locate that row on the page and check whether the LEFTMOST of its two small boxes has a digit written in it.
 
-The leftmost box is the PLAYED box. It will be marked for very few cards — the player has exactly one played leader and approximately 15 played cards across the Vigilance and Command sections on this page.
+HOW THE PLAYED BOX WORKS:
+- Played = player wrote a number in the leftmost box (usually same as pool count, or 1 if they have 2+ copies)
+- Not played = leftmost box is completely BLANK/EMPTY
+- Most cards in the pool are NOT played — expect roughly half or fewer to be played
 
-Scan the LEFTMOST column of boxes for:
-1. LEADER section (rows 1-18): which SINGLE row has a mark in the leftmost box (the chosen leader)
-2. VIGILANCE (BLUE) section: which card numbers have a mark in their leftmost box
-3. COMMAND (GREEN) section: which card numbers have a mark in their leftmost box
+ONLY check these specific card numbers (do not report any other rows):
+- LEADER rows in pool: {leaders_in_pool} → report exactly ONE as leader_played
+- VIGILANCE cards in pool: {vig_nums}
+- COMMAND cards in pool: {cmd_nums}
 
-Return ONLY this JSON:
-{
+Return ONLY this JSON (include only card numbers where leftmost box has a digit):
+{{
   "leader_played": 7,
   "vigilance_played": [129],
   "command_played": [145, 152, 168]
-}"""
+}}"""
 
 BACK_POOL_PROMPT = """This is PAGE 2 (back) of a sealed deck form.
 
@@ -447,30 +473,53 @@ Return ONLY this JSON (omit cards with t=0):
   "gray":       [{"n": 258, "t": 1, "p": 0}]
 }"""
 
-BACK_PLAYED_PROMPT = """This is PAGE 2 (back) of a sealed deck form.
+def make_back_played_prompt(agg_nums: list, cun_nums: list, mul_nums: list,
+                             vil_nums: list, her_nums: list, gray_nums: list) -> str:
+    return f"""This is PAGE 2 (back) of a sealed deck form.
 
-Your task: identify which cards are in the player's DECK (played). Look ONLY at the LEFTMOST of the two small boxes before each card number. Ignore the second box entirely.
+Your task: for each card number listed below, locate that row on the page and check whether the LEFTMOST of its two small boxes has a digit written in it.
 
-The leftmost box is the PLAYED box. It will be marked for very few cards — approximately 15 played cards across Aggression, Cunning, and Multicolor combined. Villainy, Heroism, and Gray will typically have zero or very few played marks.
+HOW THE PLAYED BOX WORKS:
+- Played = player wrote a number in the leftmost box (usually same as pool count, or 1 if they have 2+ copies)
+- Not played = leftmost box is completely BLANK/EMPTY
+- Most cards in the pool are NOT played — expect roughly half or fewer to be played
 
-Scan the LEFTMOST column of boxes for each section and list only card numbers where that leftmost box has a mark:
+ONLY check these specific card numbers (do not report any other rows):
+- AGGRESSION cards in pool: {agg_nums}
+- CUNNING cards in pool: {cun_nums}
+- MULTICOLOR cards in pool: {mul_nums}
+- VILLAINY cards in pool: {vil_nums}
+- HEROISM cards in pool: {her_nums}
+- GRAY cards in pool: {gray_nums}
 
 Return ONLY this JSON (empty array if none played in that section):
-{
+{{
   "aggression_played": [184, 191],
   "cunning_played": [211, 228, 235],
   "multicolor_played": [52, 67],
   "villainy_played": [],
   "heroism_played": [],
   "gray_played": []
-}"""
+}}"""
 
 
-def render_page(doc: fitz.Document, page_idx: int) -> str:
-    """Render a PDF page to base64-encoded JPEG."""
+def render_page(doc: fitz.Document, page_idx: int, played_only: bool = False) -> str:
+    """Render a PDF page to base64-encoded JPEG.
+
+    played_only: white out the TOTAL (pool) box columns so the model sees only
+    the PLAYED (leftmost) box marks, eliminating column confusion.
+    """
     page = doc[page_idx]
     mat = fitz.Matrix(DPI_SCALE, DPI_SCALE)
     pix = page.get_pixmap(matrix=mat)
+    if played_only:
+        is_back = (page_idx % 2 == 1)
+        strips = _BACK_TOTAL_STRIPS_PT if is_back else _FRONT_TOTAL_STRIPS_PT
+        white = (255, 255, 255)
+        for x1_pt, x2_pt in strips:
+            x1_px = int(x1_pt * DPI_SCALE)
+            x2_px = int(x2_pt * DPI_SCALE)
+            pix.set_rect(fitz.IRect(x1_px, 0, x2_px, pix.height), white)
     return base64.standard_b64encode(pix.tobytes("jpeg", jpg_quality=92)).decode()
 
 
@@ -565,8 +614,10 @@ def _get_ref_images(doc: fitz.Document) -> dict:
     global _ref_images
     if _ref_images is None:
         _ref_images = {
-            "front": render_page(doc, 0),
-            "back":  render_page(doc, 1),
+            "front_jpeg":        render_page(doc, 0),
+            "back_jpeg":         render_page(doc, 1),
+            "front_played_only": render_page(doc, 0, played_only=True),
+            "back_played_only":  render_page(doc, 1, played_only=True),
         }
     return _ref_images
 
@@ -590,28 +641,33 @@ def _parse_json_response(text: str) -> dict:
 def extract_pool(doc: fitz.Document, pool_num: int) -> dict:
     """Four API calls per pool: pool counts and played counts extracted separately per page."""
     client = anthropic.Anthropic()
-    front_b64 = render_page(doc, (pool_num - 1) * 2)
-    back_b64  = render_page(doc, (pool_num - 1) * 2 + 1)
 
-    # Load pool 1 reference images (cached after first call)
+    front_jpeg        = render_page(doc, (pool_num - 1) * 2)
+    back_jpeg         = render_page(doc, (pool_num - 1) * 2 + 1)
+    front_played_only = render_page(doc, (pool_num - 1) * 2,     played_only=True)
+    back_played_only  = render_page(doc, (pool_num - 1) * 2 + 1, played_only=True)
+
+    # Load pool 1 reference images (cached after first call); skip for pool 1 itself
     ref = _get_ref_images(doc) if pool_num != 1 else None
 
-    def _img(b64: str) -> dict:
-        return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}}
+    def _img(b64: str, mime: str = "image/jpeg") -> dict:
+        return {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
 
-    def call(image_b64: str, prompt: str, ref_image_b64: str | None, ref_answer: str) -> dict:
-        # Build messages: optional few-shot turn (pool 1 image → correct answer), then actual image
+    def call(image_b64: str, mime: str, prompt: str, model: str,
+             ref_image_b64: str | None, ref_mime: str, ref_answer: str,
+             ref_prompt_override: str | None = None) -> dict:
         messages = []
         if ref_image_b64 is not None:
+            ref_prompt = ref_prompt_override if ref_prompt_override is not None else prompt
             messages += [
-                {"role": "user",      "content": [_img(ref_image_b64), {"type": "text", "text": prompt}]},
+                {"role": "user",      "content": [_img(ref_image_b64, ref_mime), {"type": "text", "text": ref_prompt}]},
                 {"role": "assistant", "content": ref_answer},
             ]
-        messages.append({"role": "user", "content": [_img(image_b64), {"type": "text", "text": prompt}]})
+        messages.append({"role": "user", "content": [_img(image_b64, mime), {"type": "text", "text": prompt}]})
 
         for attempt in range(3):
             r = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=4096,
                 system=SYSTEM_PROMPT,
                 messages=messages,
@@ -623,13 +679,44 @@ def extract_pool(doc: fitz.Document, pool_num: int) -> dict:
                     raise
                 print(f"  [retry {attempt+1}] JSON parse failed: {e}")
 
-    ref_front = ref["front"] if ref else None
-    ref_back  = ref["back"]  if ref else None
+    ref_front_jpeg        = ref["front_jpeg"]        if ref else None
+    ref_back_jpeg         = ref["back_jpeg"]         if ref else None
+    ref_front_played_only = ref["front_played_only"] if ref else None
+    ref_back_played_only  = ref["back_played_only"]  if ref else None
 
-    front_pool   = call(front_b64, FRONT_POOL_PROMPT,   ref_front, POOL1_FRONT_POOL_ANSWER)
-    front_played = call(front_b64, FRONT_PLAYED_PROMPT, ref_front, POOL1_FRONT_PLAYED_ANSWER)
-    back_pool    = call(back_b64,  BACK_POOL_PROMPT,    ref_back,  POOL1_BACK_POOL_ANSWER)
-    back_played  = call(back_b64,  BACK_PLAYED_PROMPT,  ref_back,  POOL1_BACK_PLAYED_ANSWER)
+    # Pool calls first so we can pass card numbers to the played prompts
+    front_pool = call(front_jpeg, "image/jpeg", FRONT_POOL_PROMPT, MODEL_POOL,
+                      ref_front_jpeg, "image/jpeg", POOL1_FRONT_POOL_ANSWER)
+    back_pool  = call(back_jpeg,  "image/jpeg", BACK_POOL_PROMPT,  MODEL_POOL,
+                      ref_back_jpeg,  "image/jpeg", POOL1_BACK_POOL_ANSWER)
+
+    def _nums(data: dict, sec: str) -> list:
+        return [e["n"] for e in data.get(sec, [])]
+
+    # Build reference played prompts using pool 1's known card numbers
+    p1f = json.loads(POOL1_FRONT_POOL_ANSWER)
+    p1b = json.loads(POOL1_BACK_POOL_ANSWER)
+    ref_front_played_prompt = make_front_played_prompt(
+        p1f["leaders_in_pool"], _nums(p1f, "vigilance"), _nums(p1f, "command"))
+    ref_back_played_prompt = make_back_played_prompt(
+        _nums(p1b, "aggression"), _nums(p1b, "cunning"), _nums(p1b, "multicolor"),
+        _nums(p1b, "villainy"), _nums(p1b, "heroism"), _nums(p1b, "gray"))
+
+    # Build this pool's played prompts using its own pool data
+    front_played_prompt = make_front_played_prompt(
+        front_pool.get("leaders_in_pool", []),
+        _nums(front_pool, "vigilance"), _nums(front_pool, "command"))
+    back_played_prompt = make_back_played_prompt(
+        _nums(back_pool, "aggression"), _nums(back_pool, "cunning"), _nums(back_pool, "multicolor"),
+        _nums(back_pool, "villainy"), _nums(back_pool, "heroism"), _nums(back_pool, "gray"))
+
+    # Played calls use the pool-column-whited-out image so the model can only see PLAYED marks
+    front_played = call(front_played_only, "image/jpeg", front_played_prompt, MODEL_PLAYED,
+                        ref_front_played_only, "image/jpeg", POOL1_FRONT_PLAYED_ANSWER,
+                        ref_prompt_override=ref_front_played_prompt)
+    back_played  = call(back_played_only,  "image/jpeg", back_played_prompt,  MODEL_PLAYED,
+                        ref_back_played_only,  "image/jpeg", POOL1_BACK_PLAYED_ANSWER,
+                        ref_prompt_override=ref_back_played_prompt)
 
     # Build played sets (card numbers) per section from the focused played calls
     def played_set(key: str, data: dict) -> set:
