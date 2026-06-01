@@ -30,7 +30,7 @@ import db
 
 PDF_PATH = Path(__file__).parent.parent / "sealedPQLists.pdf"
 MODEL = "claude-sonnet-4-6"
-DPI_SCALE = 3.0  # renders at ~216 dpi from a 72 dpi base
+DPI_SCALE = 5.0  # renders at ~360 dpi from a 72 dpi base
 
 # ── Complete card list from the digital blank template ──────────────────────
 
@@ -344,59 +344,87 @@ SECTION_CARDS = {
 SYSTEM_PROMPT = """You are a data extractor reading Star Wars: Unlimited sealed deck registration forms.
 
 Each card row has: [PLAYED box] [TOTAL box] [large printed card number] [card name]
-- PLAYED box = small handwritten box (leftmost): copies in player's deck (0, 1, 2, or rarely 3)
-- TOTAL box = small handwritten box (second from left): copies in sealed pool (0, 1, 2, or rarely 3)
+- PLAYED box = small handwritten box (LEFTMOST): copies in player's DECK
+- TOTAL box = small handwritten box (SECOND from left): copies in player's SEALED POOL
 - The large printed number after the boxes is the CARD COLLECTOR NUMBER — ignore it for TOTAL/PLAYED values
 - For leaders/bases: a checkmark or X = 1, blank = 0
 
-CRITICAL: TOTAL and PLAYED values are ALWAYS small numbers: 0, 1, 2, or at most 3.
-Never report a TOTAL or PLAYED value larger than 3. If you read a larger number, it's the card collector number — set that row's values to 0.
+CRITICAL — COLUMN SEPARATION:
+The two small boxes before each card form a pair: [PLAYED][TOTAL]
+  □☑  →  total=1, played=0   (card is in the sealed pool but NOT in the deck — the common case)
+  ☑☑  →  total=1, played=1   (card is in pool AND chosen for the deck — rare)
+  □□  →  total=0, played=0   (card not in pool)
+
+A mark in the TOTAL (right) box does NOT mean PLAYED (left) is also marked.
+The left box must have its OWN visible mark, independent of the right box, for PLAYED > 0.
+MOST cards will be □☑ (total=1, played=0).
+
+DECK STRUCTURE — use this to self-check your work:
+- Exactly 1 leader played, exactly 1 base played
+- Exactly 30 regular card copies played across all non-leader/base sections
+- Total played entries across the entire sheet = 32 (1 leader + 1 base + 30 cards)
+- Players choose TWO aspect colors: two sections will have many played cards, the other two will have few or zero
+
+If your played totals deviate significantly from these numbers, you have confused the PLAYED and TOTAL columns in one or more sections. Re-examine only the leftmost box of each row in that section.
+
+CRITICAL — NUMBER RANGE:
+TOTAL and PLAYED values are ALWAYS 0, 1, 2, or at most 3.
+If you read a larger number it is the card collector number — set that row's values to 0.
 
 Be exhaustive: read EVERY row in every section top to bottom. Return ONLY compact JSON."""
 
-FRONT_PROMPT = """This is PAGE 1 (front) of a sealed deck form.
+FRONT_POOL_PROMPT = """This is PAGE 1 (front) of a sealed deck form.
 
-REMINDER: TOTAL and PLAYED box values are always 0, 1, 2, or at most 3.
-The large printed numbers on each row are card collector numbers — do NOT use those as TOTAL/PLAYED values.
-Only read the small handwritten boxes immediately to the left of the large card number.
+Your task: extract pool (TOTAL) counts only. Ignore the PLAYED (leftmost) box entirely — set p=0 for all cards.
+
+REMINDER: TOTAL values are always 0, 1, 2, or at most 3. The large printed numbers are card collector numbers — ignore them.
 
 Extract:
-
 1. Player info (top of page): first name, last name, SWU ID, verifier names/IDs, table number
-2. LEADER section (left column, rows 1-18): which rows have marks in TOTAL (in pool), which single row has a mark in PLAYED (deck leader)
-3. BASE section (small section): which base is marked as selected
-4. VIGILANCE (BLUE) section (middle column): all cards with non-zero TOTAL or PLAYED
-5. COMMAND (GREEN) section (right column): all cards with non-zero TOTAL or PLAYED
+2. LEADER section: which of rows 1-18 have a mark in their TOTAL box (in pool)
+3. BASE section: which base is marked
+4. VIGILANCE (BLUE) section (middle column): all cards with TOTAL > 0, all with p=0
+5. COMMAND (GREEN) section (right column): all cards with TOTAL > 0, all with p=0
 
-Leader row reference:
-1=Saw Gerrera  2=Tobias Beckett  3=Agent Kallus  4=Aurra Sing  5=Jyn Erso
+Leader rows: 1=Saw Gerrera  2=Tobias Beckett  3=Agent Kallus  4=Aurra Sing  5=Jyn Erso
 6=Vel Sartha  7=Boba Fett  8=Director Krennic  9=Hera Syndulla  10=Leia Organa
 11=Darth Vader  12=Sebulba  13=Chewbacca  14=Enfys Nest  15=Jabba the Hutt
 16=The Client  17=Han Solo  18=Lando Calrissian
 
-Return ONLY this JSON (omit zero entries from cards arrays):
+Return ONLY this JSON (omit cards with t=0):
 {
-  "player_first_name": "...",
-  "player_last_name": "...",
-  "player_swu_id": "...",
-  "verifier_first_name": "...",
-  "verifier_last_name": "...",
-  "verifier_swu_id": "...",
+  "player_first_name": "...", "player_last_name": "...", "player_swu_id": "...",
+  "verifier_first_name": "...", "verifier_last_name": "...", "verifier_swu_id": "...",
   "table_num": null,
   "leaders_in_pool": [4, 11, 14],
-  "leader_played": 4,
   "base": "Partisan Hideout (Yellow)",
-  "vigilance": [{"n": 102, "t": 1, "p": 1}, {"n": 108, "t": 1, "p": 0}],
-  "command": [{"n": 139, "t": 1, "p": 1}]
+  "vigilance": [{"n": 102, "t": 1, "p": 0}, {"n": 108, "t": 2, "p": 0}],
+  "command": [{"n": 139, "t": 1, "p": 0}]
 }"""
 
-BACK_PROMPT = """This is PAGE 2 (back) of a sealed deck form.
+FRONT_PLAYED_PROMPT = """This is PAGE 1 (front) of a sealed deck form.
 
-REMINDER: TOTAL and PLAYED values are always 0, 1, 2, or at most 3.
-The large printed numbers in each row are card collector numbers — do NOT use those as TOTAL/PLAYED values.
-Only read the small handwritten boxes immediately to the left of the large card number.
+Your task: identify which cards are in the player's DECK (played). Look ONLY at the LEFTMOST of the two small boxes before each card number. Ignore the second box entirely.
 
-Extract all non-zero cards from every section.
+The leftmost box is the PLAYED box. It will be marked for very few cards — the player has exactly one played leader and approximately 15 played cards across the Vigilance and Command sections on this page.
+
+Scan the LEFTMOST column of boxes for:
+1. LEADER section (rows 1-18): which SINGLE row has a mark in the leftmost box (the chosen leader)
+2. VIGILANCE (BLUE) section: which card numbers have a mark in their leftmost box
+3. COMMAND (GREEN) section: which card numbers have a mark in their leftmost box
+
+Return ONLY this JSON:
+{
+  "leader_played": 7,
+  "vigilance_played": [129],
+  "command_played": [145, 152, 168]
+}"""
+
+BACK_POOL_PROMPT = """This is PAGE 2 (back) of a sealed deck form.
+
+Your task: extract pool (TOTAL) counts only. Ignore the PLAYED (leftmost) box entirely — set p=0 for all cards.
+
+REMINDER: TOTAL values are always 0, 1, 2, or at most 3. Large printed numbers are card collector numbers — ignore them.
 
 Sections on this page:
 - AGGRESSION (RED): left column, card numbers 172-208
@@ -406,18 +434,35 @@ Sections on this page:
 - HEROISM (WHITE): lower left below Villainy, card numbers 253-256
 - NO ASPECT (GRAY): lower middle, card numbers 257-264
 
-For each card with any non-zero value, include: {"n": <card_number>, "t": <TOTAL>, "p": <PLAYED>}
-TOTAL is the second box from left (how many in pool); PLAYED is the leftmost box (how many in deck).
-Read ALL rows in each section — scan from top to bottom completely before moving to next section.
+For each card with TOTAL > 0, include: {"n": <card_number>, "t": <TOTAL>, "p": 0}
+Read ALL rows in every section top to bottom.
 
-Return ONLY this JSON (section arrays contain only non-zero entries):
+Return ONLY this JSON (omit cards with t=0):
 {
   "aggression": [{"n": 172, "t": 1, "p": 0}],
-  "cunning":    [{"n": 211, "t": 1, "p": 1}],
+  "cunning":    [{"n": 211, "t": 1, "p": 0}],
   "multicolor": [{"n": 31,  "t": 1, "p": 0}],
   "villainy":   [],
   "heroism":    [],
-  "gray":       [{"n": 258, "t": 1, "p": 1}]
+  "gray":       [{"n": 258, "t": 1, "p": 0}]
+}"""
+
+BACK_PLAYED_PROMPT = """This is PAGE 2 (back) of a sealed deck form.
+
+Your task: identify which cards are in the player's DECK (played). Look ONLY at the LEFTMOST of the two small boxes before each card number. Ignore the second box entirely.
+
+The leftmost box is the PLAYED box. It will be marked for very few cards — approximately 15 played cards across Aggression, Cunning, and Multicolor combined. Villainy, Heroism, and Gray will typically have zero or very few played marks.
+
+Scan the LEFTMOST column of boxes for each section and list only card numbers where that leftmost box has a mark:
+
+Return ONLY this JSON (empty array if none played in that section):
+{
+  "aggression_played": [184, 191],
+  "cunning_played": [211, 228, 235],
+  "multicolor_played": [52, 67],
+  "villainy_played": [],
+  "heroism_played": [],
+  "gray_played": []
 }"""
 
 
@@ -446,50 +491,79 @@ def _parse_json_response(text: str) -> dict:
 
 
 def extract_pool(doc: fitz.Document, pool_num: int) -> dict:
-    """Two API calls (one per page) to extract pool data."""
+    """Four API calls per pool: pool counts and played counts extracted separately per page."""
     client = anthropic.Anthropic()
     front_b64 = render_page(doc, (pool_num - 1) * 2)
     back_b64  = render_page(doc, (pool_num - 1) * 2 + 1)
 
     def call(image_b64: str, prompt: str) -> dict:
-        r = client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-        )
-        return _parse_json_response(r.content[0].text)
+        for attempt in range(3):
+            r = client.messages.create(
+                model=MODEL,
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
+                        {"type": "text", "text": prompt},
+                    ],
+                }],
+            )
+            try:
+                return _parse_json_response(r.content[0].text)
+            except (ValueError, json.JSONDecodeError) as e:
+                if attempt == 2:
+                    raise
+                print(f"  [retry {attempt+1}] JSON parse failed: {e}")
 
-    front = call(front_b64, FRONT_PROMPT)
-    back  = call(back_b64,  BACK_PROMPT)
+    front_pool   = call(front_b64, FRONT_POOL_PROMPT)
+    front_played = call(front_b64, FRONT_PLAYED_PROMPT)
+    back_pool    = call(back_b64,  BACK_POOL_PROMPT)
+    back_played  = call(back_b64,  BACK_PLAYED_PROMPT)
 
-    # Merge: front has player info + leaders + base + vigilance + command
-    # back has aggression + cunning + multicolor + villainy + heroism + gray
-    merged = {**front}
+    # Build played sets (card numbers) per section from the focused played calls
+    def played_set(key: str, data: dict) -> set:
+        return set(data.get(key) or [])
+
+    vig_played  = played_set("vigilance_played",  front_played)
+    cmd_played  = played_set("command_played",    front_played)
+    agg_played  = played_set("aggression_played", back_played)
+    cun_played  = played_set("cunning_played",    back_played)
+    mul_played  = played_set("multicolor_played", back_played)
+    vil_played  = played_set("villainy_played",   back_played)
+    her_played  = played_set("heroism_played",    back_played)
+    gray_played = played_set("gray_played",       back_played)
+
+    played_by_sec = {
+        "vigilance":  vig_played,
+        "command":    cmd_played,
+        "aggression": agg_played,
+        "cunning":    cun_played,
+        "multicolor": mul_played,
+        "villainy":   vil_played,
+        "heroism":    her_played,
+        "gray":       gray_played,
+    }
+
+    # Merge pool and played data
+    merged = {**front_pool}
+    merged["leader_played"] = front_played.get("leader_played")
     for sec in ("aggression", "cunning", "multicolor", "villainy", "heroism", "gray"):
-        merged[sec] = back.get(sec, [])
+        merged[sec] = back_pool.get(sec, [])
 
-    # Flatten all card sections into a single list and apply sanity fixes
+    # Flatten all card sections, applying played flags from the separate played call
     cards = []
     for sec in ("vigilance", "command", "aggression", "cunning", "villainy", "heroism", "gray", "multicolor"):
+        p_set = played_by_sec.get(sec, set())
         for entry in merged.get(sec, []):
             t = entry.get("t") or 0
-            p = entry.get("p") or 0
-            # Values >3 are card collector numbers read by mistake — discard
+            n = entry.get("n")
             if t > 3:
-                t, p = 0, 0
-            elif p > t:
-                # Fix swapped columns: played can't exceed total
-                t, p = p, t
-            p = min(p, t)
+                t = 0
+            p = min(1, t) if (n in p_set) else 0
             if t > 0 or p > 0:
-                cards.append({"s": sec, "n": entry.get("n"), "t": t, "p": p})
+                cards.append({"s": sec, "n": n, "t": t, "p": p})
     merged["cards"] = cards
 
     return merged
