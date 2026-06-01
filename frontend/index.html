@@ -5270,7 +5270,7 @@ function renderWeaknesses() {
     const i      = idx++;
     const wr     = r.win_rate ?? 0;
     const pct    = Math.round(wr * 100);
-    const losses = r.game_count - r.wins;
+    const losses = Math.round(r.game_count - r.wins);
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const { name: wkName, subtitle: wkSub } = cardNameParts(r.card_name);
     const t      = (wr - minWr) / wrSpan;
@@ -5285,13 +5285,13 @@ function renderWeaknesses() {
   <div class="ct-art" id="wk-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
-    <div class="ct-badge">${r.game_count}<span class="ct-badge-label">g</span></div>
+    <div class="ct-badge">${Math.round(r.game_count)}<span class="ct-badge-label">g</span></div>
     <div class="ct-badge">${pct}%</div>
   </div>
   <div class="ct-bottom">
     <div class="ct-name"${wkSub ? ` data-tooltip="${wkSub}"` : ''}>${wkName}</div>
     <div class="ct-stats">
-      <span class="ct-incl">${r.wins}W – ${losses}L</span>
+      <span class="ct-incl">${Math.round(r.wins)}W – ${losses}L</span>
       <span class="wk-pips">${pips}</span>
     </div>
   </div>
