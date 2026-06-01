@@ -3557,7 +3557,6 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
-  <button class="nav-btn"        id="nav-winrate" onclick="showPage('winrate')">Win Rates</button>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -4040,26 +4039,6 @@ select.sl-input { cursor: pointer; }
 
 <!-- ══ KARABAST PAGE ══ -->
 <!-- ══ SEALED CONFIRM PAGE (hidden — access via #confirm) ══ -->
-<!-- ══ WIN RATES PAGE (access via #winrate) ══ -->
-<div class="page" id="page-winrate">
-  <div class="page-header">
-    <div>
-      <div class="page-title">WIN RATES</div>
-      <div class="page-sub">game win rate from melee tournament data</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <span id="winrate-count" style="font-family:var(--mono);font-size:12px;color:var(--text3)"></span>
-    </div>
-  </div>
-  <div class="sealed-tabs">
-    <button class="sealed-tab active" id="winrate-tab-btn-leaders" onclick="winrateShowTab('leaders')">Leaders</button>
-    <button class="sealed-tab" id="winrate-tab-btn-cards" onclick="winrateShowTab('cards')">Cards</button>
-  </div>
-  <div id="winrate-controls" style="display:flex;padding:16px 24px 0;gap:8px;flex-wrap:wrap;align-items:center"></div>
-  <div id="winrate-body" style="padding:16px 24px 48px">
-    <div class="loading" style="padding:40px">loading…</div>
-  </div>
-</div>
 
 <div class="page" id="page-confirm">
   <div class="page-header">
@@ -4348,7 +4327,6 @@ function showPage(name) {
   if (name === 'karabast') loadKarabast();
   if (name === 'confirm')  loadConfirm();
   if (name === 'correct')  loadCorrect();
-  if (name === 'winrate')  loadWinrate();
 }
 function goHome() {
   showPage('home');
@@ -4418,7 +4396,6 @@ function routeFromHash() {
     return true;
   }
   const page = hash.replace(/^#/, '');
-  if (page === 'sealed') { showPage('winrate'); return true; }
   const el = document.getElementById('page-' + page);
   if (el) { showPage(page); return true; }
   return false;
@@ -7558,128 +7535,6 @@ function closeKbDetail() {
   document.querySelectorAll('#kb-grid .leader-card').forEach(c => c.classList.remove('kb-selected'));
 }
 
-// ══ SEALED STATS ════════════════════════════════════════════════════════════
-let _winrateData = null;
-let _winrateTab  = 'leaders';
-let _winrateSort = { leaders: 'gwr', cards: 'gwr' };
-let _winrateDir  = { leaders: -1, cards: -1 };
-
-async function loadWinrate(force) {
-  if (_winrateData && !force) { renderWinrate(); return; }
-  document.getElementById('winrate-body').innerHTML = '<div class="loading" style="padding:40px">loading…</div>';
-  try {
-    _winrateData = await api('/api/sealed/stats');
-    renderWinrate();
-  } catch(e) {
-    document.getElementById('winrate-body').innerHTML = `<div class="empty-state" style="padding:40px">// ${e.message}</div>`;
-  }
-}
-
-function winrateShowTab(tab) {
-  _winrateTab = tab;
-  document.querySelectorAll('.sealed-tab').forEach(b => b.classList.remove('active'));
-  document.getElementById(`winrate-tab-btn-${tab}`)?.classList.add('active');
-  renderWinrate();
-}
-
-function winrateSortBy(tab, col) {
-  if (_winrateSort[tab] === col) _winrateDir[tab] *= -1;
-  else { _winrateSort[tab] = col; _winrateDir[tab] = -1; }
-  renderWinrate();
-}
-
-function winrateColor(rate) {
-  if (rate == null) return 'var(--text3)';
-  if (rate >= 54)   return 'var(--green)';
-  if (rate >= 50)   return 'var(--text2)';
-  if (rate >= 46)   return 'var(--yellow)';
-  return 'var(--red2)';
-}
-
-function renderWinrate() {
-  if (!_winrateData) return;
-  const { leaders, cards, pool_count } = _winrateData;
-
-  document.getElementById('winrate-count').textContent = `${pool_count} players linked`;
-
-  const ctrl = document.getElementById('winrate-controls');
-  ctrl.innerHTML = '';
-
-  const tab  = _winrateTab;
-  const sort = _winrateSort[tab];
-  const dir  = _winrateDir[tab];
-
-  const mkTh = (col, label, t) => {
-    const cls = _winrateSort[t] === col ? (_winrateDir[t] > 0 ? 'sort-asc' : 'sort-desc') : '';
-    return `<th class="${cls}" style="cursor:pointer" onclick="winrateSortBy('${t}','${col}')">${label}</th>`;
-  };
-
-  const mkBar = (val, lo, hi, color) => {
-    const w = Math.min(100, Math.max(0, Math.round(((val - lo) / (hi - lo)) * 100)));
-    return `<span class="sl-bar-wrap"><span class="sl-bar" style="width:${w}%;background:${color}"></span></span>`;
-  };
-
-  if (!pool_count) {
-    document.getElementById('winrate-body').innerHTML =
-      '<div class="empty-state" style="padding:40px">// no players linked yet — use the confirm page to associate pools with melee accounts</div>';
-    return;
-  }
-
-  if (tab === 'leaders') {
-    const sorted = [...leaders].sort((a,b) => dir * ((b[sort] ?? -999) - (a[sort] ?? -999)));
-    const rows = sorted.map(r => {
-      const gwr = r.gwr != null ? r.gwr * 100 : null;
-      const col = winrateColor(gwr);
-      const gwrTxt = gwr != null ? gwr.toFixed(1) + '%' : '—';
-      const games = (r.gw ?? 0) + (r.gl ?? 0);
-      return `<tr onclick="openLeader('${r.leader.replace(/'/g,"\\'")}',null,null,null)" style="cursor:pointer">` +
-        `<td style="font-size:13px">${shortName(r.leader)}</td>` +
-        `<td class="sl-num" style="color:${col};text-align:right">${gwrTxt}</td>` +
-        `<td style="min-width:120px">${mkBar(gwr ?? 50, 44, 58, col)}</td>` +
-        `<td class="sl-num" style="color:var(--text2);text-align:right">${games}</td>` +
-        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.n}</td>` +
-        `</tr>`;
-    }).join('');
-    document.getElementById('winrate-body').innerHTML = sorted.length
-      ? `<table class="sl-table"><thead><tr>` +
-          `<th>Leader</th>` +
-          mkTh('gwr','GWR','leaders') +
-          `<th></th>` +
-          mkTh('gw','Games','leaders') +
-          mkTh('n','Players','leaders') +
-          `</tr></thead><tbody>${rows}</tbody></table>` +
-          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">GWR = game win rate across all matches at this event. Click a row to open leader detail.</div>`
-      : '<div class="empty-state" style="padding:40px">// no leader data</div>';
-
-  } else {
-    const sorted = [...cards].sort((a,b) => dir * ((b[sort] ?? -999) - (a[sort] ?? -999)));
-    const rows = sorted.map(r => {
-      const gwr = r.gwr != null ? r.gwr * 100 : null;
-      const col = winrateColor(gwr);
-      const gwrTxt = gwr != null ? gwr.toFixed(1) + '%' : '—';
-      const games = (r.gw ?? 0) + (r.gl ?? 0);
-      return `<tr>` +
-        `<td style="font-size:13px">${r.card_name}</td>` +
-        `<td class="sl-num" style="color:${col};text-align:right">${gwrTxt}</td>` +
-        `<td style="min-width:120px">${mkBar(gwr ?? 50, 44, 58, col)}</td>` +
-        `<td class="sl-num" style="color:var(--text2);text-align:right">${games}</td>` +
-        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.n}</td>` +
-        `<td class="sl-num" style="color:var(--text3);text-align:right">${r.pool_n ?? '—'}</td>` +
-        `</tr>`;
-    }).join('');
-    document.getElementById('winrate-body').innerHTML = sorted.length
-      ? `<table class="sl-table"><thead><tr>` +
-          `<th>Card</th>` +
-          mkTh('gwr','GWR','cards') +
-          `<th></th>` +
-          mkTh('gw','Games','cards') +
-          mkTh('n','Played In','cards') +
-          mkTh('pool_n','In Pool','cards') +
-          `</tr></thead><tbody>${rows}</tbody></table>` +
-          `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:12px">GWR = game win rate of players who played this card. Played In = decks it appeared in. In Pool = pools that opened it.</div>`
-      : '<div class="empty-state" style="padding:40px">// no card data</div>';
-  }
-}
 
 // ══ SEALED CONFIRM ══════════════════════════════════════════════════════════
 let _confirmData = null;
@@ -8305,7 +8160,6 @@ function _correctSideOf(cardId) {
   <button class="mob-nav-btn"        id="mob-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="mob-nav-btn"        id="mob-events"  onclick="showPage('events')">Events</button>
   <button class="mob-nav-btn"        id="mob-players" onclick="showPage('players')">Players</button>
-  <button class="mob-nav-btn"        id="mob-winrate" onclick="showPage('winrate')">Win %</button>
 </nav>
 
 </body>
