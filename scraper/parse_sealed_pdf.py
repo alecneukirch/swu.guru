@@ -425,21 +425,24 @@ Return ONLY this JSON (omit cards with t=0):
 }"""
 
 def make_front_played_prompt(leaders_in_pool: list, vig_nums: list, cmd_nums: list) -> str:
-    return f"""This is PAGE 1 (front) of a sealed deck form.
+    return f"""This is PAGE 1 (front) of a sealed deck form. The TOTAL (pool count) boxes have been whited out — only the PLAYED boxes remain visible.
 
-Your task: for each card number listed below, locate that row on the page and check whether the LEFTMOST of its two small boxes has a digit written in it.
+Your task: for each card number listed below, check whether the LEFTMOST small box has a handwritten digit inside it.
 
-HOW THE PLAYED BOX WORKS:
-- Played = player wrote a number in the leftmost box (usually same as pool count, or 1 if they have 2+ copies)
-- Not played = leftmost box is completely BLANK/EMPTY
-- Most cards in the pool are NOT played — expect roughly half or fewer to be played
+HOW TO IDENTIFY A PLAYED MARK (critical — read carefully):
+- PLAYED (marked): the box has a handwritten digit (usually "1") visibly written INSIDE the box center
+- NOT PLAYED (empty): the box has ONLY the printed box border lines — the interior is blank/white
+- Row separator lines are HORIZONTAL. A box with only horizontal lines at top/bottom is EMPTY.
+- When in doubt, mark as NOT played. False negatives are better than false positives.
 
-ONLY check these specific card numbers (do not report any other rows):
+DECK SIZE CONSTRAINT: A SWU sealed deck has exactly 30 non-leader cards. Across BOTH pages combined, exactly 30 regular card numbers should appear in played arrays. This front page typically accounts for 10–20 of those 30. If your vigilance_played + command_played combined exceeds 20, re-examine — you are very likely overcounting.
+
+ONLY check these specific card numbers:
 - LEADER rows in pool: {leaders_in_pool} → report exactly ONE as leader_played
 - VIGILANCE cards in pool: {vig_nums}
 - COMMAND cards in pool: {cmd_nums}
 
-Return ONLY this JSON (include only card numbers where leftmost box has a digit):
+Return ONLY this JSON (include only card numbers where leftmost box clearly has a handwritten digit):
 {{
   "leader_played": 7,
   "vigilance_played": [129],
@@ -475,16 +478,19 @@ Return ONLY this JSON (omit cards with t=0):
 
 def make_back_played_prompt(agg_nums: list, cun_nums: list, mul_nums: list,
                              vil_nums: list, her_nums: list, gray_nums: list) -> str:
-    return f"""This is PAGE 2 (back) of a sealed deck form.
+    return f"""This is PAGE 2 (back) of a sealed deck form. The TOTAL (pool count) boxes have been whited out — only the PLAYED boxes remain visible.
 
-Your task: for each card number listed below, locate that row on the page and check whether the LEFTMOST of its two small boxes has a digit written in it.
+Your task: for each card number listed below, check whether the LEFTMOST small box has a handwritten digit inside it.
 
-HOW THE PLAYED BOX WORKS:
-- Played = player wrote a number in the leftmost box (usually same as pool count, or 1 if they have 2+ copies)
-- Not played = leftmost box is completely BLANK/EMPTY
-- Most cards in the pool are NOT played — expect roughly half or fewer to be played
+HOW TO IDENTIFY A PLAYED MARK (critical — read carefully):
+- PLAYED (marked): the box has a handwritten digit (usually "1") visibly written INSIDE the box center
+- NOT PLAYED (empty): the box has ONLY the printed box border lines — the interior is blank/white
+- Row separator lines are HORIZONTAL. A box with only horizontal lines at top/bottom is EMPTY.
+- When in doubt, mark as NOT played. False negatives are better than false positives.
 
-ONLY check these specific card numbers (do not report any other rows):
+DECK SIZE CONSTRAINT: A SWU sealed deck has exactly 30 non-leader cards total across both pages. This back page typically accounts for 10–20 of those 30. If your combined total across all sections exceeds 20, re-examine — you are very likely overcounting.
+
+ONLY check these specific card numbers:
 - AGGRESSION cards in pool: {agg_nums}
 - CUNNING cards in pool: {cun_nums}
 - MULTICOLOR cards in pool: {mul_nums}
@@ -553,8 +559,8 @@ POOL1_FRONT_POOL_ANSWER = json.dumps({
 
 POOL1_FRONT_PLAYED_ANSWER = json.dumps({
     "leader_played": 7,
-    "vigilance_played": [129],
-    "command_played": [137, 138, 153, 157, 158, 161, 165, 166],
+    "vigilance_played": [102, 114, 116, 118, 120, 124, 127],
+    "command_played": [137, 153, 157, 161, 166, 171],
 })
 
 POOL1_BACK_POOL_ANSWER = json.dumps({
@@ -599,12 +605,12 @@ POOL1_BACK_POOL_ANSWER = json.dumps({
 })
 
 POOL1_BACK_PLAYED_ANSWER = json.dumps({
-    "aggression_played": [],
-    "cunning_played": [216, 228, 230, 231, 234, 236, 239, 240, 241, 244],
-    "multicolor_played": [31, 40, 52, 53, 59],
-    "villainy_played": [250, 252],
+    "aggression_played": [175, 183, 186, 189, 190, 195, 198, 203, 206],
+    "cunning_played": [216, 218, 228, 231, 234, 241],
+    "multicolor_played": [31, 40, 52, 59],
+    "villainy_played": [252],
     "heroism_played": [],
-    "gray_played": [],
+    "gray_played": [258],
 })
 
 _ref_images: dict | None = None
@@ -781,8 +787,10 @@ def validate_pool(data: dict) -> list[str]:
         warnings.append(f"Expected 96 cards in pool, got {total_cards}")
 
     played_cards = sum((c.get("p") or 0) for c in data.get("cards") or [])
-    if played_cards < 30:
+    if played_cards < 28:
         warnings.append(f"Expected ≥30 cards played, got {played_cards}")
+    elif played_cards > 38:
+        warnings.append(f"Expected ≤35 cards played, got {played_cards} (likely overcounting)")
 
     if not data.get("base"):
         warnings.append("No base found")
