@@ -4294,3 +4294,19 @@ def update_sealed_pool_card(card_id: int, payload: dict):
         (pool_count, played_count, card_id)
     )
     return {"ok": True}
+
+
+@app.post("/api/sealed/pool-cards")
+def add_sealed_pool_card(payload: dict):
+    pool_id      = int(payload["pool_id"])
+    section      = payload["section"]
+    card_number  = payload.get("card_number")
+    card_name    = payload["card_name"]
+    pool_count   = int(payload.get("pool_count") or 1)
+    played_count = int(payload.get("played_count") or 0)
+    row = db.fetchone(
+        "INSERT INTO sealed_pool_cards (pool_id, section, card_number, card_name, pool_count, played_count) "
+        "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+        (pool_id, section, card_number, card_name, pool_count, played_count),
+    )
+    return {"id": row["id"], "ok": True}
