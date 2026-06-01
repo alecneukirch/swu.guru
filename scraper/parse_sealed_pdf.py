@@ -474,6 +474,103 @@ def render_page(doc: fitz.Document, page_idx: int) -> str:
     return base64.standard_b64encode(pix.tobytes("jpeg", jpg_quality=92)).decode()
 
 
+# ── Pool 1 few-shot reference answers (from human-corrected data) ─────────────
+# These are embedded as prior conversation turns so the model sees the exact
+# visual→JSON mapping for a real, verified pool before reading any new pool.
+
+POOL1_FRONT_POOL_ANSWER = json.dumps({
+    "player_first_name": "Ethan", "player_last_name": "Gao",
+    "player_swu_id": "7770392", "verifier_first_name": "Collin",
+    "verifier_last_name": "Tullb", "verifier_swu_id": "7735371",
+    "table_num": 1,
+    "leaders_in_pool": [1, 7, 9, 11, 17],
+    "base": "Partisan Hideout (Yellow)",
+    "vigilance": [
+        {"n": 98,  "t": 2, "p": 0}, {"n": 102, "t": 1, "p": 0},
+        {"n": 114, "t": 1, "p": 0}, {"n": 116, "t": 2, "p": 0},
+        {"n": 118, "t": 1, "p": 0}, {"n": 120, "t": 1, "p": 0},
+        {"n": 124, "t": 1, "p": 0}, {"n": 127, "t": 1, "p": 0},
+        {"n": 129, "t": 1, "p": 0},
+    ],
+    "command": [
+        {"n": 137, "t": 1, "p": 0}, {"n": 138, "t": 1, "p": 0},
+        {"n": 147, "t": 1, "p": 0}, {"n": 153, "t": 1, "p": 0},
+        {"n": 157, "t": 1, "p": 0}, {"n": 158, "t": 1, "p": 0},
+        {"n": 161, "t": 2, "p": 0}, {"n": 162, "t": 2, "p": 0},
+        {"n": 164, "t": 2, "p": 0}, {"n": 165, "t": 1, "p": 0},
+        {"n": 166, "t": 1, "p": 0}, {"n": 171, "t": 1, "p": 0},
+    ],
+})
+
+POOL1_FRONT_PLAYED_ANSWER = json.dumps({
+    "leader_played": 7,
+    "vigilance_played": [129],
+    "command_played": [137, 138, 153, 157, 158, 161, 165, 166],
+})
+
+POOL1_BACK_POOL_ANSWER = json.dumps({
+    "aggression": [
+        {"n": 172, "t": 1, "p": 0}, {"n": 175, "t": 1, "p": 0},
+        {"n": 177, "t": 1, "p": 0}, {"n": 183, "t": 1, "p": 0},
+        {"n": 184, "t": 1, "p": 0}, {"n": 186, "t": 1, "p": 0},
+        {"n": 187, "t": 1, "p": 0}, {"n": 189, "t": 1, "p": 0},
+        {"n": 190, "t": 1, "p": 0}, {"n": 192, "t": 1, "p": 0},
+        {"n": 195, "t": 1, "p": 0}, {"n": 197, "t": 1, "p": 0},
+        {"n": 198, "t": 1, "p": 0}, {"n": 202, "t": 1, "p": 0},
+        {"n": 203, "t": 1, "p": 0}, {"n": 204, "t": 1, "p": 0},
+        {"n": 206, "t": 1, "p": 0}, {"n": 207, "t": 1, "p": 0},
+    ],
+    "cunning": [
+        {"n": 216, "t": 2, "p": 0}, {"n": 218, "t": 1, "p": 0},
+        {"n": 220, "t": 1, "p": 0}, {"n": 228, "t": 1, "p": 0},
+        {"n": 229, "t": 1, "p": 0}, {"n": 230, "t": 1, "p": 0},
+        {"n": 231, "t": 2, "p": 0}, {"n": 234, "t": 1, "p": 0},
+        {"n": 236, "t": 1, "p": 0}, {"n": 239, "t": 1, "p": 0},
+        {"n": 240, "t": 1, "p": 0}, {"n": 241, "t": 1, "p": 0},
+        {"n": 242, "t": 2, "p": 0}, {"n": 244, "t": 1, "p": 0},
+    ],
+    "multicolor": [
+        {"n": 31, "t": 1, "p": 0}, {"n": 40, "t": 1, "p": 0},
+        {"n": 48, "t": 1, "p": 0}, {"n": 49, "t": 2, "p": 0},
+        {"n": 52, "t": 1, "p": 0}, {"n": 53, "t": 1, "p": 0},
+        {"n": 59, "t": 1, "p": 0}, {"n": 60, "t": 1, "p": 0},
+        {"n": 62, "t": 1, "p": 0}, {"n": 66, "t": 1, "p": 0},
+        {"n": 69, "t": 1, "p": 0}, {"n": 74, "t": 1, "p": 0},
+        {"n": 75, "t": 1, "p": 0}, {"n": 90, "t": 1, "p": 0},
+    ],
+    "villainy": [
+        {"n": 249, "t": 1, "p": 0}, {"n": 250, "t": 1, "p": 0},
+        {"n": 252, "t": 2, "p": 0},
+    ],
+    "heroism": [],
+    "gray": [
+        {"n": 257, "t": 1, "p": 0}, {"n": 258, "t": 1, "p": 0},
+        {"n": 261, "t": 1, "p": 0}, {"n": 263, "t": 1, "p": 0},
+    ],
+})
+
+POOL1_BACK_PLAYED_ANSWER = json.dumps({
+    "aggression_played": [],
+    "cunning_played": [216, 228, 230, 231, 234, 236, 239, 240, 241, 244],
+    "multicolor_played": [31, 40, 52, 53, 59],
+    "villainy_played": [250, 252],
+    "heroism_played": [],
+    "gray_played": [],
+})
+
+_ref_images: dict | None = None
+
+def _get_ref_images(doc: fitz.Document) -> dict:
+    """Render pool 1 pages once and cache them for use as few-shot examples."""
+    global _ref_images
+    if _ref_images is None:
+        _ref_images = {
+            "front": render_page(doc, 0),
+            "back":  render_page(doc, 1),
+        }
+    return _ref_images
+
+
 def _parse_json_response(text: str) -> dict:
     raw = text.strip()
     if "```" in raw:
@@ -496,19 +593,28 @@ def extract_pool(doc: fitz.Document, pool_num: int) -> dict:
     front_b64 = render_page(doc, (pool_num - 1) * 2)
     back_b64  = render_page(doc, (pool_num - 1) * 2 + 1)
 
-    def call(image_b64: str, prompt: str) -> dict:
+    # Load pool 1 reference images (cached after first call)
+    ref = _get_ref_images(doc) if pool_num != 1 else None
+
+    def _img(b64: str) -> dict:
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}}
+
+    def call(image_b64: str, prompt: str, ref_image_b64: str | None, ref_answer: str) -> dict:
+        # Build messages: optional few-shot turn (pool 1 image → correct answer), then actual image
+        messages = []
+        if ref_image_b64 is not None:
+            messages += [
+                {"role": "user",      "content": [_img(ref_image_b64), {"type": "text", "text": prompt}]},
+                {"role": "assistant", "content": ref_answer},
+            ]
+        messages.append({"role": "user", "content": [_img(image_b64), {"type": "text", "text": prompt}]})
+
         for attempt in range(3):
             r = client.messages.create(
                 model=MODEL,
                 max_tokens=4096,
                 system=SYSTEM_PROMPT,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_b64}},
-                        {"type": "text", "text": prompt},
-                    ],
-                }],
+                messages=messages,
             )
             try:
                 return _parse_json_response(r.content[0].text)
@@ -517,10 +623,13 @@ def extract_pool(doc: fitz.Document, pool_num: int) -> dict:
                     raise
                 print(f"  [retry {attempt+1}] JSON parse failed: {e}")
 
-    front_pool   = call(front_b64, FRONT_POOL_PROMPT)
-    front_played = call(front_b64, FRONT_PLAYED_PROMPT)
-    back_pool    = call(back_b64,  BACK_POOL_PROMPT)
-    back_played  = call(back_b64,  BACK_PLAYED_PROMPT)
+    ref_front = ref["front"] if ref else None
+    ref_back  = ref["back"]  if ref else None
+
+    front_pool   = call(front_b64, FRONT_POOL_PROMPT,   ref_front, POOL1_FRONT_POOL_ANSWER)
+    front_played = call(front_b64, FRONT_PLAYED_PROMPT, ref_front, POOL1_FRONT_PLAYED_ANSWER)
+    back_pool    = call(back_b64,  BACK_POOL_PROMPT,    ref_back,  POOL1_BACK_POOL_ANSWER)
+    back_played  = call(back_b64,  BACK_PLAYED_PROMPT,  ref_back,  POOL1_BACK_PLAYED_ANSWER)
 
     # Build played sets (card numbers) per section from the focused played calls
     def played_set(key: str, data: dict) -> set:
