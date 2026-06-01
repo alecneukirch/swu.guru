@@ -4191,3 +4191,106 @@ def get_winrate(format: str = "standard", min_decks: int = 0, min_card_decks: in
     """, [min_card_decks])
 
     return {"leaders": [dict(r) for r in leaders], "cards": [dict(r) for r in cards]}
+
+
+# =============================================================================
+#  SEALED DECKLIST CORRECTION
+# =============================================================================
+
+_pool_image_cache: dict[tuple[int, int], bytes] = {}
+
+@app.get("/api/sealed/pool-list")
+def sealed_pool_list():
+    pools = db.fetchall(
+        "SELECT id, scan_page, table_num, player_first_name, player_last_name, "
+        "player_swu_id, ocr_notes FROM sealed_pools ORDER BY scan_page"
+    )
+    qc_rows = db.fetchall("""
+        SELECT pool_id,
+            SUM(pool_count)                                                           AS total_pool,
+            SUM(CASE WHEN section='leader' AND played_count > 0 THEN 1 ELSE 0 END)   AS played_leaders,
+            SUM(CASE WHEN section='base'   AND played_count > 0 THEN 1 ELSE 0 END)   AS played_bases,
+            SUM(CASE WHEN section NOT IN ('leader','base') THEN played_count ELSE 0 END) AS deck_cards
+        FROM sealed_pool_cards GROUP BY pool_id
+    """)
+    qc_map = {r["pool_id"]: r for r in qc_rows}
+    result = []
+    for p in pools:
+        qc = qc_map.get(p["id"], {})
+        total_pool = int(qc.get("total_pool") or 0)
+        pl_leaders = int(qc.get("played_leaders") or 0)
+        pl_bases   = int(qc.get("played_bases") or 0)
+        deck_cards = int(qc.get("deck_cards") or 0)
+        issues = []
+        if pl_leaders != 1: issues.append(f"{pl_leaders} leaders")
+        if pl_bases != 1:   issues.append(f"{pl_bases} bases")
+        if total_pool != 96: issues.append(f"pool={total_pool}")
+        if deck_cards < 30:  issues.append(f"deck={deck_cards}")
+        result.append({
+            "pool_id":   p["id"],
+            "scan_page": p["scan_page"],
+            "table_num": p["table_num"],
+            "name":      f"{p['player_first_name'] or ''} {p['player_last_name'] or ''}".strip(),
+            "swu_id":    p["player_swu_id"],
+            "qc_ok":     len(issues) == 0,
+            "qc_issues": issues,
+            "ocr_notes": p["ocr_notes"],
+        })
+    return result
+
+
+@app.get("/api/sealed/pool-image/{pool_num}/{side}")
+def sealed_pool_image(pool_num: int, side: int):
+    """Render a PDF page as JPEG. side=0 front, side=1 back."""
+    if side not in (0, 1):
+        raise HTTPException(400, "side must be 0 or 1")
+    key = (pool_num, side)
+    if key not in _pool_image_cache:
+        pdf_path = Path(__file__).parent.parent / "sealedPQLists.pdf"
+        if not pdf_path.exists():
+            raise HTTPException(404, "PDF not found")
+        import fitz
+        doc = fitz.open(str(pdf_path))
+        page_idx = (pool_num - 1) * 2 + side
+        if page_idx < 0 or page_idx >= len(doc):
+            doc.close()
+            raise HTTPException(404, "Page out of range")
+        mat = fitz.Matrix(2.0, 2.0)
+        pix = doc[page_idx].get_pixmap(matrix=mat)
+        img_bytes = pix.tobytes("jpeg", jpg_quality=85)
+        doc.close()
+        _pool_image_cache[key] = img_bytes
+    return Response(
+        _pool_image_cache[key],
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/api/sealed/pool-cards/{pool_id}")
+def sealed_pool_card_list(pool_id: int):
+    pool = db.fetchone(
+        "SELECT id, scan_page, player_first_name, player_last_name, "
+        "player_swu_id, table_num, ocr_notes FROM sealed_pools WHERE id=%s",
+        (pool_id,)
+    )
+    if not pool:
+        raise HTTPException(404, "Pool not found")
+    cards = db.fetchall(
+        "SELECT id, section, card_number, card_name, pool_count, played_count "
+        "FROM sealed_pool_cards WHERE pool_id=%s "
+        "ORDER BY section, card_number NULLS LAST, card_name",
+        (pool_id,)
+    )
+    return {"pool": dict(pool), "cards": [dict(c) for c in cards]}
+
+
+@app.patch("/api/sealed/pool-cards/{card_id}")
+def update_sealed_pool_card(card_id: int, payload: dict):
+    pool_count   = int(payload.get("pool_count") or 0)
+    played_count = int(payload.get("played_count") or 0)
+    db.execute(
+        "UPDATE sealed_pool_cards SET pool_count=%s, played_count=%s WHERE id=%s",
+        (pool_count, played_count, card_id)
+    )
+    return {"ok": True}
