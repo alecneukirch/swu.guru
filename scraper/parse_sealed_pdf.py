@@ -906,6 +906,7 @@ def main():
     parser.add_argument("--pool", help="Pool number or range (e.g. 3 or 1-10)")
     parser.add_argument("--dry-run", action="store_true", help="Print extracted data, no DB writes")
     parser.add_argument("--reprocess", type=int, help="Reprocess pool N even if already in DB")
+    parser.add_argument("--force", action="store_true", help="Delete and reprocess all pools in --pool range")
     args = parser.parse_args()
 
     doc = fitz.open(str(PDF_PATH))
@@ -929,14 +930,15 @@ def main():
             print(f"[Pool {pool_num}] out of range (1-{total_pools}), skipping")
             continue
 
-        if not args.dry_run and not args.reprocess:
+        if not args.dry_run and not args.reprocess and not args.force:
             if already_processed(pool_num):
                 print(f"[Pool {pool_num}] already in DB, skipping")
                 continue
 
-        if args.reprocess == pool_num:
-            print(f"[Pool {pool_num}] deleting existing records for reprocess")
-            delete_pool(pool_num)
+        if args.reprocess == pool_num or args.force:
+            if already_processed(pool_num):
+                print(f"[Pool {pool_num}] deleting existing records for reprocess")
+                delete_pool(pool_num)
 
         print(f"[Pool {pool_num}] extracting...", end=" ", flush=True)
         try:
