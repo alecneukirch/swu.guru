@@ -42,7 +42,7 @@ DPI_SCALE    = 5.0  # ~360 dpi
 # Back page sections: AGG/VIL/HER (0-235pt), CUNNING/GRAY (235-401pt), MULTICOLOR (401-612pt).
 # Within each section layout: [PLAYED box][TOTAL box][NO.#][CARD NAME].
 # TOTAL box ranges measured from header-row scans on sealedPQLists.pdf at DPI_SCALE=5:
-#   Front: LEADER=28.5-51.9pt, VIGILANCE≈225-240pt, COMMAND=449-467pt
+#   Front: LEADER=28.5-51.9pt, VIGILANCE≈216-242pt, COMMAND=449-467pt
 #   Back:  sect1≈28-46pt, sect2=255.6-273.4pt, sect3=424.8-445.4pt
 _FRONT_TOTAL_STRIPS_PT = [(28, 53), (216, 242), (448, 468)]   # leader, vigilance, command
 _BACK_TOTAL_STRIPS_PT  = [(22, 47), (255, 274), (424, 446)]   # aggression+vil+her, cunning+gray, multicolor
