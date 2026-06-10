@@ -6689,19 +6689,24 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
   const RES = {3:'0-3', 5:'1-2', 7:'2-1', 9:'3-0'};
   const xFinal = totals[player.name] + outcome;
 
+  // Swiss mutual exclusion: if selected player goes 3-0, that slot is taken —
+  // no one else can also go 3-0. Cap others' reachable outcomes accordingly.
+  const othersMax = outcome === 9 ? 7 : 9;
+  const available = [3, 5, 7, 9].filter(o => o <= othersMax);
+
   // Classify each other contender:
-  //   guaranteed  — their FLOOR (+3, worst case) already beats X → always finish above X
-  //   conditional — need a specific result better than 0-3 to beat X
-  //   safe        — cannot outscore X even at their ceiling (+9)
+  //   guaranteed  — their floor (+3) already beats X → always finish above X
+  //   conditional — need a specific result (within available outcomes) to beat X
+  //   safe        — cannot outscore X even at their available ceiling
   const others = players
     .filter(p => p.name !== player.name)
     .map(p => {
       const cur       = totals[p.name];
-      const minToBeat = [3,5,7,9].find(o => cur + o > xFinal);
+      const minToBeat = available.find(o => cur + o > xFinal);
       return {
         name: p.name, cur,
-        canBeat:     minToBeat != null,
-        guaranteed:  minToBeat === 3,   // even 0-3 beats X
+        canBeat:    minToBeat != null,
+        guaranteed: (cur + 3) > xFinal,  // floor beats X regardless of slot constraints
         minToBeat,
       };
     })
@@ -6717,12 +6722,15 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
   const bestRank  = 1 + guaranteed.length;
   const worstRank = 1 + guaranteed.length + conditional.length;
 
+  const constraint = outcome === 9
+    ? `<div style="color:var(--text3);font-size:10px;margin-bottom:6px;font-style:italic">3-0 slot taken — others capped at 2-1</div>` : '';
+
   const summary = (guaranteed.length === 0 && conditional.length === 0)
-    ? `<div style="color:var(--green2);font-size:12px;margin-bottom:10px">✓ No one can reach ${xFinal} pts — locked in 1st</div>`
-    : `<div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+    ? `<div style="color:var(--green2);font-size:12px;margin-bottom:6px">✓ No one can reach ${xFinal} pts — locked in 1st</div>${constraint}`
+    : `<div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">
         Best finish: <strong style="color:var(--text)">${rankStr(bestRank)}</strong>
         &nbsp;·&nbsp; Worst finish: <strong style="color:var(--text)">${rankStr(worstRank)}</strong>
-       </div>`;
+       </div>${constraint}`;
 
   const guaranteedRows = guaranteed.length ? `
     <div style="color:var(--red2);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Always above you (even going 0-3)</div>
