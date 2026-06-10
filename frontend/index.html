@@ -6689,35 +6689,65 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
   const RES = {3:'0-3', 5:'1-2', 7:'2-1', 9:'3-0'};
   const xFinal = totals[player.name] + outcome;
 
-  // For each other contender: what minimum result do they need to outscore X?
+  // Classify each other contender:
+  //   guaranteed  — their FLOOR (+3, worst case) already beats X → always finish above X
+  //   conditional — need a specific result better than 0-3 to beat X
+  //   safe        — cannot outscore X even at their ceiling (+9)
   const others = players
     .filter(p => p.name !== player.name)
     .map(p => {
-      const cur         = totals[p.name];
-      const minToBeat   = [3,5,7,9].find(o => cur + o > xFinal);
-      return { name: p.name, cur, canBeat: minToBeat != null, minToBeat };
+      const cur       = totals[p.name];
+      const minToBeat = [3,5,7,9].find(o => cur + o > xFinal);
+      return {
+        name: p.name, cur,
+        canBeat:     minToBeat != null,
+        guaranteed:  minToBeat === 3,   // even 0-3 beats X
+        minToBeat,
+      };
     })
     .sort((a, b) => totals[b.name] - totals[a.name]);
 
-  const threats = others.filter(o => o.canBeat);
-  const safe    = others.filter(o => !o.canBeat);
-  const rankStr = r => ['','1st','2nd','3rd'][r] || `${r}th`;
+  const guaranteed   = others.filter(o => o.guaranteed);
+  const conditional  = others.filter(o => o.canBeat && !o.guaranteed);
+  const safe         = others.filter(o => !o.canBeat);
+  const rankStr      = r => ['','1st','2nd','3rd'][r] || `${r}th`;
 
-  const header = threats.length === 0
-    ? `<div style="color:var(--green2);font-size:12px;margin-bottom:10px">✓ No one can catch ${xFinal} pts — locked in 1st</div>`
-    : `<div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
-        Best finish: 1st &nbsp;·&nbsp; Falls to ${rankStr(threats.length + 1)} if everyone below hits their threshold
+  // Best finish = 1 + guaranteed count (those will ALWAYS beat X no matter what)
+  // Worst finish = 1 + guaranteed + conditional count
+  const bestRank  = 1 + guaranteed.length;
+  const worstRank = 1 + guaranteed.length + conditional.length;
+
+  const summary = (guaranteed.length === 0 && conditional.length === 0)
+    ? `<div style="color:var(--green2);font-size:12px;margin-bottom:10px">✓ No one can reach ${xFinal} pts — locked in 1st</div>`
+    : `<div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+        Best finish: <strong style="color:var(--text)">${rankStr(bestRank)}</strong>
+        &nbsp;·&nbsp; Worst finish: <strong style="color:var(--text)">${rankStr(worstRank)}</strong>
        </div>`;
 
-  const threatRows = threats.map(o => `
-    <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;background:rgba(231,76,60,0.07);font-size:12px">
-      <span style="flex:1;color:var(--text)">${o.name}</span>
-      <span style="color:var(--text3)">needs ${RES[o.minToBeat]} or better</span>
-      <span style="font-family:var(--mono);color:var(--red2)">${o.cur + o.minToBeat}+ pts</span>
-    </div>`).join('');
+  const guaranteedRows = guaranteed.length ? `
+    <div style="color:var(--red2);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Always above you (even going 0-3)</div>
+    <div style="display:flex;gap:4px;flex-direction:column;margin-bottom:8px">
+    ${guaranteed.map(o => `
+      <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;background:rgba(231,76,60,0.12);font-size:12px">
+        <span style="flex:1;color:var(--text)">${o.name}</span>
+        <span style="color:var(--text3)">floor already beats you</span>
+        <span style="font-family:var(--mono);color:var(--red2)">${o.cur + 3}+ pts</span>
+      </div>`).join('')}
+    </div>` : '';
+
+  const conditionalRows = conditional.length ? `
+    <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Beat you only if they go…</div>
+    <div style="display:flex;gap:4px;flex-direction:column;margin-bottom:8px">
+    ${conditional.map(o => `
+      <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;background:rgba(231,76,60,0.06);font-size:12px">
+        <span style="flex:1;color:var(--text)">${o.name}</span>
+        <span style="color:var(--text3)">needs ${RES[o.minToBeat]} or better</span>
+        <span style="font-family:var(--mono);color:var(--red2)">${o.cur + o.minToBeat}+ pts</span>
+      </div>`).join('')}
+    </div>` : '';
 
   const safeRows = safe.length ? `
-    <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px">Cannot catch you</div>
+    <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Cannot catch you</div>
     ${safe.map(o => `
     <div style="display:flex;gap:8px;padding:3px 6px;font-size:12px;color:var(--text3)">
       <span style="flex:1">${o.name}</span>
@@ -6734,9 +6764,7 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
       <button onclick="this.closest('.sl-scenario-panel').style.display='none';this.closest('.sl-scenario-panel').dataset.active=''"
               style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:0">✕</button>
     </div>
-    ${header}
-    ${threats.length ? `<div style="display:flex;gap:4px;flex-direction:column">${threatRows}</div>` : ''}
-    ${safeRows}`;
+    ${summary}${guaranteedRows}${conditionalRows}${safeRows}`;
 }
 
 function renderLeagueCharts(summary, sessData) {
