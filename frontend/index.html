@@ -6686,35 +6686,57 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
   if (panel.dataset.active === key) { panel.style.display = 'none'; panel.dataset.active = ''; return; }
   panel.dataset.active = key;
 
-  const resultLabel = {3:'0-3', 5:'1-2', 7:'2-1', 9:'3-0'}[outcome] || `+${outcome}`;
-  const scenario = players
-    .map(p => ({ name: p.name, final: totals[p.name] + (p.name === player.name ? outcome : 3), isTarget: p.name === player.name }))
-    .sort((a, b) => b.final - a.final);
-  const rank    = scenario.findIndex(s => s.isTarget) + 1;
-  const rankStr = ['','1st','2nd','3rd'][rank] || `${rank}th`;
+  const RES = {3:'0-3', 5:'1-2', 7:'2-1', 9:'3-0'};
+  const xFinal = totals[player.name] + outcome;
+
+  // For each other contender: what minimum result do they need to outscore X?
+  const others = players
+    .filter(p => p.name !== player.name)
+    .map(p => {
+      const cur         = totals[p.name];
+      const minToBeat   = [3,5,7,9].find(o => cur + o > xFinal);
+      return { name: p.name, cur, canBeat: minToBeat != null, minToBeat };
+    })
+    .sort((a, b) => totals[b.name] - totals[a.name]);
+
+  const threats = others.filter(o => o.canBeat);
+  const safe    = others.filter(o => !o.canBeat);
+  const rankStr = r => ['','1st','2nd','3rd'][r] || `${r}th`;
+
+  const header = threats.length === 0
+    ? `<div style="color:var(--green2);font-size:12px;margin-bottom:10px">✓ No one can catch ${xFinal} pts — locked in 1st</div>`
+    : `<div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+        Best finish: 1st &nbsp;·&nbsp; Falls to ${rankStr(threats.length + 1)} if everyone below hits their threshold
+       </div>`;
+
+  const threatRows = threats.map(o => `
+    <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;background:rgba(231,76,60,0.07);font-size:12px">
+      <span style="flex:1;color:var(--text)">${o.name}</span>
+      <span style="color:var(--text3)">needs ${RES[o.minToBeat]} or better</span>
+      <span style="font-family:var(--mono);color:var(--red2)">${o.cur + o.minToBeat}+ pts</span>
+    </div>`).join('');
+
+  const safeRows = safe.length ? `
+    <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px">Cannot catch you</div>
+    ${safe.map(o => `
+    <div style="display:flex;gap:8px;padding:3px 6px;font-size:12px;color:var(--text3)">
+      <span style="flex:1">${o.name}</span>
+      <span style="font-family:var(--mono)">max ${o.cur + 9} pts</span>
+    </div>`).join('')}` : '';
 
   panel.style.display = 'block';
   panel.innerHTML = `
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
       <div>
         <span style="color:var(--gold);font-size:13px">${player.name}</span>
-        <span style="color:var(--text3);font-size:11px;margin-left:8px">${resultLabel} (+${outcome} pts) → best finish: <strong style="color:var(--text)">${rankStr}</strong></span>
+        <span style="color:var(--text3);font-size:11px;margin-left:8px">${RES[outcome]} (+${outcome}) → <strong style="color:var(--text)">${xFinal} pts</strong></span>
       </div>
       <button onclick="this.closest('.sl-scenario-panel').style.display='none';this.closest('.sl-scenario-panel').dataset.active=''"
               style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:0">✕</button>
     </div>
-    <div style="color:var(--text3);font-size:10px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">assumes all others go 0-3 (+3 pts)</div>
-    <div style="display:flex;gap:4px;flex-direction:column">
-      ${scenario.map((s, i) => {
-        const col = s.isTarget ? 'var(--gold)' : i < 3 ? 'var(--text)' : 'var(--text2)';
-        const bg  = s.isTarget ? 'rgba(240,180,41,0.08)' : i < 3 ? 'rgba(255,255,255,0.03)' : 'transparent';
-        return `<div style="display:flex;gap:8px;padding:3px 6px;border-radius:4px;background:${bg};color:${col};font-size:12px">
-          <span style="opacity:.5;width:24px;text-align:right">#${i+1}</span>
-          <span style="flex:1">${s.name}</span>
-          <span style="font-family:var(--mono)">${s.final} pts</span>
-        </div>`;
-      }).join('')}
-    </div>`;
+    ${header}
+    ${threats.length ? `<div style="display:flex;gap:4px;flex-direction:column">${threatRows}</div>` : ''}
+    ${safeRows}`;
 }
 
 function renderLeagueCharts(summary, sessData) {
