@@ -3542,6 +3542,7 @@ select.sl-input { cursor: pointer; }
 .sl-charts-grid { margin-bottom: 32px; }
 .sl-chart-wrap { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 16px; overflow: visible; }
 .sl-chart-label { font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+.sl-canvas-box { position:relative; }
 .sl-scenario-panel { display:none; margin-top:12px; padding:12px 16px; background:var(--surface2); border:1px solid var(--border2); border-radius:6px; font-family:var(--mono); font-size:12px; }
 
 </style>
@@ -4027,12 +4028,16 @@ select.sl-input { cursor: pointer; }
       <div class="sl-charts-grid">
         <div class="sl-chart-wrap">
           <div class="sl-chart-label">Top-3 Contenders — Raw Total (3-Round Swiss)</div>
-          <canvas id="chart-cumulative" style="cursor:pointer"></canvas>
+          <div class="sl-canvas-box">
+            <canvas id="chart-cumulative" style="cursor:pointer"></canvas>
+          </div>
           <div id="chart-cumulative-panel" class="sl-scenario-panel"></div>
         </div>
         <div class="sl-chart-wrap" style="margin-top:16px">
           <div class="sl-chart-label">Top-3 Contenders — Drop Worst Week (7-Session Players)</div>
-          <canvas id="chart-adjusted" style="cursor:pointer"></canvas>
+          <div class="sl-canvas-box">
+            <canvas id="chart-adjusted" style="cursor:pointer"></canvas>
+          </div>
           <div id="chart-adjusted-panel" class="sl-scenario-panel"></div>
         </div>
       </div>
@@ -6774,11 +6779,12 @@ function renderLeagueCharts(summary, sessData) {
     const players = top3Contenders(totals);
     const panelId = canvasId + '-panel';
 
-    const canvas = document.getElementById(canvasId);
+    const canvas  = document.getElementById(canvasId);
     if (!canvas) return prevChart;
-    const wrap = canvas.parentElement;
-    wrap.style.position = 'relative';
-    wrap.style.height   = Math.max(160, players.length * 44) + 'px';
+    // canvas.parentElement is .sl-canvas-box — size it so Chart.js fills it correctly.
+    // The panel sibling sits outside this box, so it won't be buried under overflow.
+    const canvasBox = canvas.parentElement;
+    canvasBox.style.height = Math.max(160, players.length * 44) + 'px';
 
     // Plugin: draw outcome dots + track + current-position tick
     const markerPlugin = {
