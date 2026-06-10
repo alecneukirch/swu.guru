@@ -4025,8 +4025,12 @@ select.sl-input { cursor: pointer; }
       <div class="sl-section-hdr">FINAL STANDINGS PROJECTION</div>
       <div class="sl-charts-grid">
         <div class="sl-chart-wrap">
-          <div class="sl-chart-label">Possible Final Totals — 3-Round Swiss</div>
+          <div class="sl-chart-label">Top-3 Contenders — Raw Total (3-Round Swiss)</div>
           <canvas id="chart-cumulative"></canvas>
+        </div>
+        <div class="sl-chart-wrap" style="margin-top:16px">
+          <div class="sl-chart-label">Top-3 Contenders — Drop Worst Week (7-Session Players)</div>
+          <canvas id="chart-adjusted"></canvas>
         </div>
       </div>
     </div>
@@ -6665,11 +6669,12 @@ async function showLeaguePlayerModal(id) {
 }
 
 let _chartCumulative = null;
+let _chartAdjusted   = null;
 
 function renderLeagueCharts(summary, sessData) {
-  const sessions = (sessData.sessions || []).slice().sort((a, b) => a.session_number - b.session_number);
+  const sessions      = (sessData.sessions || []).slice().sort((a, b) => a.session_number - b.session_number);
   const activePlayers = (summary.players || []).filter(p => p.is_active !== false);
-  const chartsEl = document.getElementById('league-charts');
+  const chartsEl      = document.getElementById('league-charts');
 
   if (!sessions.length || !activePlayers.length) {
     chartsEl.style.display = 'none';
@@ -6679,91 +6684,124 @@ function renderLeagueCharts(summary, sessData) {
 
   const COLORS = ['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb7185','#38bdf8','#a3e635'];
 
-  // 3-round Swiss: each player plays exactly 3 matches.
-  // Scoring: win=3pts, draw/loss=1pt each.
-  const minAdd = 3;   // floor: all losses (1pt each)
-  const maxAdd = 9;   // ceiling: all wins (3pt each)
-  const extra  = maxAdd - minAdd; // win upside above the floor
+  // 3-round Swiss: win=3pts, draw/loss=1pt each
+  const minAdd = 3;
+  const maxAdd = 9;
+  const extra  = 6;
 
-  // Sort by current total (best first = top of horizontal chart)
-  const sorted     = [...activePlayers].sort((a, b) => (b.total_points || 0) - (a.total_points || 0));
-  const labels     = sorted.map(p => p.name);
-  const currentArr = sorted.map(p => Number(p.total_points) || 0);
+  // Per-player per-session points (0 for absent sessions)
+  const sessPoints = {};
+  for (const p of activePlayers) sessPoints[p.name] = [];
+  for (const sess of sessions) {
+    const pm = {};
+    for (const sp of (sess.players || [])) pm[sp.player_name] = sp;
+    for (const p of activePlayers) {
+      const sp  = pm[p.name];
+      sessPoints[p.name].push(sp ? (sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0)) : 0);
+    }
+  }
+
+  // Raw totals (server-computed)
+  const rawTotals = {};
+  for (const p of activePlayers) rawTotals[p.name] = Number(p.total_points) || 0;
+
+  // Adjusted totals: drop worst attended session for players who played ALL sessions
+  const totalSessions = sessions.length;
+  const adjTotals = {};
+  for (const p of activePlayers) {
+    const attended = p.sessions_played || 0;
+    if (attended === totalSessions) {
+      const worst = Math.min(...sessPoints[p.name].filter((_, si) => sessPoints[p.name][si] > 0));
+      adjTotals[p.name] = rawTotals[p.name] - worst;
+    } else {
+      adjTotals[p.name] = rawTotals[p.name];
+    }
+  }
+
+  // Stable color assignment by raw current rank
+  const COLORS_BY_NAME = {};
+  [...activePlayers].sort((a, b) => rawTotals[b.name] - rawTotals[a.name])
+    .forEach((p, i) => { COLORS_BY_NAME[p.name] = COLORS[i % COLORS.length]; });
+
+  // A player can reach top 3 if fewer than 3 others have (their floor > player ceiling)
+  function top3Contenders(totals) {
+    return activePlayers.filter(p => {
+      const ceil  = totals[p.name] + maxAdd;
+      const above = activePlayers.filter(o => o.name !== p.name && (totals[o.name] + minAdd) > ceil).length;
+      return above < 3;
+    }).sort((a, b) => totals[b.name] - totals[a.name]);
+  }
 
   const monoFont  = { family: "'Share Tech Mono', monospace", size: 11 };
-  const axisStyle = {
-    ticks: { color: '#5a5a70', font: monoFont },
-    grid:  { color: 'rgba(255,255,255,0.05)' },
-    stacked: true,
-  };
+  const axisStyle = { ticks: { color: '#5a5a70', font: monoFont }, grid: { color: 'rgba(255,255,255,0.05)' }, stacked: true };
 
-  const canvas = document.getElementById('chart-cumulative');
-  const wrap = canvas.parentElement;
-  wrap.style.position = 'relative';
-  wrap.style.height   = Math.max(180, sorted.length * 44) + 'px';
+  function buildChart(canvasId, totals, prevChart) {
+    const players    = top3Contenders(totals);
+    const currentArr = players.map(p => totals[p.name]);
 
-  if (_chartCumulative) _chartCumulative.destroy();
-  _chartCumulative = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'current',
-          data: currentArr,
-          backgroundColor: sorted.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
-          borderColor:     sorted.map((_, i) => COLORS[i % COLORS.length]),
-          borderWidth: 1,
-          stack: 'final',
-          barPercentage: 0.65,
-        },
-        {
-          label: `+${minAdd} if all losses`,
-          data: sorted.map(() => minAdd),
-          backgroundColor: sorted.map((_, i) => COLORS[i % COLORS.length] + '55'),
-          borderColor:     sorted.map((_, i) => COLORS[i % COLORS.length] + '88'),
-          borderWidth: 1,
-          stack: 'final',
-          barPercentage: 0.65,
-        },
-        {
-          label: `+${extra} win upside`,
-          data: sorted.map(() => extra),
-          backgroundColor: sorted.map((_, i) => COLORS[i % COLORS.length] + '22'),
-          borderColor:     sorted.map((_, i) => COLORS[i % COLORS.length] + '44'),
-          borderWidth: 1,
-          stack: 'final',
-          barPercentage: 0.65,
-        }
-      ]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          labels: { color: '#9090a8', font: monoFont, boxWidth: 12, padding: 12 },
-        },
-        tooltip: {
-          callbacks: {
-            title: items => items[0]?.label || '',
-            label(ctx) {
-              const i = ctx.dataIndex;
-              if (ctx.datasetIndex === 0) return `  current: ${currentArr[i]} pts  (rank #${i + 1})`;
-              if (ctx.datasetIndex === 1) return `  floor: ${currentArr[i] + minAdd} pts  (all losses)`;
-              return `  ceiling: ${currentArr[i] + maxAdd} pts  (all wins)`;
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return prevChart;
+    const wrap = canvas.parentElement;
+    wrap.style.position = 'relative';
+    wrap.style.height   = Math.max(160, players.length * 44) + 'px';
+
+    if (prevChart) prevChart.destroy();
+    return new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: players.map(p => p.name),
+        datasets: [
+          {
+            label: 'current',
+            data: currentArr,
+            backgroundColor: players.map(p => COLORS_BY_NAME[p.name] + 'cc'),
+            borderColor:     players.map(p => COLORS_BY_NAME[p.name]),
+            borderWidth: 1, stack: 'final', barPercentage: 0.65,
+          },
+          {
+            label: '+3 if all losses',
+            data: players.map(() => minAdd),
+            backgroundColor: players.map(p => COLORS_BY_NAME[p.name] + '55'),
+            borderColor:     players.map(p => COLORS_BY_NAME[p.name] + '88'),
+            borderWidth: 1, stack: 'final', barPercentage: 0.65,
+          },
+          {
+            label: '+6 win upside',
+            data: players.map(() => extra),
+            backgroundColor: players.map(p => COLORS_BY_NAME[p.name] + '22'),
+            borderColor:     players.map(p => COLORS_BY_NAME[p.name] + '44'),
+            borderWidth: 1, stack: 'final', barPercentage: 0.65,
+          },
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#9090a8', font: monoFont, boxWidth: 12, padding: 12 } },
+          tooltip: {
+            callbacks: {
+              title: items => items[0]?.label || '',
+              label(ctx) {
+                const i = ctx.dataIndex;
+                if (ctx.datasetIndex === 0) return `  current: ${currentArr[i]} pts  (rank #${i + 1})`;
+                if (ctx.datasetIndex === 1) return `  floor: ${currentArr[i] + minAdd} pts`;
+                return `  ceiling: ${currentArr[i] + maxAdd} pts`;
+              }
             }
           }
+        },
+        scales: {
+          x: { ...axisStyle, title: { display: true, text: 'total points', color: '#5a5a70', font: { ...monoFont, size: 10 } } },
+          y: axisStyle,
         }
-      },
-      scales: {
-        x: { ...axisStyle,
-             title: { display: true, text: 'total points', color: '#5a5a70', font: { ...monoFont, size: 10 } } },
-        y: axisStyle,
       }
-    }
-  });
+    });
+  }
+
+  _chartCumulative = buildChart('chart-cumulative', rawTotals,  _chartCumulative);
+  _chartAdjusted   = buildChart('chart-adjusted',   adjTotals,  _chartAdjusted);
 }
 
 function sortLeagueBy(col) {
