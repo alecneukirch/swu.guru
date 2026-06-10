@@ -6683,6 +6683,7 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
   const panel = document.getElementById(panelId);
   if (!panel) return;
   const key = player.name + outcome;
+  panel.dataset.canvas = panelId.replace(/-panel$/, '');
   if (panel.dataset.active === key) { panel.style.display = 'none'; panel.dataset.active = ''; return; }
   panel.dataset.active = key;
 
@@ -6769,7 +6770,7 @@ function showBestCasePanel(player, outcome, players, totals, panelId) {
         <span style="color:var(--gold);font-size:13px">${player.name}</span>
         <span style="color:var(--text3);font-size:11px;margin-left:8px">${RES[outcome]} (+${outcome}) → <strong style="color:var(--text)">${xFinal} pts</strong></span>
       </div>
-      <button onclick="this.closest('.sl-scenario-panel').style.display='none';this.closest('.sl-scenario-panel').dataset.active=''"
+      <button onclick="(function(p){p.style.display='none';p.dataset.active='';var fn=window._slClearSel&&window._slClearSel[p.dataset.canvas];if(fn)fn();})(this.closest('.sl-scenario-panel'))"
               style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:0">✕</button>
     </div>
     ${summary}${guaranteedRows}${conditionalRows}${safeRows}`;
@@ -6844,6 +6845,8 @@ function renderLeagueCharts(summary, sessData) {
     const canvasBox = canvas.parentElement;
     canvasBox.style.height = Math.max(160, players.length * 44) + 'px';
 
+    let selection = null; // { playerIdx, outcome } of currently-selected dot
+
     // Plugin: draw outcome dots + track + current-position tick
     const markerPlugin = {
       id: canvasId + '_markers',
@@ -6878,10 +6881,22 @@ function renderLeagueCharts(summary, sessData) {
           // Outcome dots: 3=small faded, 5/7=medium, 9=large bright
           [[3,4,col+'66'],[5,5,col+'99'],[7,5,col+'99'],[9,7,col]].forEach(([pts, r, fill]) => {
             const xOut = scales.x.getPixelForValue(cur + pts);
+            const isSel = selection && selection.playerIdx === i && selection.outcome === pts;
             ctx.save();
+            if (isSel) {
+              // White outer ring
+              ctx.beginPath();
+              ctx.arc(xOut, cy, r + 4, 0, Math.PI * 2);
+              ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              // Glow
+              ctx.shadowBlur = 8;
+              ctx.shadowColor = col;
+            }
             ctx.beginPath();
-            ctx.arc(xOut, cy, r, 0, Math.PI * 2);
-            ctx.fillStyle = fill;
+            ctx.arc(xOut, cy, isSel ? r + 2 : r, 0, Math.PI * 2);
+            ctx.fillStyle = isSel ? col : fill;
             ctx.fill();
             ctx.restore();
           });
@@ -6907,7 +6922,7 @@ function renderLeagueCharts(summary, sessData) {
     }
 
     if (prevChart) prevChart.destroy();
-    return new Chart(canvas, {
+    const chart = new Chart(canvas, {
       type: 'bar',
       plugins: [markerPlugin],
       data: {
@@ -6939,8 +6954,16 @@ function renderLeagueCharts(summary, sessData) {
         },
         onClick(event, elements, chart) {
           const idx = elements.length > 0 ? elements[0].index : rowAt(event.y, chart);
-          if (idx >= 0 && event.x !== null)
-            showBestCasePanel(players[idx], closestOutcome(idx, event.x, chart), players, totals, panelId);
+          if (idx < 0 || event.x === null) return;
+          const outcome = closestOutcome(idx, event.x, chart);
+          const isSame = selection && selection.playerIdx === idx && selection.outcome === outcome;
+          if (isSame) {
+            selection = null;
+          } else {
+            selection = { playerIdx: idx, outcome };
+          }
+          chart.update('none');
+          showBestCasePanel(players[idx], outcome, players, totals, panelId);
         },
         scales: {
           x: { ...axisStyle, beginAtZero: false, title: { display: true, text: 'total points', color: '#5a5a70', font: { ...monoFont, size: 10 } } },
@@ -6948,6 +6971,9 @@ function renderLeagueCharts(summary, sessData) {
         }
       }
     });
+    window._slClearSel = window._slClearSel || {};
+    window._slClearSel[canvasId] = () => { selection = null; chart.update('none'); };
+    return chart;
   }
 
   _chartCumulative = buildChart('chart-cumulative', rawTotals, _chartCumulative);
