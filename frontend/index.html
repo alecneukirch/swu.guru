@@ -6698,7 +6698,9 @@ function renderLeagueCharts(summary, sessData) {
   };
 
   const canvas = document.getElementById('chart-cumulative');
-  canvas.style.height = Math.max(180, sorted.length * 44) + 'px';
+  const wrap = canvas.parentElement;
+  wrap.style.position = 'relative';
+  wrap.style.height   = Math.max(180, sorted.length * 44) + 'px';
 
   if (_chartCumulative) _chartCumulative.destroy();
   _chartCumulative = new Chart(canvas, {
