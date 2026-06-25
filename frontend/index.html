@@ -6847,36 +6847,47 @@ function renderLeagueOverview(summary, sessData) {
     return max;
   }
 
-  function perfect3_0(name) {
-    return sessions.filter(s => {
-      const sp = (s.players || []).find(x => x.player_name === name);
-      return sp && sp.match_wins === 3 && sp.match_losses === 0 && (sp.match_draws || 0) === 0;
-    }).length;
-  }
-
   const statsByPlayer = allPlayers.map(p => {
     const streak     = longestStreak(p.name, true);
     const lossStreak = longestStreak(p.name, false);
-    const perfWeeks  = perfect3_0(p.name);
     const totalG     = (p.game_wins || 0) + (p.game_losses || 0);
     const gamePct    = totalG > 0 ? (p.game_wins || 0) / totalG : 0;
     const lv         = lossVs[p.name] || {};
     const nemName    = Object.keys(lv).sort((a, b) => lv[b] - lv[a])[0];
     const ct         = closeTotal[p.name] || 0;
     const closePct   = ct > 0 ? closeWins[p.name] / ct : 0;
-    return { ...p, streak, lossStreak, perfWeeks, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0, closePct, closeTotal: ct, closeWins: closeWins[p.name] || 0 };
+    return { ...p, streak, lossStreak, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0, closePct, closeTotal: ct, closeWins: closeWins[p.name] || 0 };
   });
 
-  const champion      = statsByPlayer[0];
-  const streakKing    = [...statsByPlayer].sort((a, b) => b.streak - a.streak)[0];
+  const champion       = statsByPlayer[0];
+  const streakKing     = [...statsByPlayer].sort((a, b) => b.streak - a.streak)[0];
   const lossStreakKing = [...statsByPlayer].sort((a, b) => b.lossStreak - a.lossStreak)[0];
-  const perfKing      = [...statsByPlayer].sort((a, b) => b.perfWeeks - a.perfWeeks)[0];
-  const gameSharp     = [...statsByPlayer].filter(p => (p.game_wins || 0) + (p.game_losses || 0) >= 3)
-                                          .sort((a, b) => b.gamePct - a.gamePct)[0];
-  const ptsPer        = [...statsByPlayer].filter(p => (p.sessions_played || 0) > 1)
-                                          .sort((a, b) => (b.norm_points || 0) - (a.norm_points || 0))[0];
-  const closer        = [...statsByPlayer].filter(p => p.closeTotal >= 2).sort((a, b) => b.closePct - a.closePct)[0];
-  const choker        = [...statsByPlayer].filter(p => p.closeTotal >= 2).sort((a, b) => a.closePct - b.closePct)[0];
+  const gameSharp      = [...statsByPlayer].filter(p => (p.game_wins || 0) + (p.game_losses || 0) >= 3)
+                                           .sort((a, b) => b.gamePct - a.gamePct)[0];
+  const ptsPer         = [...statsByPlayer].filter(p => (p.sessions_played || 0) > 1)
+                                           .sort((a, b) => (b.norm_points || 0) - (a.norm_points || 0))[0];
+  const closer         = [...statsByPlayer].filter(p => p.closeTotal >= 2).sort((a, b) => b.closePct - a.closePct)[0];
+  const choker         = [...statsByPlayer].filter(p => p.closeTotal >= 2).sort((a, b) => a.closePct - b.closePct)[0];
+
+  // Most Improved — biggest avg pts/session jump from first half to second half
+  const mid   = Math.floor(sessions.length / 2);
+  const early = sessions.slice(0, mid);
+  const late  = sessions.slice(mid);
+  const halfAvg = (half, name) => {
+    const attended = half.filter(s => (s.players || []).some(sp => sp.player_name === name));
+    if (!attended.length) return null;
+    const total = attended.reduce((sum, s) => {
+      const sp = (s.players || []).find(x => x.player_name === name);
+      return sum + (sp ? sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0) : 0);
+    }, 0);
+    return total / attended.length;
+  };
+  const mostImproved = allPlayers.map(p => {
+    const earlyAvg = halfAvg(early, p.name);
+    const lateAvg  = halfAvg(late,  p.name);
+    const delta    = earlyAvg != null && lateAvg != null ? lateAvg - earlyAvg : null;
+    return { name: p.name, earlyAvg, lateAvg, delta };
+  }).filter(p => p.delta != null).sort((a, b) => b.delta - a.delta)[0];
 
   // Greatest rivals
   let topRival = null, topRivalCount = 0;
@@ -6938,10 +6949,13 @@ function renderLeagueOverview(summary, sessData) {
       'var(--red2)') : streakN;
     cards += flippableCard('streak', streakN, streakF);
   }
-  if (perfKing?.perfWeeks > 0) {
-    cards += card('Perfect Week (3-0)',
-      colorName(perfKing.name),
-      `undefeated ${perfKing.perfWeeks}× out of ${summary.sessions_completed} sessions`,
+  if (mostImproved?.delta != null) {
+    const sign = mostImproved.delta >= 0 ? '+' : '';
+    const eLabel = `S${sessions[0].session_number}–S${sessions[mid - 1].session_number}`;
+    const lLabel = `S${sessions[mid].session_number}–S${sessions[sessions.length - 1].session_number}`;
+    cards += card('Most Improved',
+      colorName(mostImproved.name),
+      `${sign}${mostImproved.delta.toFixed(1)} pts/session · ${eLabel}: ${mostImproved.earlyAvg.toFixed(1)} → ${lLabel}: ${mostImproved.lateAvg.toFixed(1)}`,
       '#f472b6');
   }
   if (gameSharp) {
