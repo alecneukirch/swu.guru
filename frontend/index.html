@@ -3547,6 +3547,9 @@ select.sl-input { cursor: pointer; }
 .sl-stat-label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text3); margin-bottom:8px; }
 .sl-stat-name { font-family:var(--display); font-size:20px; font-weight:700; line-height:1.2; margin-bottom:4px; }
 .sl-stat-detail { font-family:var(--mono); font-size:12px; color:var(--text2); line-height:1.5; }
+.sl-toggle-btn { background:var(--surface2); border:1px solid var(--border2); border-radius:4px; color:var(--text3); font-family:var(--display); font-size:12px; font-weight:600; letter-spacing:0.06em; padding:4px 10px; cursor:pointer; transition:all 0.15s; }
+.sl-toggle-btn:hover { border-color:var(--gold); color:var(--gold); }
+.sl-toggle-btn.active { background:color-mix(in srgb,var(--gold) 12%,transparent); border-color:var(--gold); color:var(--gold); }
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -4029,7 +4032,13 @@ select.sl-input { cursor: pointer; }
     <div id="league-overview" style="display:none">
       <div class="sl-section-hdr">SEASON OVERVIEW</div>
       <div class="sl-chart-wrap">
-        <div class="sl-chart-label">Cumulative Points — All Sessions</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div class="sl-chart-label" id="sl-chart-range-label" style="margin-bottom:0">Cumulative Points — Last 4 Sessions</div>
+          <div style="display:flex;gap:6px">
+            <button class="sl-toggle-btn active" id="sl-chart-btn-4" onclick="setCumulativeRange(false)">Last 4</button>
+            <button class="sl-toggle-btn" id="sl-chart-btn-all" onclick="setCumulativeRange(true)">All</button>
+          </div>
+        </div>
         <div class="sl-canvas-box">
           <canvas id="chart-cumulative"></canvas>
         </div>
@@ -6672,6 +6681,61 @@ async function showLeaguePlayerModal(id) {
 }
 
 let _chartCumulative = null;
+let _chartShowAll    = false;
+let _leagueChartData = null;
+
+function buildCumulativeChart() {
+  if (!_leagueChartData) return;
+  const { sessions, cumPts, COLORS_BY_NAME, allPlayers } = _leagueChartData;
+  const n      = sessions.length;
+  const startI = _chartShowAll ? 0 : Math.max(0, n - 4);
+  const dispS  = sessions.slice(startI);
+
+  const monoFont  = { family: "'Share Tech Mono', monospace", size: 11 };
+  const axisStyle = { ticks: { color: '#5a5a70', font: monoFont }, grid: { color: 'rgba(255,255,255,0.05)' } };
+  const canvas = document.getElementById('chart-cumulative');
+  if (!canvas) return;
+  if (_chartCumulative) _chartCumulative.destroy();
+  _chartCumulative = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: dispS.map(s => `S${s.session_number}`),
+      datasets: allPlayers.map(p => ({
+        label: p.name,
+        data: cumPts[p.name].slice(startI),
+        borderColor: COLORS_BY_NAME[p.name],
+        backgroundColor: COLORS_BY_NAME[p.name] + '18',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.25,
+        fill: false,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#9090a8', font: monoFont, boxWidth: 14, padding: 16 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} pts` } }
+      },
+      scales: {
+        x: { ...axisStyle },
+        y: { ...axisStyle, beginAtZero: false,
+             title: { display: true, text: 'cumulative points', color: '#5a5a70', font: { ...monoFont, size: 10 } } }
+      }
+    }
+  });
+}
+
+function setCumulativeRange(showAll) {
+  _chartShowAll = showAll;
+  document.getElementById('sl-chart-btn-4')  ?.classList.toggle('active', !showAll);
+  document.getElementById('sl-chart-btn-all')?.classList.toggle('active',  showAll);
+  const lbl = document.getElementById('sl-chart-range-label');
+  if (lbl) lbl.textContent = showAll ? 'Cumulative Points — All Sessions' : 'Cumulative Points — Last 4 Sessions';
+  buildCumulativeChart();
+}
 
 function renderLeagueOverview(summary, sessData) {
   const sessions     = (sessData.sessions || []).slice().sort((a, b) => a.session_number - b.session_number);
@@ -6689,53 +6753,25 @@ function renderLeagueOverview(summary, sessData) {
   const cumPts = {};
   for (const p of allPlayers) cumPts[p.name] = [];
   for (let si = 0; si < sessions.length; si++) {
-    const sess = sessions[si];
     const sessMap = {};
-    for (const sp of (sess.players || [])) sessMap[sp.player_name] = sp;
+    for (const sp of (sessions[si].players || [])) sessMap[sp.player_name] = sp;
     for (const p of allPlayers) {
       const prev = si > 0 ? cumPts[p.name][si - 1] : 0;
-      const sp = sessMap[p.name];
-      const pts = sp ? (sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0)) : 0;
+      const sp   = sessMap[p.name];
+      const pts  = sp ? (sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0)) : 0;
       cumPts[p.name].push(prev + pts);
     }
   }
 
-  const monoFont  = { family: "'Share Tech Mono', monospace", size: 11 };
-  const axisStyle = { ticks: { color: '#5a5a70', font: monoFont }, grid: { color: 'rgba(255,255,255,0.05)' } };
-  const canvas = document.getElementById('chart-cumulative');
-  if (canvas) {
-    if (_chartCumulative) _chartCumulative.destroy();
-    _chartCumulative = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: sessions.map(s => `S${s.session_number}`),
-        datasets: allPlayers.map(p => ({
-          label: p.name,
-          data: cumPts[p.name],
-          borderColor: COLORS_BY_NAME[p.name],
-          backgroundColor: COLORS_BY_NAME[p.name] + '18',
-          borderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          tension: 0.25,
-          fill: false,
-        }))
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { color: '#9090a8', font: monoFont, boxWidth: 14, padding: 16 } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} pts` } }
-        },
-        scales: {
-          x: { ...axisStyle },
-          y: { ...axisStyle, beginAtZero: true,
-               title: { display: true, text: 'cumulative points', color: '#5a5a70', font: { ...monoFont, size: 10 } } }
-        }
-      }
-    });
-  }
+  _leagueChartData = { sessions, cumPts, COLORS_BY_NAME, allPlayers };
+  _chartShowAll    = false;
+  const btn4 = document.getElementById('sl-chart-btn-4');
+  const btnA = document.getElementById('sl-chart-btn-all');
+  if (btn4) { btn4.classList.add('active'); }
+  if (btnA) { btnA.classList.remove('active'); }
+  const lbl = document.getElementById('sl-chart-range-label');
+  if (lbl) lbl.textContent = 'Cumulative Points — Last 4 Sessions';
+  buildCumulativeChart();
 
   // ── Fun stats ─────────────────────────────────────────────────────────────
   function parseScore(score) {
@@ -6743,10 +6779,15 @@ function renderLeagueOverview(summary, sessData) {
     return p.length === 3 ? { p1gw: p[0], p2gw: p[2] } : { p1gw: p[0], p2gw: p[1] };
   }
 
-  const matchHist = {}; // playerName -> [{win, opp}] in chronological order
-  const lossVs    = {}; // playerName -> { oppName: count }
-  const winVs     = {}; // playerName -> { oppName: count }
-  for (const p of allPlayers) { matchHist[p.name] = []; lossVs[p.name] = {}; winVs[p.name] = {}; }
+  const matchHist  = {}; // playerName -> [{win, opp}]
+  const lossVs     = {}; // playerName -> { oppName: count }
+  const winVs      = {}; // playerName -> { oppName: count }
+  const closeTotal = {}; // playerName -> tight (2-1) match count
+  const closeWins  = {}; // playerName -> tight match wins
+  for (const p of allPlayers) {
+    matchHist[p.name] = []; lossVs[p.name] = {}; winVs[p.name] = {};
+    closeTotal[p.name] = 0; closeWins[p.name] = 0;
+  }
 
   for (const sess of sessions) {
     const ms = (sess.matches || []).slice().sort((a, b) => (a.round_number || 0) - (b.round_number || 0));
@@ -6754,8 +6795,9 @@ function renderLeagueOverview(summary, sessData) {
       if (m.player2 === 'BYE') continue;
       const { p1gw, p2gw } = parseScore(m.score);
       const p1win = p1gw > p2gw, p2win = p2gw > p1gw;
-      if (matchHist[m.player1]) matchHist[m.player1].push({ win: p1win, opp: m.player2 });
-      if (matchHist[m.player2]) matchHist[m.player2].push({ win: p2win, opp: m.player1 });
+      const tight = (p1gw === 2 && p2gw === 1) || (p1gw === 1 && p2gw === 2);
+      if (matchHist[m.player1]) { matchHist[m.player1].push({ win: p1win }); if (tight) { closeTotal[m.player1]++; if (p1win) closeWins[m.player1]++; } }
+      if (matchHist[m.player2]) { matchHist[m.player2].push({ win: p2win }); if (tight) { closeTotal[m.player2]++; if (p2win) closeWins[m.player2]++; } }
       if (p1win) {
         if (lossVs[m.player2]) lossVs[m.player2][m.player1] = (lossVs[m.player2][m.player1] || 0) + 1;
         if (winVs[m.player1])  winVs[m.player1][m.player2]  = (winVs[m.player1][m.player2]  || 0) + 1;
@@ -6786,16 +6828,20 @@ function renderLeagueOverview(summary, sessData) {
     const gamePct   = totalG > 0 ? (p.game_wins || 0) / totalG : 0;
     const lv        = lossVs[p.name] || {};
     const nemName   = Object.keys(lv).sort((a, b) => lv[b] - lv[a])[0];
-    return { ...p, streak, perfWeeks, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0 };
+    const ct        = closeTotal[p.name] || 0;
+    const closePct  = ct > 0 ? closeWins[p.name] / ct : 0;
+    return { ...p, streak, perfWeeks, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0, closePct, closeTotal: ct, closeWins: closeWins[p.name] || 0 };
   });
 
-  const champion   = statsByPlayer[0];
   const streakKing = [...statsByPlayer].sort((a, b) => b.streak - a.streak)[0];
   const perfKing   = [...statsByPlayer].sort((a, b) => b.perfWeeks - a.perfWeeks)[0];
   const gameSharp  = [...statsByPlayer].filter(p => (p.game_wins || 0) + (p.game_losses || 0) >= 3)
                                        .sort((a, b) => b.gamePct - a.gamePct)[0];
   const ptsPer     = [...statsByPlayer].filter(p => (p.sessions_played || 0) > 1)
                                        .sort((a, b) => (b.norm_points || 0) - (a.norm_points || 0))[0];
+  const closer     = [...statsByPlayer].filter(p => p.closeTotal >= 2)
+                                       .sort((a, b) => b.closePct - a.closePct)[0];
+  const champion   = statsByPlayer[0];
 
   // Greatest rivals: pair with most combined head-to-head matches
   let topRival = null, topRivalCount = 0;
@@ -6820,10 +6866,11 @@ function renderLeagueOverview(summary, sessData) {
   const pct = v => (v * 100).toFixed(1) + '%';
   let cards = '';
 
-  if (champion) {
-    cards += card('Champion',
-      champion.name,
-      `${champion.total_points} pts · ${champion.match_wins}W ${champion.match_losses}L overall`);
+  if (closer) {
+    cards += card('The Closer',
+      closer.name,
+      `${closer.closeWins}/${closer.closeTotal} wins in tight 2-1 matches · ${pct(closer.closePct)} close rate`,
+      'var(--gold)');
   }
   if (champion?.nemName) {
     const nemW = winVs[champion.nemName]?.[champion.name] || 0;
