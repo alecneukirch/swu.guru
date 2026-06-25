@@ -6882,12 +6882,14 @@ function renderLeagueOverview(summary, sessData) {
     }, 0);
     return total / attended.length;
   };
-  const mostImproved = allPlayers.map(p => {
+  const halfDeltas = allPlayers.map(p => {
     const earlyAvg = halfAvg(early, p.name);
     const lateAvg  = halfAvg(late,  p.name);
     const delta    = earlyAvg != null && lateAvg != null ? lateAvg - earlyAvg : null;
     return { name: p.name, earlyAvg, lateAvg, delta };
-  }).filter(p => p.delta != null).sort((a, b) => b.delta - a.delta)[0];
+  }).filter(p => p.delta != null).sort((a, b) => b.delta - a.delta);
+  const mostImproved = halfDeltas[0];
+  const mostDeclined = halfDeltas[halfDeltas.length - 1];
 
   // Greatest rivals
   let topRival = null, topRivalCount = 0;
@@ -6950,13 +6952,14 @@ function renderLeagueOverview(summary, sessData) {
     cards += flippableCard('streak', streakN, streakF);
   }
   if (mostImproved?.delta != null) {
-    const sign = mostImproved.delta >= 0 ? '+' : '';
     const eLabel = `S${sessions[0].session_number}–S${sessions[mid - 1].session_number}`;
     const lLabel = `S${sessions[mid].session_number}–S${sessions[sessions.length - 1].session_number}`;
-    cards += card('Most Improved',
-      colorName(mostImproved.name),
-      `${sign}${mostImproved.delta.toFixed(1)} pts/session · ${eLabel}: ${mostImproved.earlyAvg.toFixed(1)} → ${lLabel}: ${mostImproved.lateAvg.toFixed(1)}`,
-      '#f472b6');
+    const fmtDelta = p => `${p.delta >= 0 ? '+' : ''}${p.delta.toFixed(1)} pts/session · ${eLabel}: ${p.earlyAvg.toFixed(1)} → ${lLabel}: ${p.lateAvg.toFixed(1)}`;
+    const improvedN = cardInner('Most Improved', colorName(mostImproved.name), fmtDelta(mostImproved), '#f472b6');
+    const improvedF = mostDeclined && mostDeclined.name !== mostImproved.name
+      ? cardInner(`Fell Off${sorry}`, colorName(mostDeclined.name), fmtDelta(mostDeclined), 'var(--red2)')
+      : improvedN;
+    cards += flippableCard('improved', improvedN, improvedF);
   }
   if (gameSharp) {
     cards += card('Game Sharpshooter',
