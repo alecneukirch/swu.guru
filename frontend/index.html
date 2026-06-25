@@ -3538,12 +3538,15 @@ select.sl-input { cursor: pointer; }
 .sl-score-row input.sl-input { width: 52px; text-align: center; }
 
 
-/* ── League Charts ─────────────────────────────────────────────────── */
-.sl-charts-grid { margin-bottom: 32px; }
-.sl-chart-wrap { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 16px; overflow: visible; }
-.sl-chart-label { font-family: var(--mono); font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
-.sl-canvas-box { position:relative; }
-.sl-scenario-panel { display:none; margin-top:12px; padding:12px 16px; background:var(--surface2); border:1px solid var(--border2); border-radius:6px; font-family:var(--mono); font-size:12px; }
+/* ── League Overview ─────────────────────────────────────────────── */
+.sl-chart-wrap { background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:16px; margin-bottom:24px; overflow:hidden; }
+.sl-chart-label { font-family:var(--mono); font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px; }
+.sl-canvas-box { position:relative; height:240px; }
+.sl-fun-stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:32px; }
+.sl-stat-card { background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:16px; }
+.sl-stat-label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text3); margin-bottom:8px; }
+.sl-stat-name { font-family:var(--display); font-size:20px; font-weight:700; line-height:1.2; margin-bottom:4px; }
+.sl-stat-detail { font-family:var(--mono); font-size:12px; color:var(--text2); line-height:1.5; }
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -4023,24 +4026,16 @@ select.sl-input { cursor: pointer; }
 
   <!-- Content -->
   <div style="padding:0 24px 32px">
-    <div id="league-charts" style="display:none">
-      <div class="sl-section-hdr">FINAL STANDINGS PROJECTION</div>
-      <div class="sl-charts-grid">
-        <div class="sl-chart-wrap">
-          <div class="sl-chart-label">Top-3 Contenders — Raw Total (3-Round Swiss)</div>
-          <div class="sl-canvas-box">
-            <canvas id="chart-cumulative" style="cursor:pointer"></canvas>
-          </div>
-          <div id="chart-cumulative-panel" class="sl-scenario-panel"></div>
-        </div>
-        <div class="sl-chart-wrap" style="margin-top:16px">
-          <div class="sl-chart-label">Top-3 Contenders — Drop Worst Week (7-Session Players)</div>
-          <div class="sl-canvas-box">
-            <canvas id="chart-adjusted" style="cursor:pointer"></canvas>
-          </div>
-          <div id="chart-adjusted-panel" class="sl-scenario-panel"></div>
+    <div id="league-overview" style="display:none">
+      <div class="sl-section-hdr">SEASON OVERVIEW</div>
+      <div class="sl-chart-wrap">
+        <div class="sl-chart-label">Cumulative Points — All Sessions</div>
+        <div class="sl-canvas-box">
+          <canvas id="chart-cumulative"></canvas>
         </div>
       </div>
+      <div class="sl-section-hdr">SEASON STATS</div>
+      <div id="league-fun-stats"></div>
     </div>
     <div class="sl-section-hdr">STANDINGS</div>
     <div id="league-standings"><div class="loading" style="padding:24px">loading…</div></div>
@@ -6677,307 +6672,201 @@ async function showLeaguePlayerModal(id) {
 }
 
 let _chartCumulative = null;
-let _chartAdjusted   = null;
 
-function showBestCasePanel(player, outcome, players, totals, panelId) {
-  const panel = document.getElementById(panelId);
-  if (!panel) return;
-  const key = player.name + outcome;
-  panel.dataset.canvas = panelId.replace(/-panel$/, '');
-  if (panel.dataset.active === key) { panel.style.display = 'none'; panel.dataset.active = ''; return; }
-  panel.dataset.active = key;
-
-  const RES = {3:'0-3', 5:'1-2', 7:'2-1', 9:'3-0'};
-  const xFinal = totals[player.name] + outcome;
-
-  // Swiss mutual exclusion: if selected player goes 3-0, that slot is taken —
-  // no one else can also go 3-0. Cap others' reachable outcomes accordingly.
-  const othersMax = outcome === 9 ? 7 : 9;
-  const available = [3, 5, 7, 9].filter(o => o <= othersMax);
-
-  // Classify each other contender:
-  //   guaranteed  — their floor (+3) already beats X → always finish above X
-  //   conditional — need a specific result (within available outcomes) to beat X
-  //   safe        — cannot outscore X even at their available ceiling
-  const others = players
-    .filter(p => p.name !== player.name)
-    .map(p => {
-      const cur       = totals[p.name];
-      const minToBeat = available.find(o => cur + o > xFinal);
-      return {
-        name: p.name, cur,
-        canBeat:    minToBeat != null,
-        guaranteed: (cur + 3) > xFinal,  // floor beats X regardless of slot constraints
-        minToBeat,
-      };
-    })
-    .sort((a, b) => totals[b.name] - totals[a.name]);
-
-  const guaranteed   = others.filter(o => o.guaranteed);
-  const conditional  = others.filter(o => o.canBeat && !o.guaranteed);
-  const safe         = others.filter(o => !o.canBeat);
-  const rankStr      = r => ['','1st','2nd','3rd'][r] || `${r}th`;
-
-  // Best finish = 1 + guaranteed count (those will ALWAYS beat X no matter what)
-  // Worst finish = 1 + guaranteed + conditional count
-  const bestRank  = 1 + guaranteed.length;
-  const worstRank = 1 + guaranteed.length + conditional.length;
-
-  const constraint = outcome === 9
-    ? `<div style="color:var(--text3);font-size:10px;margin-bottom:6px;font-style:italic">3-0 slot taken — others capped at 2-1</div>` : '';
-
-  const summary = (guaranteed.length === 0 && conditional.length === 0)
-    ? `<div style="color:var(--green2);font-size:12px;margin-bottom:6px">✓ No one can reach ${xFinal} pts — locked in 1st</div>${constraint}`
-    : `<div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">
-        Best finish: <strong style="color:var(--text)">${rankStr(bestRank)}</strong>
-        &nbsp;·&nbsp; Worst finish: <strong style="color:var(--text)">${rankStr(worstRank)}</strong>
-       </div>${constraint}`;
-
-  const guaranteedRows = guaranteed.length ? `
-    <div style="color:var(--red2);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Always above you (even going 0-3)</div>
-    <div style="display:flex;gap:4px;flex-direction:column;margin-bottom:8px">
-    ${guaranteed.map(o => `
-      <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;background:rgba(231,76,60,0.12);font-size:12px">
-        <span style="flex:1;color:var(--text)">${o.name}</span>
-        <span style="color:var(--text3)">floor already beats you</span>
-        <span style="font-family:var(--mono);color:var(--red2)">${o.cur + 3}+ pts</span>
-      </div>`).join('')}
-    </div>` : '';
-
-  const conditionalRows = conditional.length ? `
-    <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Beat you only if they go…</div>
-    <div style="display:flex;gap:4px;flex-direction:column;margin-bottom:8px">
-    ${conditional.map(o => `
-      <div style="display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:4px;background:rgba(231,76,60,0.06);font-size:12px">
-        <span style="flex:1;color:var(--text)">${o.name}</span>
-        <span style="color:var(--text3)">needs ${RES[o.minToBeat]} or better</span>
-        <span style="font-family:var(--mono);color:var(--red2)">${o.cur + o.minToBeat}+ pts</span>
-      </div>`).join('')}
-    </div>` : '';
-
-  const safeRows = safe.length ? `
-    <div style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Cannot catch you</div>
-    ${safe.map(o => `
-    <div style="display:flex;gap:8px;padding:3px 6px;font-size:12px;color:var(--text3)">
-      <span style="flex:1">${o.name}</span>
-      <span style="font-family:var(--mono)">max ${o.cur + 9} pts</span>
-    </div>`).join('')}` : '';
-
-  panel.style.display = 'block';
-  panel.innerHTML = `
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-      <div>
-        <span style="color:var(--gold);font-size:13px">${player.name}</span>
-        <span style="color:var(--text3);font-size:11px;margin-left:8px">${RES[outcome]} (+${outcome}) → <strong style="color:var(--text)">${xFinal} pts</strong></span>
-      </div>
-      <button onclick="(function(p){p.style.display='none';p.dataset.active='';var fn=window._slClearSel&&window._slClearSel[p.dataset.canvas];if(fn)fn();})(this.closest('.sl-scenario-panel'))"
-              style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1;padding:0">✕</button>
-    </div>
-    ${summary}${guaranteedRows}${conditionalRows}${safeRows}`;
-}
-
-function renderLeagueCharts(summary, sessData) {
-  const sessions      = (sessData.sessions || []).slice().sort((a, b) => a.session_number - b.session_number);
-  const activePlayers = (summary.players || []).filter(p => p.is_active !== false);
-  const chartsEl      = document.getElementById('league-charts');
-
-  if (!sessions.length || !activePlayers.length) {
-    chartsEl.style.display = 'none';
-    return;
-  }
-  chartsEl.style.display = '';
+function renderLeagueOverview(summary, sessData) {
+  const sessions     = (sessData.sessions || []).slice().sort((a, b) => a.session_number - b.session_number);
+  const allPlayers   = (summary.players || []).filter(p => p.is_active !== false && p.name !== 'BYE');
+  const overviewEl   = document.getElementById('league-overview');
+  if (!sessions.length || !allPlayers.length) { overviewEl.style.display = 'none'; return; }
+  overviewEl.style.display = '';
 
   const COLORS = ['#60a5fa','#f472b6','#34d399','#fbbf24','#a78bfa','#fb7185','#38bdf8','#a3e635'];
-  const minAdd = 3;
-  const maxAdd = 9;
-
-  // Per-player per-session points (0 for absent sessions)
-  const sessPoints = {};
-  for (const p of activePlayers) sessPoints[p.name] = [];
-  for (const sess of sessions) {
-    const pm = {};
-    for (const sp of (sess.players || [])) pm[sp.player_name] = sp;
-    for (const p of activePlayers) {
-      const sp = pm[p.name];
-      sessPoints[p.name].push(sp ? (sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0)) : 0);
-    }
-  }
-
-  const rawTotals = {};
-  for (const p of activePlayers) rawTotals[p.name] = Number(p.total_points) || 0;
-
-  // Adjusted totals: drop worst attended session for players who played ALL sessions
-  const adjTotals = {};
-  for (const p of activePlayers) {
-    if ((p.sessions_played || 0) === sessions.length) {
-      const worst = Math.min(...sessPoints[p.name].filter(v => v > 0));
-      adjTotals[p.name] = rawTotals[p.name] - worst;
-    } else {
-      adjTotals[p.name] = rawTotals[p.name];
-    }
-  }
-
-  // Stable colors by raw rank
   const COLORS_BY_NAME = {};
-  [...activePlayers].sort((a, b) => rawTotals[b.name] - rawTotals[a.name])
+  [...allPlayers].sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
     .forEach((p, i) => { COLORS_BY_NAME[p.name] = COLORS[i % COLORS.length]; });
 
-  // Player can reach top 3 if fewer than 3 others have (floor > player ceiling)
-  function top3Contenders(totals) {
-    return activePlayers.filter(p => {
-      const ceil  = totals[p.name] + maxAdd;
-      const above = activePlayers.filter(o => o.name !== p.name && (totals[o.name] + minAdd) > ceil).length;
-      return above < 3;
-    }).sort((a, b) => totals[b.name] - totals[a.name]);
+  // ── Cumulative points per session ────────────────────────────────────────
+  const cumPts = {};
+  for (const p of allPlayers) cumPts[p.name] = [];
+  for (let si = 0; si < sessions.length; si++) {
+    const sess = sessions[si];
+    const sessMap = {};
+    for (const sp of (sess.players || [])) sessMap[sp.player_name] = sp;
+    for (const p of allPlayers) {
+      const prev = si > 0 ? cumPts[p.name][si - 1] : 0;
+      const sp = sessMap[p.name];
+      const pts = sp ? (sp.match_wins * 3 + (sp.match_draws || 0) + (sp.match_losses || 0)) : 0;
+      cumPts[p.name].push(prev + pts);
+    }
   }
 
   const monoFont  = { family: "'Share Tech Mono', monospace", size: 11 };
   const axisStyle = { ticks: { color: '#5a5a70', font: monoFont }, grid: { color: 'rgba(255,255,255,0.05)' } };
-
-  function buildChart(canvasId, totals, prevChart) {
-    const players = top3Contenders(totals);
-    const panelId = canvasId + '-panel';
-
-    const canvas  = document.getElementById(canvasId);
-    if (!canvas) return prevChart;
-    // canvas.parentElement is .sl-canvas-box — size it so Chart.js fills it correctly.
-    // The panel sibling sits outside this box, so it won't be buried under overflow.
-    const canvasBox = canvas.parentElement;
-    canvasBox.style.height = Math.max(160, players.length * 44) + 'px';
-
-    let selection = null; // { playerIdx, outcome } of currently-selected dot
-
-    // Plugin: draw outcome dots + track + current-position tick
-    const markerPlugin = {
-      id: canvasId + '_markers',
-      afterDatasetsDraw(chart) {
-        const { ctx, scales } = chart;
-        const meta = chart.getDatasetMeta(0);
-        players.forEach((p, i) => {
-          const bar = meta.data[i];
-          if (!bar) return;
-          const cy  = bar.y;
-          const col = COLORS_BY_NAME[p.name];
-          const cur = totals[p.name];
-
-          // Track line from +3 to +9
-          ctx.save();
-          ctx.strokeStyle = col + '44';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(scales.x.getPixelForValue(cur + 3), cy);
-          ctx.lineTo(scales.x.getPixelForValue(cur + 9), cy);
-          ctx.stroke();
-
-          // Current-position vertical tick
-          const xCur = scales.x.getPixelForValue(cur);
-          ctx.strokeStyle = col + 'bb';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(xCur, cy - 11); ctx.lineTo(xCur, cy + 11);
-          ctx.stroke();
-          ctx.restore();
-
-          // Outcome dots: 3=small faded, 5/7=medium, 9=large bright
-          [[3,4,col+'66'],[5,5,col+'99'],[7,5,col+'99'],[9,7,col]].forEach(([pts, r, fill]) => {
-            const xOut = scales.x.getPixelForValue(cur + pts);
-            const isSel = selection && selection.playerIdx === i && selection.outcome === pts;
-            ctx.save();
-            if (isSel) {
-              // White outer ring
-              ctx.beginPath();
-              ctx.arc(xOut, cy, r + 4, 0, Math.PI * 2);
-              ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-              ctx.lineWidth = 2;
-              ctx.stroke();
-              // Glow
-              ctx.shadowBlur = 8;
-              ctx.shadowColor = col;
-            }
-            ctx.beginPath();
-            ctx.arc(xOut, cy, isSel ? r + 2 : r, 0, Math.PI * 2);
-            ctx.fillStyle = isSel ? col : fill;
-            ctx.fill();
-            ctx.restore();
-          });
-        });
-      }
-    };
-
-    function closestOutcome(playerIdx, eventX, chart) {
-      const cur = totals[players[playerIdx].name];
-      return [3,5,7,9].reduce((best, pts) => {
-        const d = Math.abs(chart.scales.x.getPixelForValue(cur + pts) - eventX);
-        return d < best.d ? { pts, d } : best;
-      }, { pts: 9, d: Infinity }).pts;
-    }
-
-    function rowAt(eventY, chart) {
-      const meta = chart.getDatasetMeta(0);
-      for (let i = 0; i < meta.data.length; i++) {
-        const b = meta.data[i];
-        if (b && Math.abs(b.y - eventY) < Math.max(b.height, 28) / 2) return i;
-      }
-      return -1;
-    }
-
-    if (prevChart) prevChart.destroy();
-    const chart = new Chart(canvas, {
-      type: 'bar',
-      plugins: [markerPlugin],
+  const canvas = document.getElementById('chart-cumulative');
+  if (canvas) {
+    if (_chartCumulative) _chartCumulative.destroy();
+    _chartCumulative = new Chart(canvas, {
+      type: 'line',
       data: {
-        labels: players.map(p => p.name),
-        datasets: [{
-          // Invisible bar spanning the full outcome range — used only for y-axis labels + hit detection
-          data: players.map(p => [totals[p.name] + 3, totals[p.name] + 9]),
-          backgroundColor: 'rgba(0,0,0,0)',
-          borderColor:     'rgba(0,0,0,0)',
-          barPercentage: 0.9, categoryPercentage: 0.9,
-        }]
+        labels: sessions.map(s => `S${s.session_number}`),
+        datasets: allPlayers.map(p => ({
+          label: p.name,
+          data: cumPts[p.name],
+          borderColor: COLORS_BY_NAME[p.name],
+          backgroundColor: COLORS_BY_NAME[p.name] + '18',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.25,
+          fill: false,
+        }))
       },
       options: {
-        indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              title: items => items[0]?.label || '',
-              label(ctx) {
-                const i   = ctx.dataIndex;
-                const cur = totals[players[i].name];
-                return [`  ${cur} now  →  ${cur+3} / ${cur+5} / ${cur+7} / ${cur+9}`];
-              }
-            }
-          }
-        },
-        onClick(event, elements, chart) {
-          const idx = elements.length > 0 ? elements[0].index : rowAt(event.y, chart);
-          if (idx < 0 || event.x === null) return;
-          const outcome = closestOutcome(idx, event.x, chart);
-          const isSame = selection && selection.playerIdx === idx && selection.outcome === outcome;
-          if (isSame) {
-            selection = null;
-          } else {
-            selection = { playerIdx: idx, outcome };
-          }
-          chart.update('none');
-          showBestCasePanel(players[idx], outcome, players, totals, panelId);
+          legend: { labels: { color: '#9090a8', font: monoFont, boxWidth: 14, padding: 16 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} pts` } }
         },
         scales: {
-          x: { ...axisStyle, beginAtZero: false, title: { display: true, text: 'total points', color: '#5a5a70', font: { ...monoFont, size: 10 } } },
-          y: axisStyle,
+          x: { ...axisStyle },
+          y: { ...axisStyle, beginAtZero: true,
+               title: { display: true, text: 'cumulative points', color: '#5a5a70', font: { ...monoFont, size: 10 } } }
         }
       }
     });
-    window._slClearSel = window._slClearSel || {};
-    window._slClearSel[canvasId] = () => { selection = null; chart.update('none'); };
-    return chart;
   }
 
-  _chartCumulative = buildChart('chart-cumulative', rawTotals, _chartCumulative);
-  _chartAdjusted   = buildChart('chart-adjusted',   adjTotals, _chartAdjusted);
+  // ── Fun stats ─────────────────────────────────────────────────────────────
+  function parseScore(score) {
+    const p = (score || '0-0').split('-').map(Number);
+    return p.length === 3 ? { p1gw: p[0], p2gw: p[2] } : { p1gw: p[0], p2gw: p[1] };
+  }
+
+  const matchHist = {}; // playerName -> [{win, opp}] in chronological order
+  const lossVs    = {}; // playerName -> { oppName: count }
+  const winVs     = {}; // playerName -> { oppName: count }
+  for (const p of allPlayers) { matchHist[p.name] = []; lossVs[p.name] = {}; winVs[p.name] = {}; }
+
+  for (const sess of sessions) {
+    const ms = (sess.matches || []).slice().sort((a, b) => (a.round_number || 0) - (b.round_number || 0));
+    for (const m of ms) {
+      if (m.player2 === 'BYE') continue;
+      const { p1gw, p2gw } = parseScore(m.score);
+      const p1win = p1gw > p2gw, p2win = p2gw > p1gw;
+      if (matchHist[m.player1]) matchHist[m.player1].push({ win: p1win, opp: m.player2 });
+      if (matchHist[m.player2]) matchHist[m.player2].push({ win: p2win, opp: m.player1 });
+      if (p1win) {
+        if (lossVs[m.player2]) lossVs[m.player2][m.player1] = (lossVs[m.player2][m.player1] || 0) + 1;
+        if (winVs[m.player1])  winVs[m.player1][m.player2]  = (winVs[m.player1][m.player2]  || 0) + 1;
+      } else if (p2win) {
+        if (lossVs[m.player1]) lossVs[m.player1][m.player2] = (lossVs[m.player1][m.player2] || 0) + 1;
+        if (winVs[m.player2])  winVs[m.player2][m.player1]  = (winVs[m.player2][m.player1]  || 0) + 1;
+      }
+    }
+  }
+
+  function longestWinStreak(name) {
+    let max = 0, cur = 0;
+    for (const r of (matchHist[name] || [])) { if (r.win) { if (++cur > max) max = cur; } else cur = 0; }
+    return max;
+  }
+
+  function perfect3_0(name) {
+    return sessions.filter(s => {
+      const sp = (s.players || []).find(x => x.player_name === name);
+      return sp && sp.match_wins === 3 && sp.match_losses === 0 && (sp.match_draws || 0) === 0;
+    }).length;
+  }
+
+  const statsByPlayer = allPlayers.map(p => {
+    const streak    = longestWinStreak(p.name);
+    const perfWeeks = perfect3_0(p.name);
+    const totalG    = (p.game_wins || 0) + (p.game_losses || 0);
+    const gamePct   = totalG > 0 ? (p.game_wins || 0) / totalG : 0;
+    const lv        = lossVs[p.name] || {};
+    const nemName   = Object.keys(lv).sort((a, b) => lv[b] - lv[a])[0];
+    return { ...p, streak, perfWeeks, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0 };
+  });
+
+  const champion   = statsByPlayer[0];
+  const streakKing = [...statsByPlayer].sort((a, b) => b.streak - a.streak)[0];
+  const perfKing   = [...statsByPlayer].sort((a, b) => b.perfWeeks - a.perfWeeks)[0];
+  const gameSharp  = [...statsByPlayer].filter(p => (p.game_wins || 0) + (p.game_losses || 0) >= 3)
+                                       .sort((a, b) => b.gamePct - a.gamePct)[0];
+  const ptsPer     = [...statsByPlayer].filter(p => (p.sessions_played || 0) > 1)
+                                       .sort((a, b) => (b.norm_points || 0) - (a.norm_points || 0))[0];
+
+  // Greatest rivals: pair with most combined head-to-head matches
+  let topRival = null, topRivalCount = 0;
+  const seen = new Set();
+  for (const p of allPlayers) {
+    for (const opp of Object.keys({ ...lossVs[p.name], ...winVs[p.name] })) {
+      const key = [p.name, opp].sort().join('||');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const total = (lossVs[p.name]?.[opp] || 0) + (lossVs[opp]?.[p.name] || 0);
+      if (total > topRivalCount) { topRivalCount = total; topRival = { p1: p.name, p2: opp }; }
+    }
+  }
+
+  const card = (label, name, detail, color = 'var(--gold)') =>
+    `<div class="sl-stat-card">
+      <div class="sl-stat-label">${label}</div>
+      <div class="sl-stat-name" style="color:${color}">${name}</div>
+      <div class="sl-stat-detail">${detail}</div>
+    </div>`;
+
+  const pct = v => (v * 100).toFixed(1) + '%';
+  let cards = '';
+
+  if (champion) {
+    cards += card('Champion',
+      champion.name,
+      `${champion.total_points} pts · ${champion.match_wins}W ${champion.match_losses}L overall`);
+  }
+  if (champion?.nemName) {
+    const nemW = winVs[champion.nemName]?.[champion.name] || 0;
+    cards += card("Champion's Nemesis",
+      champion.nemName,
+      `beat ${champion.name} ${champion.nemLosses}× · ${champion.name} won ${nemW}×`,
+      'var(--red2)');
+  }
+  if (streakKing?.streak > 1) {
+    cards += card('Longest Win Streak',
+      streakKing.name,
+      `${streakKing.streak} wins in a row`,
+      '#34d399');
+  }
+  if (perfKing?.perfWeeks > 0) {
+    cards += card('Perfect Week (3-0)',
+      perfKing.name,
+      `undefeated ${perfKing.perfWeeks}× out of ${summary.sessions_completed} sessions`,
+      '#f472b6');
+  }
+  if (gameSharp) {
+    cards += card('Game Sharpshooter',
+      gameSharp.name,
+      `${pct(gameSharp.gamePct)} game win rate · ${gameSharp.game_wins}W ${gameSharp.game_losses}L`,
+      '#60a5fa');
+  }
+  if (ptsPer) {
+    cards += card('Best Pts / Session',
+      ptsPer.name,
+      `${Number(ptsPer.norm_points).toFixed(2)} avg over ${ptsPer.sessions_played} sessions`,
+      '#a78bfa');
+  }
+  if (topRival && topRivalCount > 1) {
+    const r1w = winVs[topRival.p1]?.[topRival.p2] || 0;
+    const r2w = winVs[topRival.p2]?.[topRival.p1] || 0;
+    cards += card('Greatest Rivals',
+      `${topRival.p1} vs ${topRival.p2}`,
+      `${topRivalCount} matches · ${r1w}-${r2w} head-to-head`,
+      'var(--gold2)');
+  }
+
+  document.getElementById('league-fun-stats').innerHTML =
+    `<div class="sl-fun-stats-grid">${cards}</div>`;
 }
 
 function sortLeagueBy(col) {
@@ -7002,7 +6891,7 @@ async function loadLeague() {
     document.getElementById('league-sub').textContent =
       sc + ' session' + (sc !== 1 ? 's' : '') + ' completed' +
       (summary.last_session_date ? ' · last ' + summary.last_session_date : '');
-    renderLeagueCharts(summary, sessData);
+    renderLeagueOverview(summary, sessData);
     renderLeagueStandings(summary);
     renderLeagueSessions(sessData);
     if (_leagueAdminOpen) _populateLeagueAdmin(sessData);
