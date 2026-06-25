@@ -3550,6 +3550,9 @@ select.sl-input { cursor: pointer; }
 .sl-toggle-btn { background:var(--surface2); border:1px solid var(--border2); border-radius:4px; color:var(--text3); font-family:var(--display); font-size:12px; font-weight:600; letter-spacing:0.06em; padding:4px 10px; cursor:pointer; transition:all 0.15s; }
 .sl-toggle-btn:hover { border-color:var(--gold); color:var(--gold); }
 .sl-toggle-btn.active { background:color-mix(in srgb,var(--gold) 12%,transparent); border-color:var(--gold); color:var(--gold); }
+.sl-flippable { cursor:pointer; user-select:none; transition:border-color 0.15s; }
+.sl-flippable:hover { border-color:rgba(255,255,255,0.25); }
+.sl-flippable:hover .sl-stat-label::after { content:' ↺'; opacity:0.45; }
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -4042,6 +4045,7 @@ select.sl-input { cursor: pointer; }
         <div class="sl-canvas-box">
           <canvas id="chart-cumulative"></canvas>
         </div>
+        <div id="sl-chart-legend" style="display:flex;flex-wrap:wrap;gap:14px 20px;justify-content:center;padding-top:14px"></div>
       </div>
       <div class="sl-section-hdr">SEASON STATS</div>
       <div id="league-fun-stats"></div>
@@ -6683,10 +6687,19 @@ async function showLeaguePlayerModal(id) {
 let _chartCumulative = null;
 let _chartShowAll    = false;
 let _leagueChartData = null;
+let _flippableCards  = {};
+
+function toggleStatCard(id) {
+  const entry = _flippableCards[id];
+  if (!entry) return;
+  entry.flipped = !entry.flipped;
+  const el = document.getElementById(`sl-${id}-card`);
+  if (el) el.innerHTML = entry.flipped ? entry.flippedHTML : entry.normalHTML;
+}
 
 function buildCumulativeChart() {
   if (!_leagueChartData) return;
-  const { sessions, cumPts, COLORS_BY_NAME, allPlayers } = _leagueChartData;
+  const { sessions, cumPts, COLORS_BY_NAME, allPlayers, championName } = _leagueChartData;
   const n      = sessions.length;
   const startI = _chartShowAll ? 0 : Math.max(0, n - 4);
   const dispS  = sessions.slice(startI);
@@ -6716,7 +6729,7 @@ function buildCumulativeChart() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#9090a8', font: monoFont, boxWidth: 14, padding: 16 } },
+        legend: { display: false },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} pts` } }
       },
       scales: {
@@ -6726,6 +6739,22 @@ function buildCumulativeChart() {
       }
     }
   });
+
+  // Custom HTML legend with crown over champion
+  const legendEl = document.getElementById('sl-chart-legend');
+  if (legendEl) {
+    legendEl.innerHTML = allPlayers.map(p => {
+      const isChamp = p.name === championName;
+      const crown = `<div style="font-size:10px;color:var(--gold);line-height:1;margin-bottom:2px;visibility:${isChamp ? 'visible' : 'hidden'}">♛</div>`;
+      return `<div style="display:flex;flex-direction:column;align-items:center">
+        ${crown}
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="display:inline-block;width:20px;height:3px;border-radius:2px;background:${COLORS_BY_NAME[p.name]}"></span>
+          <span style="font-family:var(--mono);font-size:12px;color:${COLORS_BY_NAME[p.name]}">${p.name}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
 
 function setCumulativeRange(showAll) {
@@ -6763,8 +6792,9 @@ function renderLeagueOverview(summary, sessData) {
     }
   }
 
-  _leagueChartData = { sessions, cumPts, COLORS_BY_NAME, allPlayers };
+  _leagueChartData = { sessions, cumPts, COLORS_BY_NAME, allPlayers, championName: allPlayers[0]?.name };
   _chartShowAll    = false;
+  _flippableCards  = {};
   const btn4 = document.getElementById('sl-chart-btn-4');
   const btnA = document.getElementById('sl-chart-btn-all');
   if (btn4) { btn4.classList.add('active'); }
@@ -6774,16 +6804,19 @@ function renderLeagueOverview(summary, sessData) {
   buildCumulativeChart();
 
   // ── Fun stats ─────────────────────────────────────────────────────────────
+  const colorName = name => COLORS_BY_NAME[name]
+    ? `<span style="color:${COLORS_BY_NAME[name]}">${name}</span>` : name;
+
   function parseScore(score) {
     const p = (score || '0-0').split('-').map(Number);
     return p.length === 3 ? { p1gw: p[0], p2gw: p[2] } : { p1gw: p[0], p2gw: p[1] };
   }
 
-  const matchHist  = {}; // playerName -> [{win, opp}]
-  const lossVs     = {}; // playerName -> { oppName: count }
-  const winVs      = {}; // playerName -> { oppName: count }
-  const closeTotal = {}; // playerName -> tight (2-1) match count
-  const closeWins  = {}; // playerName -> tight match wins
+  const matchHist  = {};
+  const lossVs     = {};
+  const winVs      = {};
+  const closeTotal = {};
+  const closeWins  = {};
   for (const p of allPlayers) {
     matchHist[p.name] = []; lossVs[p.name] = {}; winVs[p.name] = {};
     closeTotal[p.name] = 0; closeWins[p.name] = 0;
@@ -6808,9 +6841,9 @@ function renderLeagueOverview(summary, sessData) {
     }
   }
 
-  function longestWinStreak(name) {
+  function longestStreak(name, win) {
     let max = 0, cur = 0;
-    for (const r of (matchHist[name] || [])) { if (r.win) { if (++cur > max) max = cur; } else cur = 0; }
+    for (const r of (matchHist[name] || [])) { if (r.win === win) { if (++cur > max) max = cur; } else cur = 0; }
     return max;
   }
 
@@ -6822,28 +6855,30 @@ function renderLeagueOverview(summary, sessData) {
   }
 
   const statsByPlayer = allPlayers.map(p => {
-    const streak    = longestWinStreak(p.name);
-    const perfWeeks = perfect3_0(p.name);
-    const totalG    = (p.game_wins || 0) + (p.game_losses || 0);
-    const gamePct   = totalG > 0 ? (p.game_wins || 0) / totalG : 0;
-    const lv        = lossVs[p.name] || {};
-    const nemName   = Object.keys(lv).sort((a, b) => lv[b] - lv[a])[0];
-    const ct        = closeTotal[p.name] || 0;
-    const closePct  = ct > 0 ? closeWins[p.name] / ct : 0;
-    return { ...p, streak, perfWeeks, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0, closePct, closeTotal: ct, closeWins: closeWins[p.name] || 0 };
+    const streak     = longestStreak(p.name, true);
+    const lossStreak = longestStreak(p.name, false);
+    const perfWeeks  = perfect3_0(p.name);
+    const totalG     = (p.game_wins || 0) + (p.game_losses || 0);
+    const gamePct    = totalG > 0 ? (p.game_wins || 0) / totalG : 0;
+    const lv         = lossVs[p.name] || {};
+    const nemName    = Object.keys(lv).sort((a, b) => lv[b] - lv[a])[0];
+    const ct         = closeTotal[p.name] || 0;
+    const closePct   = ct > 0 ? closeWins[p.name] / ct : 0;
+    return { ...p, streak, lossStreak, perfWeeks, gamePct, nemName, nemLosses: nemName ? lv[nemName] : 0, closePct, closeTotal: ct, closeWins: closeWins[p.name] || 0 };
   });
 
-  const streakKing = [...statsByPlayer].sort((a, b) => b.streak - a.streak)[0];
-  const perfKing   = [...statsByPlayer].sort((a, b) => b.perfWeeks - a.perfWeeks)[0];
-  const gameSharp  = [...statsByPlayer].filter(p => (p.game_wins || 0) + (p.game_losses || 0) >= 3)
-                                       .sort((a, b) => b.gamePct - a.gamePct)[0];
-  const ptsPer     = [...statsByPlayer].filter(p => (p.sessions_played || 0) > 1)
-                                       .sort((a, b) => (b.norm_points || 0) - (a.norm_points || 0))[0];
-  const closer     = [...statsByPlayer].filter(p => p.closeTotal >= 2)
-                                       .sort((a, b) => b.closePct - a.closePct)[0];
-  const champion   = statsByPlayer[0];
+  const champion      = statsByPlayer[0];
+  const streakKing    = [...statsByPlayer].sort((a, b) => b.streak - a.streak)[0];
+  const lossStreakKing = [...statsByPlayer].sort((a, b) => b.lossStreak - a.lossStreak)[0];
+  const perfKing      = [...statsByPlayer].sort((a, b) => b.perfWeeks - a.perfWeeks)[0];
+  const gameSharp     = [...statsByPlayer].filter(p => (p.game_wins || 0) + (p.game_losses || 0) >= 3)
+                                          .sort((a, b) => b.gamePct - a.gamePct)[0];
+  const ptsPer        = [...statsByPlayer].filter(p => (p.sessions_played || 0) > 1)
+                                          .sort((a, b) => (b.norm_points || 0) - (a.norm_points || 0))[0];
+  const closer        = [...statsByPlayer].filter(p => p.closeTotal >= 2).sort((a, b) => b.closePct - a.closePct)[0];
+  const choker        = [...statsByPlayer].filter(p => p.closeTotal >= 2).sort((a, b) => a.closePct - b.closePct)[0];
 
-  // Greatest rivals: pair with most combined head-to-head matches
+  // Greatest rivals
   let topRival = null, topRivalCount = 0;
   const seen = new Set();
   for (const p of allPlayers) {
@@ -6856,50 +6891,68 @@ function renderLeagueOverview(summary, sessData) {
     }
   }
 
-  const card = (label, name, detail, color = 'var(--gold)') =>
-    `<div class="sl-stat-card">
-      <div class="sl-stat-label">${label}</div>
-      <div class="sl-stat-name" style="color:${color}">${name}</div>
-      <div class="sl-stat-detail">${detail}</div>
-    </div>`;
-
   const pct = v => (v * 100).toFixed(1) + '%';
+  const sorry = `<span style="color:var(--text3);font-style:italic;letter-spacing:0;font-weight:400"> (sorry)</span>`;
+
+  const cardInner = (label, name, detail, color = 'var(--gold)') =>
+    `<div class="sl-stat-label">${label}</div>
+     <div class="sl-stat-name" style="color:${color}">${name}</div>
+     <div class="sl-stat-detail">${detail}</div>`;
+
+  const card = (label, name, detail, color) =>
+    `<div class="sl-stat-card">${cardInner(label, name, detail, color)}</div>`;
+
+  const flippableCard = (id, normalHTML, flippedHTML) => {
+    _flippableCards[id] = { normalHTML, flippedHTML, flipped: false };
+    return `<div class="sl-stat-card sl-flippable" id="sl-${id}-card" onclick="toggleStatCard('${id}')">${normalHTML}</div>`;
+  };
+
   let cards = '';
 
   if (closer) {
-    cards += card('The Closer',
-      closer.name,
+    const closerN = cardInner('The Closer',
+      colorName(closer.name),
       `${closer.closeWins}/${closer.closeTotal} wins in tight 2-1 matches · ${pct(closer.closePct)} close rate`,
       'var(--gold)');
+    const closerF = choker ? cardInner(`The Choker${sorry}`,
+      colorName(choker.name),
+      `${choker.closeWins}/${choker.closeTotal} wins in tight 2-1 matches · ${pct(choker.closePct)} close rate`,
+      'var(--red2)') : closerN;
+    cards += flippableCard('closer', closerN, closerF);
   }
   if (champion?.nemName) {
     const nemW = winVs[champion.nemName]?.[champion.name] || 0;
     cards += card("Champion's Nemesis",
-      champion.nemName,
-      `beat ${champion.name} ${champion.nemLosses}× · ${champion.name} won ${nemW}×`,
+      colorName(champion.nemName),
+      `beat ${colorName(champion.name)} ${champion.nemLosses}× · ${colorName(champion.name)} won ${nemW}×`,
       'var(--red2)');
   }
   if (streakKing?.streak > 1) {
-    cards += card('Longest Win Streak',
-      streakKing.name,
+    const streakN = cardInner('Longest Win Streak',
+      colorName(streakKing.name),
       `${streakKing.streak} wins in a row`,
       '#34d399');
+    const streakF = lossStreakKing?.lossStreak > 1 ? cardInner(`Longest Loss Streak${sorry}`,
+      colorName(lossStreakKing.name),
+      `${lossStreakKing.lossStreak} losses in a row`,
+      'var(--red2)') : streakN;
+    cards += flippableCard('streak', streakN, streakF);
   }
   if (perfKing?.perfWeeks > 0) {
     cards += card('Perfect Week (3-0)',
-      perfKing.name,
+      colorName(perfKing.name),
       `undefeated ${perfKing.perfWeeks}× out of ${summary.sessions_completed} sessions`,
       '#f472b6');
   }
   if (gameSharp) {
     cards += card('Game Sharpshooter',
-      gameSharp.name,
+      colorName(gameSharp.name),
       `${pct(gameSharp.gamePct)} game win rate · ${gameSharp.game_wins}W ${gameSharp.game_losses}L`,
       '#60a5fa');
   }
   if (ptsPer) {
     cards += card('Best Pts / Session',
-      ptsPer.name,
+      colorName(ptsPer.name),
       `${Number(ptsPer.norm_points).toFixed(2)} avg over ${ptsPer.sessions_played} sessions`,
       '#a78bfa');
   }
@@ -6907,7 +6960,7 @@ function renderLeagueOverview(summary, sessData) {
     const r1w = winVs[topRival.p1]?.[topRival.p2] || 0;
     const r2w = winVs[topRival.p2]?.[topRival.p1] || 0;
     cards += card('Greatest Rivals',
-      `${topRival.p1} vs ${topRival.p2}`,
+      `${colorName(topRival.p1)} vs ${colorName(topRival.p2)}`,
       `${topRivalCount} matches · ${r1w}-${r2w} head-to-head`,
       'var(--gold2)');
   }
