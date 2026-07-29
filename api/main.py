@@ -784,7 +784,7 @@ def leader_stats(
     """Hero stats for the leader page header. Supports base group filtering."""
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
-    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
 
     if base_names:
         base_filter = "AND s.base = ANY(%s::text[])"
@@ -1020,7 +1020,7 @@ def leader_cards(
     """
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
-    base_names  = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     sb_filter   = "" if is_sideboard is None else ("AND dc.is_sideboard = true" if is_sideboard else "AND dc.is_sideboard = false")
     base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
     base_params = [base_names] if base_names else []
@@ -1726,7 +1726,7 @@ def leader_matchups(
     """
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
-    own_bases = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    own_bases = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
 
     own_as_p1  = "AND m.p1_base = ANY(%s::text[])" if own_bases else ""
     own_as_p2  = "AND m.p2_base = ANY(%s::text[])" if own_bases else ""
@@ -1888,8 +1888,8 @@ def leader_matchup_cards(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    own_bases = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
-    opp_bases = [b.strip() for b in opponent_bases.split(',') if b.strip()] if opponent_bases else []
+    own_bases = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
+    opp_bases = [b.strip() for b in opponent_bases.split('|') if b.strip()] if opponent_bases else []
 
     own_as_p1  = "AND m.p1_base = ANY(%s::text[])" if own_bases else ""
     own_as_p2  = "AND m.p2_base = ANY(%s::text[])" if own_bases else ""
@@ -2051,7 +2051,7 @@ def leader_synergy(
     Otherwise serves from the materialized view.
     lift > 1 = positively correlated (played together more than chance).
     """
-    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
 
     if base_names:
         # Live query scoped to specific bases
@@ -2140,7 +2140,7 @@ def leader_weaknesses(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     base_as_p1 = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
     base_as_p2 = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
     base_param = [base_names] if base_names else []
@@ -2276,7 +2276,7 @@ def leader_elo_breakdown(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
-    base_names = [b.strip() for b in base_group.split(',') if b.strip()] if base_group else []
+    base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     base_sql   = "AND s.base = ANY(%s::text[])" if base_names else ""
     base_param = [base_names] if base_names else []
 

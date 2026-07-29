@@ -4542,7 +4542,7 @@ function mkCard(r, i, conv, maxD, pfx = 'limg', eventMode = false) {
   const barW = Math.round((r.total_decks / maxD) * 100);
   const safe      = r.leader.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
   const safeKey    = (r.base_key || '').replace(/"/g,'&quot;');
-  const safeBases  = (r.bases || []).join(',').replace(/"/g,'&quot;');
+  const safeBases  = (r.bases || []).join('|').replace(/"/g,'&quot;');
   const safeAspect = (r.aspect || 'none').replace(/"/g,'&quot;');
   const eloColor = r.avg_hri_rating >= 1700 ? 'var(--green)' : r.avg_hri_rating >= 1550 ? 'var(--gold)' : 'var(--text2)';
   const eloBadge = r.avg_hri_rating
@@ -5165,7 +5165,7 @@ async function openMatchupDetail(matchup) {
 
   let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
     + '?opponent=' + encodeURIComponent(matchup.opponent)
-    + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join(','))
+    + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join('|'))
     + '&format=' + currentFormat;
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
 
