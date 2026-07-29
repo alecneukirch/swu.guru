@@ -5010,7 +5010,7 @@ function renderCardTable(rows) {
   <div class="ct-bottom">
     <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` data-tooltip="${ctSub}"` : ''}>${ctName}</div></div>
     <div class="ct-stats">
-      <span class="ct-incl">${fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-incl" data-tooltip="Match win rate of decks running this card">${r.card_mwr != null ? Math.round(r.card_mwr * 100) + '%' : fmtPct(r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
     </div>
   </div>
@@ -5059,7 +5059,7 @@ function renderCardTable(rows) {
   <div class="ct-bottom">
     <div class="ct-name-row">${sbCostBadge}<div class="ct-name"${sbSub ? ` data-tooltip="${sbSub}"` : ''}>${sbName}</div></div>
     <div class="ct-stats">
-      <span class="ct-incl">${fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-incl" data-tooltip="Match win rate of decks running this card">${r.card_mwr != null ? Math.round(r.card_mwr * 100) + '%' : fmtPct(r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
     </div>
   </div>

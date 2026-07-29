@@ -1216,6 +1216,44 @@ def leader_cards(
             ORDER BY m.inclusion_rate DESC, m.deck_count DESC
         """, params)
 
+    # Attach per-card match win rate (unweighted — not in the materialized views)
+    if rows:
+        card_names = list({r['card_name'] for r in rows})
+        mwr_rows = db.fetchall(f"""
+            SELECT dc.card_name,
+                   SUM(p.mw)::INT AS wins,
+                   SUM(p.mg)::INT AS games
+            FROM {t['decklist_cards']} dc
+            JOIN {t['standings']} s ON s.id = dc.standing_id
+            JOIN {t['events']}    e ON e.id = s.event_id
+            JOIN (
+                SELECT p1_standing_id AS sid,
+                       COUNT(*) FILTER (WHERE winner = 'p1'           ) AS mw,
+                       COUNT(*) FILTER (WHERE winner IN ('p1', 'p2')) AS mg
+                FROM {t['matches']} WHERE winner IN ('p1', 'p2')
+                GROUP BY p1_standing_id
+                UNION ALL
+                SELECT p2_standing_id AS sid,
+                       COUNT(*) FILTER (WHERE winner = 'p2'           ) AS mw,
+                       COUNT(*) FILTER (WHERE winner IN ('p1', 'p2')) AS mg
+                FROM {t['matches']} WHERE winner IN ('p1', 'p2')
+                GROUP BY p2_standing_id
+            ) p ON p.sid = s.id
+            WHERE s.leader = %s
+              AND s.placement IS NOT NULL
+              AND dc.card_name = ANY(%s)
+              {date_sql if date_sql else "AND e.date <= CURRENT_DATE"}
+              {base_filter}
+            GROUP BY dc.card_name
+        """, [leader, card_names] + (date_params if date_sql else []) + base_params)
+
+        mwr_map = {
+            r['card_name']: round(r['wins'] / r['games'], 4) if r.get('games') else None
+            for r in mwr_rows
+        }
+        for r in rows:
+            r['card_mwr'] = mwr_map.get(r['card_name'])
+
     return rows
 
 
