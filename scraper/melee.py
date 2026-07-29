@@ -320,7 +320,7 @@ def melee_tournament_rounds(melee_id: str) -> dict:
 def melee_round_standings(round_id: int) -> list[dict]:
     """POST GetRoundStandings → raw row list."""
     url  = f"{MELEE}/Standing/GetRoundStandings"
-    data = _dt_params(STANDINGS_COLUMNS, round_id, length=500)
+    data = _dt_params(STANDINGS_COLUMNS, round_id, length=2000)
     resp = post_json(url, data)
     return resp.get("data", [])
 
@@ -357,7 +357,7 @@ def parse_standing_row(row: dict) -> dict:
 def melee_round_matches(round_id: int, include_byes: bool = False) -> list[dict]:
     """POST GetRoundMatches → parsed match list."""
     url  = f"{MELEE}/Match/GetRoundMatches/{round_id}"
-    data = _dt_params(MATCHES_COLUMNS, round_id, length=500)
+    data = _dt_params(MATCHES_COLUMNS, round_id, length=2000)
     try:
         resp = post_json(url, data)
         return _parse_matches(resp.get("data", []), include_byes=include_byes)
