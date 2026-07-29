@@ -4521,10 +4521,10 @@ function setHomeSort(col) {
 }
 
 // Image cache — persisted to localStorage so art survives page reloads
-const _LS_KEY = 'swu_img_cache_v4';
+const _LS_KEY = 'swu_img_cache_v5';
 // Clean up old cache versions on startup
 try {
-  ['swu_img_cache_v1', 'swu_img_cache_v2', 'swu_img_cache_v3', 'swu_art_cache_v1', 'swu_art_cache_v2'].forEach(k => localStorage.removeItem(k));
+  ['swu_img_cache_v1', 'swu_img_cache_v2', 'swu_img_cache_v3', 'swu_img_cache_v4', 'swu_art_cache_v1', 'swu_art_cache_v2'].forEach(k => localStorage.removeItem(k));
 } catch {}
 
 const imageCache = (() => {
@@ -4568,7 +4568,12 @@ async function _doFetchLeaderCard(leaderName) {
 }
 
 async function fetchLeaderCard(leaderName) {
-  if (imageCache[leaderName]) return imageCache[leaderName];
+  if (imageCache[leaderName]) {
+    const d = imageCache[leaderName];
+    if (d.all_aspects && !leaderAspectCache[leaderName])
+      leaderAspectCache[leaderName] = aspectFromArray(d.all_aspects);
+    return d;
+  }
   return new Promise(resolve => {
     _fetchQueue.push({ resolve, leaderName });
     _runQueue();
