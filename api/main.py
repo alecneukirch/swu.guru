@@ -2879,6 +2879,7 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
             'match_wins':     r['match_wins'],
             'match_games':    r['match_games'],
             'match_win_rate': mwr,
+            'aspect':         r['base_aspect'] or 'none',
             'avg_hri_rating': r['avg_hri_rating'],
             'rated_count':    r['rated_count'],
             'placements':     r['placements'] or [],
