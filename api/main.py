@@ -1631,7 +1631,7 @@ def leader_image(leader_name: str, response: Response):
     Quick endpoint the frontend uses to get a leader's image URL.
     Cache is pre-warmed at startup so this should always be a memory hit.
     """
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "no-store"
     if leader_name in _leader_image_cache:
         return _leader_image_cache[leader_name]
 

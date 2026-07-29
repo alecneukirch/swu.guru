@@ -4552,7 +4552,7 @@ function _runQueue() {
 
 async function _doFetchLeaderCard(leaderName) {
   try {
-    const d = await api('/api/cards/leader-image/' + encodeURIComponent(leaderName));
+    const d = await api('/api/cards/leader-image/' + encodeURIComponent(leaderName) + '?v=' + _LS_KEY.replace(/\D/g,''));
     if (d && d.uuid) {
       if (d.aspects && d.aspects.length) {
         leaderAspectCache[leaderName] = aspectFromArray(d.aspects);
