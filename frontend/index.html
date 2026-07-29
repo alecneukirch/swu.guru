@@ -158,8 +158,23 @@ body::before {
 .decay-toast-table td:first-child { color: var(--text3); width: 130px; }
 .decay-toast-table td:last-child { color: var(--gold); }
 .decay-toast-dismiss { font-size: 12px; color: var(--text3); margin-top: 14px; }
-.nav-format-toggle {
+.nav-meta-select {
   margin-left: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+}
+.nav-meta-select option { background: var(--surface2); color: var(--text2); }
+.nav-format-toggle {
+  margin-left: 8px;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -3568,6 +3583,7 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
+  <select id="meta-select" class="nav-meta-select" onchange="setMeta(this.value)"></select>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -4166,6 +4182,7 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
 
 // ── State ──────────────────────────────────────────────────────────────────
 let currentFormat  = 'standard';  // 'standard' | 'eternal'
+let currentMeta    = null;         // 'ASH', 'LAW', etc. — null means all-time
 let homeSort       = 'total_decks';
 let homeComboData  = [];
 let _homeGen       = 0;
@@ -4189,6 +4206,30 @@ async function api(path, opts) {
   const r = await fetch(API + path, opts || {});
   if (!r.ok) throw new Error(r.status + ' ' + path);
   return r.json();
+}
+
+function metaParam() {
+  return currentMeta ? '&meta_id=' + encodeURIComponent(currentMeta) : '';
+}
+
+async function loadMetas() {
+  try {
+    const d = await api('/api/metas/dropdown?format=' + currentFormat);
+    const sel = document.getElementById('meta-select');
+    if (!sel) return;
+    const opts = d.options || [];
+    sel.innerHTML = opts.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+    const current = opts.find(o => o.is_current);
+    if (current) { currentMeta = current.id; sel.value = current.id; }
+    else if (opts.length) { currentMeta = opts[0].id; sel.value = opts[0].id; }
+  } catch(e) {}
+}
+
+function setMeta(metaId) {
+  currentMeta = metaId || null;
+  const activePage = document.querySelector('.page.active')?.id;
+  if (activePage === 'page-matrix') loadMatrix();
+  else { goHome(); loadHome(); }
 }
 
 // ── Aspect ──────────────────────────────────────────────────────────────────
@@ -4427,6 +4468,7 @@ function applyFormat(fmt) {
   document.body.classList.toggle('eternal-theme', fmt === 'eternal');
   document.getElementById('fmt-standard').classList.toggle('active', fmt === 'standard');
   document.getElementById('fmt-eternal').classList.toggle('active', fmt === 'eternal');
+  loadMetas();
 }
 function setFormat(fmt) {
   applyFormat(fmt);
@@ -4443,12 +4485,12 @@ function setFormat(fmt) {
 async function loadHome() {
   const gen = ++_homeGen;
   const fmt = currentFormat;
-  const qs  = '&format=' + fmt;
+  const qs  = '&format=' + fmt + metaParam();
   try {
     const deckFilter = 'min_decks=1';
     const [comboData, summary] = await Promise.all([
       api('/api/leaders/by-base?' + deckFilter + qs),
-      api('/api/summary?format=' + fmt + '&days=120'),
+      api('/api/summary?format=' + fmt + metaParam()),
     ]);
     if (gen !== _homeGen) return;
     homeComboData = comboData;
@@ -4705,7 +4747,7 @@ async function renderLeaderHero(name) {
   const hero = document.getElementById('leader-hero');
   hero.innerHTML = '<div style="padding:24px;color:var(--text3);font-family:var(--mono)">loading…</div>';
   try {
-    let statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats?format=' + currentFormat;
+    let statsUrl = '/api/leader/' + encodeURIComponent(name) + '/stats?format=' + currentFormat + metaParam();
     if (currentLeaderBase) statsUrl += '&base_group=' + encodeURIComponent(currentLeaderBase);
     const stats = await api(statsUrl);
     const asp  = aspect(name);
@@ -4803,7 +4845,7 @@ async function loadLeaderCards() {
   document.getElementById('leader-cards-tbody').innerHTML = '<tr><td colspan="6" class="loading">loading…</td></tr>';
   try {
     const minDecks = parseInt(document.getElementById('lp-min-decks')?.value) || 5;
-    let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat;
+    let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat + metaParam();
     if (currentLeaderBase)         url += '&base_group=' + encodeURIComponent(currentLeaderBase);
     if (_eloFilterBucket !== null) url += '&elo_bucket=' + _eloFilterBucket;
     leaderData = await api(url) || [];
@@ -5058,7 +5100,7 @@ async function loadLeaderMatchups() {
   const grid = document.getElementById('leader-matchups-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
-  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups?format=' + currentFormat;
+  let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchups?format=' + currentFormat + metaParam();
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
   try {
     const data = await api(url);
@@ -5166,7 +5208,7 @@ async function openMatchupDetail(matchup) {
   let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/matchup-cards'
     + '?opponent=' + encodeURIComponent(matchup.opponent)
     + '&opponent_bases=' + encodeURIComponent((matchup.bases || []).join('|'))
-    + '&format=' + currentFormat;
+    + '&format=' + currentFormat + metaParam();
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
 
   try {
@@ -5254,7 +5296,7 @@ async function loadLeaderWeaknesses() {
 
   const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
-    + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + '&limit=60';
+    + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + metaParam() + '&limit=60';
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
   try {
     weaknessesData = await api(url);
@@ -5334,7 +5376,7 @@ async function loadLeaderElo() {
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
 
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
-    + '/elo-breakdown?format=' + currentFormat;
+    + '/elo-breakdown?format=' + currentFormat + metaParam();
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
 
   try {
@@ -5426,7 +5468,7 @@ function toggleEloFilter(bucket) {
 async function loadEvents() {
   eventsData = [];
   try {
-    const d = await api('/api/events?limit=500&format=' + currentFormat);
+    const d = await api('/api/events?limit=500&format=' + currentFormat + metaParam());
     eventsData = d.events || [];
     document.getElementById('events-sub').textContent = `${eventsData.length} events`;
     filterEvents();
@@ -6068,7 +6110,7 @@ async function loadMatrix() {
   const topN = Math.max(matrixRows, matrixCols);
 
   const minDecks = currentFormat === 'eternal' ? 1 : 5;
-  let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}`;
+  let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}` + metaParam();
   if (matrixMinElo > 0)    url += `&min_elo=${matrixMinElo}`;
   if (matrixOppMinElo > 0) url += `&opp_min_elo=${matrixOppMinElo}`;
 
@@ -7288,6 +7330,7 @@ async function leagueDeleteMatch(matchId) {
 // ── Init ────────────────────────────────────────────────────────────────────
 (async () => {
   await checkStatus();
+  await loadMetas();
   if (!routeFromHash()) loadHome();
   window.addEventListener('popstate', () => { if (!routeFromHash()) { showPage('home'); loadHome(); } });
   setInterval(checkStatus, 30000);
@@ -7353,7 +7396,7 @@ async function loadCardsPage() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
   const minDecks = parseInt(document.getElementById('cp-min-decks')?.value) || 5;
-  let url = `/api/cards/stats?format=${currentFormat}&min_decks=${minDecks}`;
+  let url = `/api/cards/stats?format=${currentFormat}&min_decks=${minDecks}` + metaParam();
   try {
     _cpData = await api(url) || [];
     initCpCostFilters();
@@ -7517,7 +7560,7 @@ async function loadPicks() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   const minDecks  = currentFormat === 'eternal' ? 3 : 10;
-  let url = `/api/meta-call?min_decks=${minDecks}&min_games=2&top_n=30&format=${currentFormat}`;
+  let url = `/api/meta-call?min_decks=${minDecks}&min_games=2&top_n=30&format=${currentFormat}` + metaParam();
   try {
     const d = await api(url);
     _picksData = d.decks || [];
