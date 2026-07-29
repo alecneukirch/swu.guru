@@ -2863,26 +2863,66 @@ def event_leader_stats(event_id: int, format: str = Query("standard")):
         ORDER BY total_decks DESC, best_placement ASC NULLS LAST
     """, [event_id, event_id, event_id, event_id])
 
-    result = []
+    # Merge rows with the same leader+base_group (e.g. Vigilance bases from different sets)
+    groups: dict = {}
     for r in combos:
-        mwr = (r['match_wins'] / r['match_games']) if r['match_games'] else None
+        grp_lbl   = r['base_group'] or r['base']
+        combo_key = f"{r['leader']}|||{grp_lbl}"
+        if combo_key not in groups:
+            groups[combo_key] = {
+                'leader':             r['leader'],
+                'base':               r['base'],
+                'base_group':         grp_lbl,
+                'aspect':             r['base_aspect'] or 'none',
+                'total_decks':        0,
+                'top8_count':         0,
+                'day2_count':         0,
+                'literal_top8_count': 0,
+                'wins':               0,
+                'best_placement':     r['best_placement'],
+                'match_wins':         0,
+                'match_games':        0,
+                '_hri_sum':           0,
+                '_hri_count':         0,
+                'placements':         [],
+            }
+        g = groups[combo_key]
+        g['total_decks']        += r['total_decks']
+        g['top8_count']         += r['top8_count']
+        g['day2_count']         += r['day2_count']
+        g['literal_top8_count'] += r['literal_top8_count']
+        g['wins']               += r['wins']
+        g['match_wins']         += r['match_wins']
+        g['match_games']        += r['match_games']
+        if r['best_placement'] is not None:
+            if g['best_placement'] is None or r['best_placement'] < g['best_placement']:
+                g['best_placement'] = r['best_placement']
+        if r['avg_hri_rating'] and r['rated_count']:
+            g['_hri_sum']   += r['avg_hri_rating'] * r['rated_count']
+            g['_hri_count'] += r['rated_count']
+        g['placements'] += r['placements'] or []
+
+    result = []
+    for g in groups.values():
+        avg_hri = round(g['_hri_sum'] / g['_hri_count']) if g['_hri_count'] else None
+        mwr     = (g['match_wins'] / g['match_games']) if g['match_games'] else None
         result.append({
-            'leader':         r['leader'],
-            'base':           r['base'],
-            'base_group':     r['base_group'] or r['base'],
-            'total_decks':    r['total_decks'],
-            'top8_count':         r['top8_count'],
-            'day2_count':         r['day2_count'],
-            'literal_top8_count': r['literal_top8_count'],
-            'wins':               r['wins'],
-            'best_placement': r['best_placement'],
-            'match_wins':     r['match_wins'],
-            'match_games':    r['match_games'],
-            'match_win_rate': mwr,
-            'aspect':         r['base_aspect'] or 'none',
-            'avg_hri_rating': r['avg_hri_rating'],
-            'rated_count':    r['rated_count'],
-            'placements':     r['placements'] or [],
+            'leader':             g['leader'],
+            'base':               g['base'],
+            'base_group':         g['base_group'],
+            'total_decks':        g['total_decks'],
+            'top8_count':         g['top8_count'],
+            'day2_count':         g['day2_count'],
+            'literal_top8_count': g['literal_top8_count'],
+            'wins':               g['wins'],
+            'best_placement':     g['best_placement'],
+            'match_wins':         g['match_wins'],
+            'match_games':        g['match_games'],
+            'match_win_rate':     mwr,
+            'aspect':             g['aspect'],
+            'avg_hri_rating':     avg_hri,
+            'rated_count':        g['_hri_count'],
+            'placements':         sorted(g['placements'], key=lambda x: x.get('placement') or 9999),
         })
     return {
         'event_name':   ev_meta['name']   if ev_meta else None,
