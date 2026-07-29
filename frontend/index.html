@@ -4521,10 +4521,10 @@ function setHomeSort(col) {
 }
 
 // Image cache — persisted to localStorage so art survives page reloads
-const _LS_KEY = 'swu_img_cache_v3';
+const _LS_KEY = 'swu_img_cache_v4';
 // Clean up old cache versions on startup
 try {
-  ['swu_img_cache_v1', 'swu_img_cache_v2', 'swu_art_cache_v1', 'swu_art_cache_v2'].forEach(k => localStorage.removeItem(k));
+  ['swu_img_cache_v1', 'swu_img_cache_v2', 'swu_img_cache_v3', 'swu_art_cache_v1', 'swu_art_cache_v2'].forEach(k => localStorage.removeItem(k));
 } catch {}
 
 const imageCache = (() => {

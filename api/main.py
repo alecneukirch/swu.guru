@@ -1674,11 +1674,14 @@ def warm_leader_image_cache():
     try:
         rows = db.fetchall(
             """SELECT DISTINCT ON (name, subtitle)
-                      name, subtitle, uuid, front_image_url, back_image_url,
-                      aspects, collector_number, set_code
+                      cards.name, cards.subtitle, cards.uuid,
+                      cards.front_image_url, cards.back_image_url,
+                      cards.aspects, cards.collector_number, cards.set_code
                FROM cards
-               WHERE is_leader = true AND variant_type = 'Standard'
-               ORDER BY name, subtitle, set_code DESC"""
+               LEFT JOIN sets ON sets.code = cards.set_code
+               WHERE cards.is_leader = true AND cards.variant_type = 'Standard'
+               ORDER BY cards.name, cards.subtitle,
+                        COALESCE(sets.released_at, '2099-01-01'::date) DESC"""
         )
         for r in rows:
             key = r['name'] + (', ' + r['subtitle'] if r.get('subtitle') else '')
