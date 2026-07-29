@@ -35,12 +35,10 @@ providers:
 entryPoints:
   web:
     address: ":80"
-    http:
-      redirections:
-        entryPoint:
-          to: websecure
-          scheme: https
-          permanent: true
+    forwardedHeaders:
+      trustedIPs:
+        # Local network — NGINX reverse proxy at 192.168.1.50
+        - "192.168.1.0/24"
 
   websecure:
     address: ":443"
@@ -50,6 +48,8 @@ entryPoints:
         options: modern@file
     forwardedHeaders:
       trustedIPs:
+        # Local network — NGINX reverse proxy at 192.168.1.50
+        - "192.168.1.0/24"
         # Cloudflare IP ranges — update from https://www.cloudflare.com/ips/
         - "103.21.244.0/22"
         - "103.22.200.0/22"
