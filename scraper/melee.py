@@ -121,10 +121,10 @@ def post_json(url: str, data: dict) -> dict:
     return resp.json()
 
 
-def _dt_params(columns: list, round_id: int, length: int = 500) -> dict:
+def _dt_params(columns: list, round_id: int, length: int = 500, start: int = 0) -> dict:
     """Build DataTables POST body that melee.gg expects."""
     p = {
-        "draw": "1", "start": "0", "length": str(length),
+        "draw": "1", "start": str(start), "length": str(length),
         "search[value]": "", "search[regex]": "false",
         "order[0][column]": "0", "order[0][dir]": "asc",
         "roundId": str(round_id),
@@ -318,11 +318,21 @@ def melee_tournament_rounds(melee_id: str) -> dict:
 # ── Melee: standings ───────────────────────────────────────────────────────
 
 def melee_round_standings(round_id: int) -> list[dict]:
-    """POST GetRoundStandings → raw row list."""
-    url  = f"{MELEE}/Standing/GetRoundStandings"
-    data = _dt_params(STANDINGS_COLUMNS, round_id, length=2000)
-    resp = post_json(url, data)
-    return resp.get("data", [])
+    """POST GetRoundStandings → full paginated row list."""
+    url     = f"{MELEE}/Standing/GetRoundStandings"
+    page_sz = 500
+    all_rows: list = []
+    start   = 0
+    while True:
+        data = _dt_params(STANDINGS_COLUMNS, round_id, length=page_sz, start=start)
+        resp = post_json(url, data)
+        rows  = resp.get("data", [])
+        total = resp.get("recordsTotal", 0)
+        all_rows.extend(rows)
+        start += len(rows)
+        if len(rows) < page_sz or start >= total:
+            break
+    return all_rows
 
 
 def parse_standing_row(row: dict) -> dict:
@@ -355,12 +365,22 @@ def parse_standing_row(row: dict) -> dict:
 # ── Melee: matches ─────────────────────────────────────────────────────────
 
 def melee_round_matches(round_id: int, include_byes: bool = False) -> list[dict]:
-    """POST GetRoundMatches → parsed match list."""
-    url  = f"{MELEE}/Match/GetRoundMatches/{round_id}"
-    data = _dt_params(MATCHES_COLUMNS, round_id, length=2000)
+    """POST GetRoundMatches → full paginated parsed match list."""
+    url     = f"{MELEE}/Match/GetRoundMatches/{round_id}"
+    page_sz = 500
+    all_raw: list = []
+    start   = 0
     try:
-        resp = post_json(url, data)
-        return _parse_matches(resp.get("data", []), include_byes=include_byes)
+        while True:
+            data = _dt_params(MATCHES_COLUMNS, round_id, length=page_sz, start=start)
+            resp = post_json(url, data)
+            rows  = resp.get("data", [])
+            total = resp.get("recordsTotal", 0)
+            all_raw.extend(rows)
+            start += len(rows)
+            if len(rows) < page_sz or start >= total:
+                break
+        return _parse_matches(all_raw, include_byes=include_byes)
     except Exception as e:
         log.warning(f"    Matches failed for round {round_id}: {e}")
         return []
