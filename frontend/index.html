@@ -4214,7 +4214,8 @@ function metaParam() {
 
 async function loadMetas() {
   try {
-    const d = await api('/api/metas/dropdown?format=' + currentFormat);
+    const metaFmt = currentFormat === 'standard' ? 'premiere' : currentFormat;
+    const d = await api('/api/metas/dropdown?format=' + metaFmt);
     const sel = document.getElementById('meta-select');
     if (!sel) return;
     const opts = d.options || [];
