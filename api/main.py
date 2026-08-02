@@ -2199,6 +2199,7 @@ def leader_weaknesses(
                 FROM {t['matches']} m
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.winner IS NOT NULL
+                  AND m.p1_leader != m.p2_leader
                   AND e.date <= CURRENT_DATE {base_as_p1}
                 UNION ALL
                 SELECT m.p1_standing_id AS standing_id,
@@ -2207,6 +2208,7 @@ def leader_weaknesses(
                 FROM {t['matches']} m
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p2_leader = %s AND m.winner IS NOT NULL
+                  AND m.p1_leader != m.p2_leader
                   AND e.date <= CURRENT_DATE {base_as_p2}
             ),
             totals AS (
@@ -2253,6 +2255,7 @@ def leader_weaknesses(
                 FROM {t['matches']} m
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.winner IS NOT NULL
+                  AND m.p1_leader != m.p2_leader
                   AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
                 UNION ALL
                 SELECT m.p1_standing_id AS standing_id,
@@ -2260,6 +2263,7 @@ def leader_weaknesses(
                 FROM {t['matches']} m
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p2_leader = %s AND m.winner IS NOT NULL
+                  AND m.p1_leader != m.p2_leader
                   AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
             ),
             totals AS (
