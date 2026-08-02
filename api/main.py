@@ -1757,11 +1757,11 @@ def leader_matchups(
     leader:     str,
     meta_id:    Optional[str] = Query(None),
     base_group: Optional[str] = Query(None),
-    min_games:  int            = Query(3),
-    top8_only:  bool           = Query(False),
-    format:     str            = Query("standard"),
-    days:       Optional[int]  = Query(None),
-    decay:      bool           = Query(True),
+    min_matches: int            = Query(3),
+    top8_only:   bool           = Query(False),
+    format:      str            = Query("standard"),
+    days:        Optional[int]  = Query(None),
+    decay:       bool           = Query(True),
 ):
     """
     Win/loss record for a leader against each opponent leader+base combo.
@@ -1900,7 +1900,7 @@ def leader_matchups(
     result = []
     for g in groups.values():
         total = g['wins'] + g['losses']
-        if total >= min_games:
+        if total >= min_matches:
             result.append({
                 **g,
                 'matches': round(g['matches']),
@@ -1920,7 +1920,7 @@ def leader_matchup_cards(
     opponent_bases: str            = Query("", description="Comma-separated opponent base names"),
     base_group:     Optional[str]  = Query(None, description="Comma-separated base names for this leader"),
     meta_id:        Optional[str]  = Query(None),
-    min_games:      int             = Query(3),
+    min_matches:    int             = Query(3),
     top8_only:      bool            = Query(False),
     format:         str             = Query("standard"),
     days:           Optional[int]   = Query(None),
@@ -1978,13 +1978,13 @@ def leader_matchup_cards(
               AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {opp_as_p2} {top8_where}
         ),
         totals AS (
-            SELECT COUNT(*)::INT AS total_games,
+            SELECT COUNT(*)::INT AS total_matches,
                    SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT AS total_wins
             FROM matchup_games
         ),
         card_stats AS (
             SELECT dc.card_name,
-                   COUNT(*)::INT AS game_count,
+                   COUNT(*)::INT AS match_count,
                    SUM(CASE WHEN mg.won THEN 1 ELSE 0 END)::INT AS card_wins
             FROM matchup_games mg
             JOIN {t['decklist_cards']} dc ON dc.standing_id = mg.standing_id
@@ -1998,28 +1998,28 @@ def leader_matchup_cards(
             HAVING COUNT(*) >= %s
         )
         SELECT cs.card_name,
-               cs.game_count,
+               cs.match_count,
                cs.card_wins AS wins,
-               ROUND(cs.card_wins::numeric / NULLIF(cs.game_count, 0), 4) AS win_rate,
-               t.total_games,
+               ROUND(cs.card_wins::numeric / NULLIF(cs.match_count, 0), 4) AS win_rate,
+               t.total_matches,
                t.total_wins,
-               ROUND(t.total_wins::numeric / NULLIF(t.total_games, 0), 4) AS baseline_win_rate,
+               ROUND(t.total_wins::numeric / NULLIF(t.total_matches, 0), 4) AS baseline_win_rate,
                ROUND(
-                   cs.card_wins::numeric / NULLIF(cs.game_count, 0)
-                   - t.total_wins::numeric / NULLIF(t.total_games, 0),
+                   cs.card_wins::numeric / NULLIF(cs.match_count, 0)
+                   - t.total_wins::numeric / NULLIF(t.total_matches, 0),
                4) AS delta
         FROM card_stats cs, totals t
         ORDER BY delta DESC
-    """, branch_params + branch_params + [min_games])
+    """, branch_params + branch_params + [min_matches])
 
     return rows
 
 
 @app.get("/api/matchups")
 def matchup_matrix(
-    meta_id:   Optional[str] = Query(None),
-    min_games: int            = Query(5),
-    days:      Optional[int]  = Query(None),
+    meta_id:     Optional[str] = Query(None),
+    min_matches: int            = Query(5),
+    days:        Optional[int]  = Query(None),
 ):
     """
     Full symmetric matchup matrix: every leader vs every leader.
@@ -2055,7 +2055,7 @@ def matchup_matrix(
             GROUP BY leader, opponent
             HAVING SUM(matches) >= %s
             ORDER BY leader, SUM(matches) DESC
-        """, date_params + [min_games])
+        """, date_params + [min_matches])
     else:
         rows = db.fetchall("""
             WITH sym AS (
@@ -2072,7 +2072,7 @@ def matchup_matrix(
             GROUP BY leader, opponent
             HAVING SUM(matches) >= %s
             ORDER BY leader, SUM(matches) DESC
-        """, [min_games])
+        """, [min_matches])
 
     return rows
 
@@ -2171,9 +2171,9 @@ def leader_weaknesses(
     base_group: Optional[str] = Query(None),
     format:     str           = Query("standard"),
     meta_id:    Optional[str] = Query(None),
-    min_games:  int           = Query(20),
-    limit:      int           = Query(60),
-    sort:       str           = Query("count"),  # "count" | "delta"
+    min_matches: int           = Query(20),
+    limit:       int           = Query(60),
+    sort:        str           = Query("count"),  # "count" | "delta"
     days:       Optional[int] = Query(None),
     decay:      bool          = Query(True),
 ):
@@ -2212,14 +2212,14 @@ def leader_weaknesses(
                   AND e.date <= CURRENT_DATE {base_as_p2}
             ),
             totals AS (
-                SELECT SUM(weight) AS total_games,
+                SELECT SUM(weight) AS total_matches,
                        SUM(weight) FILTER (WHERE won) AS total_wins
                 FROM target_matches
             ),
             card_stats AS (
                 SELECT dc.card_name,
-                       COUNT(*)          AS raw_game_count,
-                       SUM(tm.weight)    AS game_count,
+                       COUNT(*)          AS raw_match_count,
+                       SUM(tm.weight)    AS match_count,
                        SUM(tm.weight) FILTER (WHERE tm.won) AS wins
                 FROM target_matches tm
                 JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
@@ -2233,20 +2233,20 @@ def leader_weaknesses(
                 HAVING COUNT(*) >= %s
             )
             SELECT cs.card_name,
-                   ROUND(cs.game_count::numeric, 1) AS game_count,
-                   ROUND(cs.wins::numeric, 1)       AS wins,
-                   ROUND((cs.wins / NULLIF(cs.game_count, 0))::numeric, 4) AS win_rate,
-                   ROUND(t.total_games::numeric, 1) AS total_games,
-                   ROUND(t.total_wins::numeric, 1)  AS total_wins,
-                   ROUND((t.total_wins / NULLIF(t.total_games, 0))::numeric, 4) AS baseline_win_rate,
+                   ROUND(cs.match_count::numeric, 1) AS match_count,
+                   ROUND(cs.wins::numeric, 1)        AS wins,
+                   ROUND((cs.wins / NULLIF(cs.match_count, 0))::numeric, 4) AS win_rate,
+                   ROUND(t.total_matches::numeric, 1) AS total_matches,
+                   ROUND(t.total_wins::numeric, 1)    AS total_wins,
+                   ROUND((t.total_wins / NULLIF(t.total_matches, 0))::numeric, 4) AS baseline_win_rate,
                    ROUND(
-                       (cs.wins / NULLIF(cs.game_count, 0)
-                       - t.total_wins / NULLIF(t.total_games, 0))::numeric,
+                       (cs.wins / NULLIF(cs.match_count, 0)
+                       - t.total_wins / NULLIF(t.total_matches, 0))::numeric,
                    4) AS delta
             FROM card_stats cs, totals t
-            ORDER BY {'cs.game_count DESC' if sort == 'count' else 'delta DESC'}, cs.game_count DESC
+            ORDER BY {'cs.match_count DESC' if sort == 'count' else 'delta DESC'}, cs.match_count DESC
             LIMIT %s
-        """, [leader] + base_param + [leader] + base_param + [min_games, limit])
+        """, [leader] + base_param + [leader] + base_param + [min_matches, limit])
     else:
         rows = db.fetchall(f"""
             WITH target_matches AS (
@@ -2267,13 +2267,13 @@ def leader_weaknesses(
                   AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
             ),
             totals AS (
-                SELECT COUNT(*)::INT AS total_games,
+                SELECT COUNT(*)::INT AS total_matches,
                        SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT AS total_wins
                 FROM target_matches
             ),
             card_stats AS (
                 SELECT dc.card_name,
-                       COUNT(*)::INT AS game_count,
+                       COUNT(*)::INT AS match_count,
                        SUM(CASE WHEN tm.won THEN 1 ELSE 0 END)::INT AS wins
                 FROM target_matches tm
                 JOIN {t['decklist_cards']} dc ON dc.standing_id = tm.standing_id
@@ -2287,22 +2287,22 @@ def leader_weaknesses(
                 HAVING COUNT(*) >= %s
             )
             SELECT cs.card_name,
-                   cs.game_count,
+                   cs.match_count,
                    cs.wins,
-                   ROUND(cs.wins::numeric / NULLIF(cs.game_count, 0), 4) AS win_rate,
-                   t.total_games,
+                   ROUND(cs.wins::numeric / NULLIF(cs.match_count, 0), 4) AS win_rate,
+                   t.total_matches,
                    t.total_wins,
-                   ROUND(t.total_wins::numeric / NULLIF(t.total_games, 0), 4) AS baseline_win_rate,
+                   ROUND(t.total_wins::numeric / NULLIF(t.total_matches, 0), 4) AS baseline_win_rate,
                    ROUND(
-                       cs.wins::numeric / NULLIF(cs.game_count, 0)
-                       - t.total_wins::numeric / NULLIF(t.total_games, 0),
+                       cs.wins::numeric / NULLIF(cs.match_count, 0)
+                       - t.total_wins::numeric / NULLIF(t.total_matches, 0),
                    4) AS delta
             FROM card_stats cs, totals t
-            ORDER BY {'game_count DESC' if sort == 'count' else 'win_rate ASC'}, game_count DESC
+            ORDER BY {'match_count DESC' if sort == 'count' else 'win_rate ASC'}, match_count DESC
             LIMIT %s
         """, [leader] + date_params + base_param +
              [leader] + date_params + base_param +
-             [min_games, limit])
+             [min_matches, limit])
 
     return rows
 
@@ -2375,7 +2375,7 @@ def leader_elo_breakdown(
 def matchup_matrix_by_base(
     meta_id:   Optional[str] = Query(None),
     min_decks: int            = Query(1,   description="Min decks for a combo to appear"),
-    min_games: int            = Query(1,   description="Min H2H games for a cell to show"),
+    min_matches: int           = Query(1,   description="Min H2H matches for a cell to show"),
     top_n:     int            = Query(40,  description="Max combos to include"),
     top8_only: bool           = Query(False, description="Only count matches where at least one player made top 8"),
     min_elo:     int            = Query(0, description="Min HRI rating for the row player (0 = no filter)"),
@@ -2486,7 +2486,7 @@ def matchup_matrix_by_base(
     # Accumulate W/L per ordered combo pair.
     # When min_elo is set, only record a direction if the row player meets the threshold.
     from collections import defaultdict
-    pair_stats: dict = defaultdict(lambda: {"wins": 0, "games": 0})
+    pair_stats: dict = defaultdict(lambda: {"wins": 0, "matches": 0})
 
     for m in matches:
         p1_key = base_to_combo.get(f"{m['p1_leader']}||{m['p1_base']}")
@@ -2496,11 +2496,11 @@ def matchup_matrix_by_base(
         p1_elo = m.get("p1_elo") or 0
         p2_elo = m.get("p2_elo") or 0
         if (not min_elo or p1_elo >= min_elo) and (not opp_min_elo or p2_elo >= opp_min_elo):
-            pair_stats[(p1_key, p2_key)]["games"] += 1
+            pair_stats[(p1_key, p2_key)]["matches"] += 1
             if m["winner"] == "p1":
                 pair_stats[(p1_key, p2_key)]["wins"] += 1
         if (not min_elo or p2_elo >= min_elo) and (not opp_min_elo or p1_elo >= opp_min_elo):
-            pair_stats[(p2_key, p1_key)]["games"] += 1
+            pair_stats[(p2_key, p1_key)]["matches"] += 1
             if m["winner"] == "p2":
                 pair_stats[(p2_key, p1_key)]["wins"] += 1
 
@@ -2516,14 +2516,14 @@ def matchup_matrix_by_base(
             if row_key == col_key:
                 row_cells.append(None)  # diagonal
                 continue
-            stat = pair_stats.get((row_key, col_key), {"wins": 0, "games": 0})
-            if stat["games"] < min_games:
+            stat = pair_stats.get((row_key, col_key), {"wins": 0, "matches": 0})
+            if stat["matches"] < min_matches:
                 row_cells.append(None)
             else:
                 row_cells.append({
-                    "wins":  stat["wins"],
-                    "games": stat["games"],
-                    "wr":    round(stat["wins"] / stat["games"], 4),
+                    "wins":    stat["wins"],
+                    "matches": stat["matches"],
+                    "wr":      round(stat["wins"] / stat["matches"], 4),
                 })
         matrix.append(row_cells)
 
@@ -2532,18 +2532,18 @@ def matchup_matrix_by_base(
     overall = []
     for ri, row_c in enumerate(combos):
         row_key = f"{row_c['leader']}|||{row_c['base_key']}"
-        total_wins = total_games = 0
+        total_wins = total_matches = 0
         for col_c in combos:
             col_key = f"{col_c['leader']}|||{col_c['base_key']}"
             if row_key == col_key:
                 continue
-            stat = pair_stats.get((row_key, col_key), {"wins": 0, "games": 0})
-            total_wins  += stat["wins"]
-            total_games += stat["games"]
+            stat = pair_stats.get((row_key, col_key), {"wins": 0, "matches": 0})
+            total_wins    += stat["wins"]
+            total_matches += stat["matches"]
         overall.append({
-            "wins":  total_wins,
-            "games": total_games,
-            "wr":    round(total_wins / total_games, 4) if total_games >= min_games else None,
+            "wins":    total_wins,
+            "matches": total_matches,
+            "wr":      round(total_wins / total_matches, 4) if total_matches >= min_matches else None,
         })
 
     return {
@@ -2561,12 +2561,12 @@ def matchup_matrix_by_base(
 
 @app.get("/api/meta-call")
 def meta_call(
-    meta_id:   Optional[str] = Query(None),
-    min_decks: int            = Query(5),
-    min_games: int            = Query(5),
-    top_n:     int            = Query(30),
-    format:    str            = Query("standard"),
-    days:      Optional[int]  = Query(None),
+    meta_id:     Optional[str] = Query(None),
+    min_decks:   int            = Query(5),
+    min_matches: int            = Query(5),
+    top_n:       int            = Query(30),
+    format:      str            = Query("standard"),
+    days:        Optional[int]  = Query(None),
 ):
     """
     Ranks leader+base combos by field EV: expected win rate against the current
@@ -2652,14 +2652,14 @@ def meta_call(
             base_to_combo[f"{c['leader']}||{b}"] = f"{c['leader']}|||{c['base_key']}"
 
     from collections import defaultdict
-    pair_stats: dict = defaultdict(lambda: {"wins": 0, "games": 0})
+    pair_stats: dict = defaultdict(lambda: {"wins": 0, "matches": 0})
     for m in matches:
         p1_key = base_to_combo.get(f"{m['p1_leader']}||{m['p1_base']}")
         p2_key = base_to_combo.get(f"{m['p2_leader']}||{m['p2_base']}")
         if not p1_key or not p2_key or p1_key == p2_key:
             continue
-        pair_stats[(p1_key, p2_key)]["games"] += 1
-        pair_stats[(p2_key, p1_key)]["games"] += 1
+        pair_stats[(p1_key, p2_key)]["matches"] += 1
+        pair_stats[(p2_key, p1_key)]["matches"] += 1
         if m["winner"] == "p1":
             pair_stats[(p1_key, p2_key)]["wins"] += 1
         else:
@@ -2679,10 +2679,10 @@ def meta_call(
             if opp_key == deck_key:
                 continue
             opp_share = opp["decks"] / total_decks
-            stat      = pair_stats.get((deck_key, opp_key), {"wins": 0, "games": 0})
-            if stat["games"] < min_games:
+            stat      = pair_stats.get((deck_key, opp_key), {"wins": 0, "matches": 0})
+            if stat["matches"] < min_matches:
                 continue
-            wr = stat["wins"] / stat["games"]
+            wr = stat["wins"] / stat["matches"]
             ev_num += opp_share * wr
             ev_den += opp_share
             matchups.append({
@@ -2691,7 +2691,7 @@ def meta_call(
                 "opponent_base_key":   opp["base_key"],
                 "opponent_share":      round(opp_share, 4),
                 "win_rate":            round(wr, 4),
-                "games":               stat["games"],
+                "matches":             stat["matches"],
             })
 
         field_ev = round(ev_num / ev_den, 4) if ev_den > 0 else None
@@ -3881,7 +3881,7 @@ def import_sealed_league_melee(body: dict):
 # ── Karabast (swustats.net matchup data) ─────────────────────────────────────
 
 @app.get("/api/karabast/leaders")
-def karabast_leaders(min_games: int = Query(200)):
+def karabast_leaders(min_matches: int = Query(200)):
     rows = db.fetchall("""
         SELECT leader_id, base_id, leader_name, base_name,
                SUM(num_wins)::int  AS total_wins,
@@ -3902,7 +3902,7 @@ def karabast_leaders(min_games: int = Query(200)):
         GROUP BY leader_id, base_id, leader_name, base_name
         HAVING SUM(num_plays) >= %s
         ORDER BY SUM(num_wins)::float / SUM(num_plays) DESC
-    """, (min_games,))
+    """, (min_matches,))
     if not rows:
         return []
     total_wins  = sum(r["total_wins"]  for r in rows)

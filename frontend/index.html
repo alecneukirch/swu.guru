@@ -3752,8 +3752,8 @@ select.sl-input { cursor: pointer; }
         <button class="btn"        id="wk-sort-delta" onclick="setWeaknessSort('delta')">Win %Δ</button>
       </div>
       <div class="sep"></div>
-      <span class="ctrl-label">Min games</span>
-      <input type="number" id="wk-min-games" value="20" min="1" style="width:64px" oninput="loadLeaderWeaknesses()">
+      <span class="ctrl-label">Min matches</span>
+      <input type="number" id="wk-min-matches" value="20" min="1" style="width:64px" oninput="loadLeaderWeaknesses()">
     </div>
     <div class="card-grid" id="leader-weaknesses-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
@@ -4136,11 +4136,11 @@ select.sl-input { cursor: pointer; }
   </div>
   <div class="meta-banner">
     <div class="mb-stat"><div class="mb-val" id="kb-leaders">—</div><div class="mb-label">Leaders</div></div>
-    <div class="mb-stat"><div class="mb-val" id="kb-games">—</div><div class="mb-label">Games</div></div>
+    <div class="mb-stat"><div class="mb-val" id="kb-matches">—</div><div class="mb-label">Matches</div></div>
   </div>
   <div class="controls">
-    <span class="ctrl-label">Min Games</span>
-    <input type="number" id="kb-min-games" value="200" min="1" style="width:72px" oninput="loadKarabast()">
+    <span class="ctrl-label">Min Matches</span>
+    <input type="number" id="kb-min-matches" value="200" min="1" style="width:72px" oninput="loadKarabast()">
   </div>
   <div id="kb-grid"><div class="loading" style="padding:24px">loading…</div></div>
   <div id="kb-detail" style="display:none">
@@ -5175,7 +5175,7 @@ function filterMatchups() {
   <div class="matchup-info">
     <div class="matchup-name">${shortName(r.opponent)}</div>
     <div class="matchup-base">${r.opponent_base_group || ''}</div>
-    <div class="matchup-games">${r.wins}W – ${r.losses}L (${r.matches} games)</div>
+    <div class="matchup-games">${r.wins}W – ${r.losses}L (${r.matches} matches)</div>
   </div>
   <div class="matchup-winrate" style="color:${color}">${pct}%</div>
   <div class="matchup-bar" style="width:${pct}%;background:${color};opacity:0.6"></div>
@@ -5212,7 +5212,7 @@ async function openMatchupDetail(matchup) {
   const pct   = Math.round(wr * 100);
   const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--gold)' : 'var(--red2)';
   document.getElementById('mu-detail-title').textContent = shortName(matchup.opponent) + ' — ' + (matchup.opponent_base_group || '');
-  document.getElementById('mu-detail-sub').textContent = matchup.wins + 'W – ' + matchup.losses + 'L (' + matchup.matches + ' games)';
+  document.getElementById('mu-detail-sub').textContent = matchup.wins + 'W – ' + matchup.losses + 'L (' + matchup.matches + ' matches)';
   document.getElementById('mu-detail-wr').textContent = pct + '%';
   document.getElementById('mu-detail-wr').style.color = color;
   document.getElementById('mu-cards-grid').innerHTML = '<div class="loading" style="grid-column:1/-1;padding:24px">loading…</div>';
@@ -5235,9 +5235,9 @@ async function openMatchupDetail(matchup) {
 function renderMatchupCards(data) {
   const grid = document.getElementById('mu-cards-grid');
   const THRESHOLD = 0.09;
-  const byGames = (a, b) => b.game_count - a.game_count;
-  const better = data.filter(r => (r.delta ?? 0) >=  THRESHOLD).sort(byGames);
-  const worse  = data.filter(r => (r.delta ?? 0) <= -THRESHOLD).sort(byGames);
+  const byMatches = (a, b) => b.match_count - a.match_count;
+  const better = data.filter(r => (r.delta ?? 0) >=  THRESHOLD).sort(byMatches);
+  const worse  = data.filter(r => (r.delta ?? 0) <= -THRESHOLD).sort(byMatches);
 
   if (!better.length && !worse.length) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:24px">// no cards with ≥10% win rate impact in this matchup</div>';
@@ -5261,7 +5261,7 @@ function renderMatchupCards(data) {
   <div class="ct-art" id="muc-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
-    <div class="ct-badge">${r.game_count}<span class="ct-badge-label">g</span></div>
+    <div class="ct-badge">${r.match_count}<span class="ct-badge-label">m</span></div>
   </div>
   <div class="ct-bottom">
     <div class="ct-name"${mucSub ? ` data-tooltip="${mucSub}"` : ''}>${mucName}</div>
@@ -5306,9 +5306,9 @@ async function loadLeaderWeaknesses() {
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
-  const minGames = parseInt(document.getElementById('wk-min-games').value) || 20;
+  const minMatches = parseInt(document.getElementById('wk-min-matches').value) || 20;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
-    + '/weaknesses?min_games=' + minGames + '&sort=' + weaknessSort + '&format=' + currentFormat + metaParam() + '&limit=60';
+    + '/weaknesses?min_matches=' + minMatches + '&sort=' + weaknessSort + '&format=' + currentFormat + metaParam() + '&limit=60';
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
   try {
     weaknessesData = await api(url);
@@ -5321,7 +5321,7 @@ async function loadLeaderWeaknesses() {
 function renderWeaknesses() {
   const grid = document.getElementById('leader-weaknesses-grid');
   if (!weaknessesData.length) {
-    grid.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no weakness data — not enough games recorded against this leader</div>';
+    grid.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no weakness data — not enough matches recorded against this leader</div>';
     return;
   }
 
@@ -5344,7 +5344,7 @@ function renderWeaknesses() {
     const i      = idx++;
     const wr     = r.win_rate ?? 0;
     const pct    = Math.round(wr * 100);
-    const losses = Math.round(r.game_count - r.wins);
+    const losses = Math.round(r.match_count - r.wins);
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const { name: wkName, subtitle: wkSub } = cardNameParts(r.card_name);
     const t      = (wr - minWr) / wrSpan;
@@ -5359,7 +5359,7 @@ function renderWeaknesses() {
   <div class="ct-art" id="wk-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
-    <div class="ct-badge">${Math.round(r.game_count)}<span class="ct-badge-label">g</span></div>
+    <div class="ct-badge">${Math.round(r.match_count)}<span class="ct-badge-label">m</span></div>
     <div class="ct-badge">${pct}%</div>
   </div>
   <div class="ct-bottom">
@@ -6122,7 +6122,7 @@ async function loadMatrix() {
   const topN = Math.max(matrixRows, matrixCols);
 
   const minDecks = currentFormat === 'eternal' ? 1 : 5;
-  let url = `/api/matrix?min_decks=${minDecks}&min_games=1&top_n=${topN}&format=${currentFormat}` + metaParam();
+  let url = `/api/matrix?min_decks=${minDecks}&min_matches=1&top_n=${topN}&format=${currentFormat}` + metaParam();
   if (matrixMinElo > 0)    url += `&min_elo=${matrixMinElo}`;
   if (matrixOppMinElo > 0) url += `&opp_min_elo=${matrixOppMinElo}`;
 
@@ -6184,7 +6184,7 @@ async function loadMatrix() {
         const op  = Math.round(ov.wr * 100);
         const cls = op >= 55 ? 'mx-good' : op >= 45 ? 'mx-mid' : 'mx-bad';
         ovCell = `<td class="mx-cell ${cls}" style="font-size:15px;font-weight:800;border-right:1px solid var(--border2)"
-          title="Overall: ${op}% across ${ov.games} games">${op}%</td>`;
+          title="Overall: ${op}% across ${ov.matches} matches">${op}%</td>`;
       }
 
       // Per-opponent cells
@@ -6197,7 +6197,7 @@ async function loadMatrix() {
         return `<td class="mx-cell ${cls}" data-ri="${ri}" data-ci="${ci}"
           data-row-leader="${esc(rowC.leader)}" data-row-base="${esc(rowC.base_group)}"
           data-col-leader="${esc(colC.leader)}"
-          title="${esc(rowC.leader)}/${esc(rowC.base_group)} vs ${esc(colC.leader)}/${esc(colC.base_group)}: ${pct}% (${cell.games}g)"
+          title="${esc(rowC.leader)}/${esc(rowC.base_group)} vs ${esc(colC.leader)}/${esc(colC.base_group)}: ${pct}% (${cell.matches}m)"
         >${pct}%</td>`;
       }).join('');
 
@@ -7552,7 +7552,7 @@ function renderGlobalCards(rows) {
 
 let _picksData        = [];
 let _picksSelectedKey = null;
-let _picksMuSort      = 'games';
+let _picksMuSort      = 'matches';
 let _picksMuDir       = -1;
 
 function togglePickRow(key) {
@@ -7572,7 +7572,7 @@ async function loadPicks() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   const minDecks  = currentFormat === 'eternal' ? 3 : 10;
-  let url = `/api/meta-call?min_decks=${minDecks}&min_games=2&top_n=30&format=${currentFormat}` + metaParam();
+  let url = `/api/meta-call?min_decks=${minDecks}&min_matches=2&top_n=30&format=${currentFormat}` + metaParam();
   try {
     const d = await api(url);
     _picksData = d.decks || [];
@@ -7612,8 +7612,8 @@ function renderPicks() {
     const leaderAsp = deck.leader_aspect || 'none';
     const baseAsp   = deck.base_aspect   || 'none';
 
-    const positives = deck.matchups.filter(m => m.win_rate > 0.5).sort((a, b) => b.games - a.games);
-    const negatives = deck.matchups.filter(m => m.win_rate <= 0.5).sort((a, b) => b.games - a.games);
+    const positives = deck.matchups.filter(m => m.win_rate > 0.5).sort((a, b) => b.matches - a.matches);
+    const negatives = deck.matchups.filter(m => m.win_rate <= 0.5).sort((a, b) => b.matches - a.matches);
     const muChipArr = [];
     if (positives[0]) muChipArr.push(`<span class="pick-mu-chip good">${shortName(positives[0].opponent)} ${fmtEV(positives[0].win_rate)}</span>`);
     if (negatives[0]) muChipArr.push(`<span class="pick-mu-chip bad">${shortName(negatives[0].opponent)} ${fmtEV(negatives[0].win_rate)}</span>`);
@@ -7673,7 +7673,7 @@ function renderPickDetail() {
       <td style="color:var(--text3);font-size:12px">${m.opponent_base_group}</td>
       <td style="color:${col};font-weight:600">${fmtEV(wr)}</td>
       <td style="color:var(--text3)">${fmtShare(m.opponent_share)}</td>
-      <td style="color:var(--text3)">${m.games}</td>
+      <td style="color:var(--text3)">${m.matches}</td>
     </tr>`;
   }
 
@@ -7698,7 +7698,7 @@ function renderPickDetail() {
         <th>Base</th>
         <th style="${thStyle}" onclick="setPicksMuSort('win_rate')">Win Rate ${sortArrow('win_rate')}</th>
         <th style="${thStyle}" onclick="setPicksMuSort('opponent_share')">Meta % ${sortArrow('opponent_share')}</th>
-        <th style="${thStyle}" onclick="setPicksMuSort('games')">Games ${sortArrow('games')}</th>
+        <th style="${thStyle}" onclick="setPicksMuSort('matches')">Matches ${sortArrow('matches')}</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -7712,12 +7712,12 @@ async function loadKarabast() {
   grid.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   closeKbDetail();
   try {
-    const minGames = parseInt(document.getElementById('kb-min-games')?.value) || 200;
-    kbData = await api(`/api/karabast/leaders?min_games=${minGames}`);
+    const minMatches = parseInt(document.getElementById('kb-min-matches')?.value) || 200;
+    kbData = await api(`/api/karabast/leaders?min_matches=${minMatches}`);
     renderKbGrid();
-    const totalGames = kbData.reduce((s, r) => s + r.total_plays, 0);
-    document.getElementById('kb-leaders').textContent = kbData.length;
-    document.getElementById('kb-games').textContent   = totalGames.toLocaleString();
+    const totalMatches = kbData.reduce((s, r) => s + r.total_plays, 0);
+    document.getElementById('kb-leaders').textContent  = kbData.length;
+    document.getElementById('kb-matches').textContent  = totalMatches.toLocaleString();
   } catch(e) {
     grid.innerHTML = '<div class="empty-state">// failed to load</div>';
   }
@@ -7729,7 +7729,7 @@ function renderKbGrid() {
 
   grid.classList.add('tier-grouped');
   const sorted   = [...kbData].sort((a, b) => b.mwr - a.mwr);
-  const maxGames = Math.max(...sorted.map(r => r.total_plays), 1);
+  const maxMatches = Math.max(...sorted.map(r => r.total_plays), 1);
 
   const TIER_ORDER   = ['S','A','B','C','D','F'];
   const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
@@ -7752,7 +7752,7 @@ function renderKbGrid() {
     html += `<div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
-      html += mkKbCard(r, i, maxGames);
+      html += mkKbCard(r, i, maxMatches);
       allCards.push({ r, i });
     });
     html += `</div>`;
@@ -7783,10 +7783,10 @@ function renderKbGrid() {
   });
 }
 
-function mkKbCard(r, i, maxGames) {
+function mkKbCard(r, i, maxMatches) {
   const mwr      = Math.round(r.mwr * 100);
   const mwrColor = r.mwr >= 0.53 ? 'var(--green)' : r.mwr >= 0.47 ? 'var(--text2)' : 'var(--red, #e74c3c)';
-  const barW     = Math.round((r.total_plays / maxGames) * 100);
+  const barW     = Math.round((r.total_plays / maxMatches) * 100);
   const kbId     = (r.leader_id + '::' + r.base_id).replace(/"/g,'&quot;');
   return `<div class="leader-card asp-Unknown" data-kb-id="${kbId}">
   <div class="lc-img-wrap" id="kbimg-wrap-${i}"></div>
@@ -7796,7 +7796,7 @@ function mkKbCard(r, i, maxGames) {
     <div class="lc-base">${r.base_name || '—'}</div>
     <div class="lc-stats">
       <div class="lc-stat"><div class="lc-stat-label">MWR</div><div class="lc-stat-val" style="color:${mwrColor}">${mwr}%</div></div>
-      <div class="lc-stat"><div class="lc-stat-label">Games</div><div class="lc-stat-val">${r.total_plays.toLocaleString()}</div></div>
+      <div class="lc-stat"><div class="lc-stat-label">Matches</div><div class="lc-stat-val">${r.total_plays.toLocaleString()}</div></div>
     </div>
     <div class="lc-bar"><div class="lc-bar-fill" style="width:${barW}%"></div></div>
   </div>
@@ -7815,7 +7815,7 @@ async function openKbDetail(kbId) {
   document.getElementById('kb-detail-title').textContent = `${shortName(r.leader_name)} · ${r.base_name || r.base_id}`;
   const mwr      = Math.round(r.mwr * 100);
   const mwrColor = r.mwr >= 0.53 ? 'var(--green)' : r.mwr >= 0.47 ? 'var(--text2)' : 'var(--red, #e74c3c)';
-  document.getElementById('kb-detail-mwr').innerHTML = `<span style="color:${mwrColor}">${mwr}%</span> <span style="color:var(--text3);font-size:13px">${r.total_plays.toLocaleString()} games</span>`;
+  document.getElementById('kb-detail-mwr').innerHTML = `<span style="color:${mwrColor}">${mwr}%</span> <span style="color:var(--text3);font-size:13px">${r.total_plays.toLocaleString()} matches</span>`;
   document.getElementById('kb-matchups-list').innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   detail.style.display = '';
   detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -7829,7 +7829,7 @@ async function openKbDetail(kbId) {
       const mwrColor = mwr == null ? 'var(--text3)' : mwr >= 53 ? 'var(--green)' : mwr >= 47 ? 'var(--text2)' : 'var(--red, #e74c3c)';
       return `<div class="kb-mu-row">
         <div><div class="kb-mu-name">${shortName(m.opponent_leader_name || m.opponent_leader_id)}</div><div class="kb-mu-base">${m.opponent_base_id || ''}</div></div>
-        <div class="kb-mu-games">${m.num_plays.toLocaleString()} games</div>
+        <div class="kb-mu-games">${m.num_plays.toLocaleString()} matches</div>
         <div class="kb-mu-mwr" style="color:${mwrColor}">${mwr != null ? mwr + '%' : '—'}</div>
       </div>`;
     }).join('')}</div>`;
