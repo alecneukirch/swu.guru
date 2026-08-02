@@ -5330,10 +5330,10 @@ function renderWeaknesses() {
   const wrSpan = maxWr - minWr || 1;
   const n      = weaknessesData.length;
 
-  // Rank cards by win_rate ascending (rank 0 = worst) for even quintile bucketing
+  // Rank cards by win_rate descending (rank 0 = highest opp WR = most dangerous) for quintile bucketing
   const rankByIdx = new Array(n);
   [...weaknessesData.map((r, i) => ({ wr: r.win_rate ?? 0, i }))]
-    .sort((a, b) => a.wr - b.wr)
+    .sort((a, b) => b.wr - a.wr)
     .forEach(({ i }, rank) => { rankByIdx[i] = rank; });
 
   grid.innerHTML = weaknessesData.map(r => {
@@ -5344,9 +5344,9 @@ function renderWeaknesses() {
     const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const { name: wkName, subtitle: wkSub } = cardNameParts(r.card_name);
     const t      = (wr - minWr) / wrSpan;
-    const rating = 5 - Math.floor(rankByIdx[i] * 5 / n);  // 5 (worst 20%) – 1 (best 20%)
-    const a      = ((1 - t) * 0.85).toFixed(2);
-    const glow   = ((1 - t) * 0.45).toFixed(2);
+    const rating = 5 - Math.floor(rankByIdx[i] * 5 / n);  // 5 (most dangerous) – 1 (least dangerous)
+    const a      = (t * 0.85).toFixed(2);
+    const glow   = (t * 0.45).toFixed(2);
     const style  = `border-color:rgba(231,76,60,${a});box-shadow:0 0 14px rgba(231,76,60,${glow})`;
     const pips   = Array.from({length:5}, (_, k) =>
       `<span class="wk-pip${k < rating ? ' on' : ''}"></span>`).join('');
