@@ -3764,16 +3764,10 @@ select.sl-input { cursor: pointer; }
   <!-- Mirror tab -->
   <div id="lp-panel-mirror" style="display:none">
     <div class="controls" style="padding-top:14px">
-      <div class="sort-btn-wrap">
-        <span class="ctrl-label">Sort</span>
-        <button class="btn active" id="mr-sort-count" onclick="setMirrorSort('count')">Count</button>
-        <button class="btn"        id="mr-sort-delta" onclick="setMirrorSort('delta')">Win %Δ</button>
-      </div>
-      <div class="sep"></div>
       <span class="ctrl-label">Min matches</span>
-      <input type="number" id="mr-min-matches" value="10" min="1" style="width:64px" oninput="loadLeaderMirror()">
+      <input type="number" id="mr-min-matches" value="5" min="1" style="width:64px" oninput="loadLeaderMirror()">
     </div>
-    <div class="card-grid" id="leader-mirror-grid">
+    <div class="mu-cards-grid" id="leader-mirror-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
     </div>
   </div>
@@ -4444,9 +4438,6 @@ function openLeader(name, base = null, baseAspect = null, baseGroup = null) {
   document.getElementById('wk-sort-count')?.classList.add('active');
   document.getElementById('wk-sort-delta')?.classList.remove('active');
   mirrorData   = [];
-  mirrorSort   = 'count';
-  document.getElementById('mr-sort-count')?.classList.add('active');
-  document.getElementById('mr-sort-delta')?.classList.remove('active');
   spiceFilter  = false;
   document.getElementById('btn-spice')?.classList.remove('active');
   leaderTab    = 'cards';
@@ -5407,23 +5398,15 @@ function renderWeaknesses() {
 // ══ MIRROR BREAKERS ══════════════════════════════════════════════════════════
 
 let mirrorData = [];
-let mirrorSort = 'count';
-
-function setMirrorSort(s) {
-  mirrorSort = s;
-  document.getElementById('mr-sort-count').classList.toggle('active', s === 'count');
-  document.getElementById('mr-sort-delta').classList.toggle('active', s === 'delta');
-  loadLeaderMirror();
-}
 
 async function loadLeaderMirror() {
   const grid = document.getElementById('leader-mirror-grid');
   if (!currentLeader) return;
   grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
 
-  const minMatches = parseInt(document.getElementById('mr-min-matches').value) || 10;
+  const minMatches = parseInt(document.getElementById('mr-min-matches').value) || 5;
   let url = '/api/leader/' + encodeURIComponent(currentLeader)
-    + '/mirror-breakers?min_matches=' + minMatches + '&sort=' + mirrorSort + '&format=' + currentFormat + metaParam() + '&limit=60';
+    + '/mirror-breakers?min_matches=' + minMatches + '&sort=delta&format=' + currentFormat + metaParam() + '&limit=500';
   if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
   try {
     mirrorData = await api(url);
@@ -5435,57 +5418,52 @@ async function loadLeaderMirror() {
 
 function renderMirror() {
   const grid = document.getElementById('leader-mirror-grid');
-  if (!mirrorData.length) {
-    grid.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no mirror data — not enough mirror matches recorded for this leader</div>';
+  const THRESHOLD = 0.05;
+  const byMatches = (a, b) => b.match_count - a.match_count;
+  const better = mirrorData.filter(r => (r.delta ?? 0) >=  THRESHOLD).sort(byMatches).slice(0, 30);
+  const worse  = mirrorData.filter(r => (r.delta ?? 0) <= -THRESHOLD).sort(byMatches).slice(0, 30);
+
+  if (!better.length && !worse.length) {
+    grid.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no cards with ≥5% mirror win rate impact — not enough mirror matches recorded</div>';
     return;
   }
 
   let idx = 0;
   const artQueue = [];
-
-  const deltas  = mirrorData.map(r => r.delta ?? 0);
-  const maxDelta = Math.max(...deltas, 0.001);
-  const n        = mirrorData.length;
-
-  // Rank by delta descending for quintile bucketing
-  const rankByIdx = new Array(n);
-  [...mirrorData.map((r, i) => ({ d: r.delta ?? 0, i }))]
-    .sort((a, b) => b.d - a.d)
-    .forEach(({ i }, rank) => { rankByIdx[i] = rank; });
-
-  grid.innerHTML = mirrorData.map(r => {
-    const i      = idx++;
-    const wr     = r.win_rate ?? 0;
-    const delta  = r.delta ?? 0;
-    const pct    = Math.round(wr * 100);
-    const losses = Math.round(r.match_count - r.wins);
-    const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+  const cardTile = r => {
+    const i     = idx++;
+    const wr    = r.win_rate ?? 0;
+    const delta = r.delta ?? 0;
+    const pct   = Math.round(wr * 100);
+    const dpct  = Math.round(Math.abs(delta) * 100);
+    const dSign = delta >= 0 ? '+' : '−';
+    const cc    = delta >= 0 ? 'good' : 'bad';
+    const safe  = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
     const { name: mrName, subtitle: mrSub } = cardNameParts(r.card_name);
-    const t      = Math.max(delta, 0) / maxDelta;
-    const rating = 5 - Math.floor(rankByIdx[i] * 5 / n);
-    const a      = (t * 0.85).toFixed(2);
-    const glow   = (t * 0.45).toFixed(2);
-    const style  = `border-color:rgba(39,174,96,${a});box-shadow:0 0 14px rgba(39,174,96,${glow})`;
-    const pips   = Array.from({length:5}, (_, k) =>
-      `<span class="wk-pip${k < rating ? ' on' : ''}"></span>`).join('');
-    const deltaSign = delta >= 0 ? '+' : '';
     artQueue.push({ name: r.card_name, id: 'mr-art-' + i });
-    return `<div class="card-tile" style="${style}" data-card="${safe}" id="mr-${i}">
+    return `<div class="card-tile conv-${cc}" data-card="${safe}" id="mr-${i}">
   <div class="ct-art" id="mr-art-${i}"></div>
   <div class="ct-scrim"></div>
   <div class="ct-top">
     <div class="ct-badge">${Math.round(r.match_count)}<span class="ct-badge-label">m</span></div>
-    <div class="ct-badge">${pct}%</div>
   </div>
   <div class="ct-bottom">
     <div class="ct-name"${mrSub ? ` data-tooltip="${mrSub}"` : ''}>${mrName}</div>
     <div class="ct-stats">
-      <span class="ct-incl">${Math.round(r.wins)}W – ${losses}L</span>
-      <span class="wk-pips">${pips}</span>
+      <span class="ct-incl">${pct}%</span>
+      <span class="ct-conv ${cc}">${dSign}${dpct}%</span>
     </div>
   </div>
 </div>`;
-  }).join('');
+  };
+
+  const section = (title, rows) => rows.length
+    ? `<div class="mu-section-hdr">${title}</div>` + rows.map(cardTile).join('')
+    : '';
+
+  grid.innerHTML =
+    section('Mirror breakers', better) +
+    section('Mirror weaknesses', worse);
 
   grid.onclick = e => {
     const tile = e.target.closest('.card-tile[data-card]');
