@@ -2308,6 +2308,152 @@ def leader_weaknesses(
 
 
 # =============================================================================
+#  LEADER MIRROR-BREAKERS — cards with high win rates in the mirror matchup
+# =============================================================================
+
+@app.get("/api/leader/{leader}/mirror-breakers")
+def leader_mirror_breakers(
+    leader:      str,
+    base_group:  Optional[str] = Query(None),
+    format:      str           = Query("standard"),
+    meta_id:     Optional[str] = Query(None),
+    min_matches: int           = Query(10),
+    limit:       int           = Query(60),
+    sort:        str           = Query("count"),  # "count" | "delta"
+    days:        Optional[int] = Query(None),
+    decay:       bool          = Query(True),
+):
+    """
+    Cards with the highest win rates when played in the mirror matchup
+    (both players running the same leader). The baseline is always ~50%.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days)
+
+    base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
+    base_as_p1  = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
+    base_as_p2  = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
+    base_param  = [base_names] if base_names else []
+
+    if decay and not date_sql:
+        w = decay_weight()
+        rows = db.fetchall(f"""
+            WITH mirror_matches AS (
+                SELECT m.p1_standing_id AS standing_id,
+                       {w}              AS weight,
+                       (m.winner = 'p1') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p1_leader = %s AND m.p2_leader = %s
+                  AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {base_as_p1}
+                UNION ALL
+                SELECT m.p2_standing_id AS standing_id,
+                       {w}              AS weight,
+                       (m.winner = 'p2') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p1_leader = %s AND m.p2_leader = %s
+                  AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {base_as_p2}
+            ),
+            totals AS (
+                SELECT SUM(weight)                                    AS total_matches,
+                       COALESCE(SUM(weight) FILTER (WHERE won), 0)   AS total_wins
+                FROM mirror_matches
+            ),
+            card_stats AS (
+                SELECT dc.card_name,
+                       COUNT(*)                                                   AS raw_match_count,
+                       SUM(mm.weight)                                             AS match_count,
+                       COALESCE(SUM(mm.weight) FILTER (WHERE mm.won), 0)          AS wins
+                FROM mirror_matches mm
+                JOIN {t['decklist_cards']} dc ON dc.standing_id = mm.standing_id
+                WHERE dc.is_sideboard = false
+                  AND NOT EXISTS (
+                      SELECT 1 FROM cards c
+                      WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
+                        AND (c.is_leader = true OR c.is_base = true)
+                  )
+                GROUP BY dc.card_name
+                HAVING COUNT(*) >= %s
+            )
+            SELECT cs.card_name,
+                   ROUND(cs.match_count::numeric, 1)                        AS match_count,
+                   ROUND(cs.wins::numeric, 1)                               AS wins,
+                   ROUND((cs.wins / NULLIF(cs.match_count, 0))::numeric, 4) AS win_rate,
+                   ROUND(t.total_matches::numeric, 1)                       AS total_matches,
+                   ROUND(t.total_wins::numeric, 1)                          AS total_wins,
+                   ROUND((t.total_wins / NULLIF(t.total_matches, 0))::numeric, 4) AS baseline_win_rate,
+                   ROUND(
+                       (cs.wins / NULLIF(cs.match_count, 0)
+                       - t.total_wins / NULLIF(t.total_matches, 0))::numeric,
+                   4) AS delta
+            FROM card_stats cs, totals t
+            ORDER BY {'cs.match_count DESC' if sort == 'count' else 'delta DESC'}, cs.match_count DESC
+            LIMIT %s
+        """, [leader, leader] + base_param + [leader, leader] + base_param + [min_matches, limit])
+    else:
+        rows = db.fetchall(f"""
+            WITH mirror_matches AS (
+                SELECT m.p1_standing_id AS standing_id,
+                       (m.winner = 'p1') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p1_leader = %s AND m.p2_leader = %s
+                  AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
+                UNION ALL
+                SELECT m.p2_standing_id AS standing_id,
+                       (m.winner = 'p2') AS won
+                FROM {t['matches']} m
+                JOIN {t['events']} e ON e.id = m.event_id
+                WHERE m.p1_leader = %s AND m.p2_leader = %s
+                  AND m.winner IS NOT NULL
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
+            ),
+            totals AS (
+                SELECT COUNT(*)::INT                                      AS total_matches,
+                       SUM(CASE WHEN won THEN 1 ELSE 0 END)::INT         AS total_wins
+                FROM mirror_matches
+            ),
+            card_stats AS (
+                SELECT dc.card_name,
+                       COUNT(*)::INT                                      AS match_count,
+                       SUM(CASE WHEN mm.won THEN 1 ELSE 0 END)::INT      AS wins
+                FROM mirror_matches mm
+                JOIN {t['decklist_cards']} dc ON dc.standing_id = mm.standing_id
+                WHERE dc.is_sideboard = false
+                  AND NOT EXISTS (
+                      SELECT 1 FROM cards c
+                      WHERE c.name = SPLIT_PART(dc.card_name, ' | ', 1)
+                        AND (c.is_leader = true OR c.is_base = true)
+                  )
+                GROUP BY dc.card_name
+                HAVING COUNT(*) >= %s
+            )
+            SELECT cs.card_name,
+                   cs.match_count,
+                   cs.wins,
+                   ROUND(cs.wins::numeric / NULLIF(cs.match_count, 0), 4)  AS win_rate,
+                   t.total_matches,
+                   t.total_wins,
+                   ROUND(t.total_wins::numeric / NULLIF(t.total_matches, 0), 4) AS baseline_win_rate,
+                   ROUND(
+                       cs.wins::numeric / NULLIF(cs.match_count, 0)
+                       - t.total_wins::numeric / NULLIF(t.total_matches, 0),
+                   4) AS delta
+            FROM card_stats cs, totals t
+            ORDER BY {'match_count DESC' if sort == 'count' else 'delta DESC'}, match_count DESC
+            LIMIT %s
+        """, [leader, leader] + date_params + base_param +
+             [leader, leader] + date_params + base_param +
+             [min_matches, limit])
+
+    return rows
+
+
+# =============================================================================
 #  LEADER ELO BREAKDOWN
 # =============================================================================
 

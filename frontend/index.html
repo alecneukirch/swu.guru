@@ -3663,6 +3663,7 @@ select.sl-input { cursor: pointer; }
     <button class="lp-tab active" id="lp-tab-cards"      onclick="setLeaderTab('cards')">Cards</button>
     <button class="lp-tab"        id="lp-tab-matchups"   onclick="setLeaderTab('matchups')">Matchups</button>
     <button class="lp-tab"        id="lp-tab-weaknesses" onclick="setLeaderTab('weaknesses')">Weaknesses</button>
+    <button class="lp-tab"        id="lp-tab-mirror"     onclick="setLeaderTab('mirror')">Mirror</button>
   </div>
 
   <!-- Cards tab -->
@@ -3756,6 +3757,23 @@ select.sl-input { cursor: pointer; }
       <input type="number" id="wk-min-matches" value="20" min="1" style="width:64px" oninput="loadLeaderWeaknesses()">
     </div>
     <div class="card-grid" id="leader-weaknesses-grid">
+      <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
+    </div>
+  </div>
+
+  <!-- Mirror tab -->
+  <div id="lp-panel-mirror" style="display:none">
+    <div class="controls" style="padding-top:14px">
+      <div class="sort-btn-wrap">
+        <span class="ctrl-label">Sort</span>
+        <button class="btn active" id="mr-sort-count" onclick="setMirrorSort('count')">Count</button>
+        <button class="btn"        id="mr-sort-delta" onclick="setMirrorSort('delta')">Win %Δ</button>
+      </div>
+      <div class="sep"></div>
+      <span class="ctrl-label">Min matches</span>
+      <input type="number" id="mr-min-matches" value="10" min="1" style="width:64px" oninput="loadLeaderMirror()">
+    </div>
+    <div class="card-grid" id="leader-mirror-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
     </div>
   </div>
@@ -4425,6 +4443,10 @@ function openLeader(name, base = null, baseAspect = null, baseGroup = null) {
   weaknessSort   = 'count';
   document.getElementById('wk-sort-count')?.classList.add('active');
   document.getElementById('wk-sort-delta')?.classList.remove('active');
+  mirrorData   = [];
+  mirrorSort   = 'count';
+  document.getElementById('mr-sort-count')?.classList.add('active');
+  document.getElementById('mr-sort-delta')?.classList.remove('active');
   spiceFilter  = false;
   document.getElementById('btn-spice')?.classList.remove('active');
   leaderTab    = 'cards';
@@ -4839,6 +4861,7 @@ function onLeaderFilterChange() {
     if (!muOpen) loadLeaderMatchups();
   }
   else if (leaderTab === 'weaknesses') loadLeaderWeaknesses();
+  else if (leaderTab === 'mirror')     loadLeaderMirror();
 }
 
 function shareLeader(btn) {
@@ -5091,13 +5114,14 @@ let leaderTab = 'cards';
 
 function setLeaderTab(tab) {
   leaderTab = tab;
-  ['cards','matchups','weaknesses'].forEach(t => {
+  ['cards','matchups','weaknesses','mirror'].forEach(t => {
     document.getElementById('lp-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('lp-panel-' + t).style.display = t === tab ? '' : 'none';
   });
   if (currentLeader) history.replaceState(null, '', buildLeaderHash());
   if (tab === 'matchups'   && currentLeader) loadLeaderMatchups();
   if (tab === 'weaknesses' && currentLeader) loadLeaderWeaknesses();
+  if (tab === 'mirror'     && currentLeader) loadLeaderMirror();
 }
 
 // ══ MATCHUPS ════════════════════════════════════════════════════════════════
@@ -5364,6 +5388,97 @@ function renderWeaknesses() {
   </div>
   <div class="ct-bottom">
     <div class="ct-name"${wkSub ? ` data-tooltip="${wkSub}"` : ''}>${wkName}</div>
+    <div class="ct-stats">
+      <span class="ct-incl">${Math.round(r.wins)}W – ${losses}L</span>
+      <span class="wk-pips">${pips}</span>
+    </div>
+  </div>
+</div>`;
+  }).join('');
+
+  grid.onclick = e => {
+    const tile = e.target.closest('.card-tile[data-card]');
+    if (tile) openModal(tile.dataset.card);
+  };
+
+  artQueue.forEach(({ name, id }) => loadCardArt(name, id, 'loaded'));
+}
+
+// ══ MIRROR BREAKERS ══════════════════════════════════════════════════════════
+
+let mirrorData = [];
+let mirrorSort = 'count';
+
+function setMirrorSort(s) {
+  mirrorSort = s;
+  document.getElementById('mr-sort-count').classList.toggle('active', s === 'count');
+  document.getElementById('mr-sort-delta').classList.toggle('active', s === 'delta');
+  loadLeaderMirror();
+}
+
+async function loadLeaderMirror() {
+  const grid = document.getElementById('leader-mirror-grid');
+  if (!currentLeader) return;
+  grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
+
+  const minMatches = parseInt(document.getElementById('mr-min-matches').value) || 10;
+  let url = '/api/leader/' + encodeURIComponent(currentLeader)
+    + '/mirror-breakers?min_matches=' + minMatches + '&sort=' + mirrorSort + '&format=' + currentFormat + metaParam() + '&limit=60';
+  if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
+  try {
+    mirrorData = await api(url);
+    renderMirror();
+  } catch(e) {
+    grid.innerHTML = `<div class="empty-state" style="padding:24px;grid-column:1/-1">// ${e.message}</div>`;
+  }
+}
+
+function renderMirror() {
+  const grid = document.getElementById('leader-mirror-grid');
+  if (!mirrorData.length) {
+    grid.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no mirror data — not enough mirror matches recorded for this leader</div>';
+    return;
+  }
+
+  let idx = 0;
+  const artQueue = [];
+
+  const deltas  = mirrorData.map(r => r.delta ?? 0);
+  const maxDelta = Math.max(...deltas, 0.001);
+  const n        = mirrorData.length;
+
+  // Rank by delta descending for quintile bucketing
+  const rankByIdx = new Array(n);
+  [...mirrorData.map((r, i) => ({ d: r.delta ?? 0, i }))]
+    .sort((a, b) => b.d - a.d)
+    .forEach(({ i }, rank) => { rankByIdx[i] = rank; });
+
+  grid.innerHTML = mirrorData.map(r => {
+    const i      = idx++;
+    const wr     = r.win_rate ?? 0;
+    const delta  = r.delta ?? 0;
+    const pct    = Math.round(wr * 100);
+    const losses = Math.round(r.match_count - r.wins);
+    const safe   = r.card_name.replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+    const { name: mrName, subtitle: mrSub } = cardNameParts(r.card_name);
+    const t      = Math.max(delta, 0) / maxDelta;
+    const rating = 5 - Math.floor(rankByIdx[i] * 5 / n);
+    const a      = (t * 0.85).toFixed(2);
+    const glow   = (t * 0.45).toFixed(2);
+    const style  = `border-color:rgba(39,174,96,${a});box-shadow:0 0 14px rgba(39,174,96,${glow})`;
+    const pips   = Array.from({length:5}, (_, k) =>
+      `<span class="wk-pip${k < rating ? ' on' : ''}"></span>`).join('');
+    const deltaSign = delta >= 0 ? '+' : '';
+    artQueue.push({ name: r.card_name, id: 'mr-art-' + i });
+    return `<div class="card-tile" style="${style}" data-card="${safe}" id="mr-${i}">
+  <div class="ct-art" id="mr-art-${i}"></div>
+  <div class="ct-scrim"></div>
+  <div class="ct-top">
+    <div class="ct-badge">${Math.round(r.match_count)}<span class="ct-badge-label">m</span></div>
+    <div class="ct-badge">${pct}%</div>
+  </div>
+  <div class="ct-bottom">
+    <div class="ct-name"${mrSub ? ` data-tooltip="${mrSub}"` : ''}>${mrName}</div>
     <div class="ct-stats">
       <span class="ct-incl">${Math.round(r.wins)}W – ${losses}L</span>
       <span class="wk-pips">${pips}</span>
