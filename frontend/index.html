@@ -29,6 +29,7 @@
   --text3:       #9898b0;
   --gold:        #f0b429;
   --gold2:       #ffd166;
+  --conv-mid:    #f0b429;  /* neutral performance — not overridden by theme */
   --green:       #2ecc71;
   --green2:      #00ff87;
   --red:         #e74c3c;
@@ -1232,7 +1233,7 @@ select option { background: var(--surface2); }
   border: 1px solid rgba(255,255,255,0.08);
 }
 .lc-conversion.good { background: rgba(9,9,15,0.75); color: var(--green); border-color: rgba(46,204,113,0.35); }
-.lc-conversion.mid  { background: rgba(9,9,15,0.75); color: var(--gold);  border-color: rgba(240,180,41,0.35); }
+.lc-conversion.mid  { background: rgba(9,9,15,0.75); color: var(--conv-mid);  border-color: rgba(240,180,41,0.35); }
 .lc-conversion.bad  { background: rgba(9,9,15,0.75); color: var(--red);   border-color: rgba(231,76,60,0.35); }
 
 .lc-bar { height: 2px; background: var(--border); margin-bottom: 8px; border-radius: 1px; }
@@ -1547,7 +1548,7 @@ select option { background: var(--surface2); }
   line-height: 1;
 }
 .conversion-badge.good { background: rgba(46,204,113,0.12); color: var(--green); border: 1px solid rgba(46,204,113,0.25); }
-.conversion-badge.mid  { background: rgba(240,180,41,0.12); color: var(--gold);  border: 1px solid rgba(240,180,41,0.25); }
+.conversion-badge.mid  { background: rgba(240,180,41,0.12); color: var(--conv-mid);  border: 1px solid rgba(240,180,41,0.25); }
 .conversion-badge.bad  { background: rgba(231,76,60,0.12);  color: var(--red);   border: 1px solid rgba(231,76,60,0.25); }
 
 /* ── Card tile grid ─────────────────────────────────────────── */
@@ -1863,10 +1864,10 @@ select option { background: var(--surface2); }
   box-shadow: 0 12px 32px rgba(0,0,0,0.5);
 }
 .card-tile.conv-good { border-color: var(--green); box-shadow: 0 0 0 0px rgba(46,204,113,0.3); }
-.card-tile.conv-mid  { border-color: var(--gold);  box-shadow: 0 0 0 0px rgba(240,180,41,0.3); }
+.card-tile.conv-mid  { border-color: var(--conv-mid);  box-shadow: 0 0 0 0px rgba(240,180,41,0.3); }
 .card-tile.conv-bad  { border-color: var(--red);   box-shadow: 0 0 0 0px rgba(231,76,60,0.3); }
 .card-tile:hover.conv-good { box-shadow: 0 8px 24px rgba(46,204,113,0.35); }
-.card-tile:hover.conv-mid  { box-shadow: 0 8px 24px rgba(240,180,41,0.35); }
+.card-tile:hover.conv-mid  { box-shadow: 0 8px 24px rgba(240,180,41,0.35); }  /* hardcoded yellow — not theme-dependent */
 .card-tile:hover.conv-bad  { box-shadow: 0 8px 24px rgba(231,76,60,0.35); }
 
 /* Full-bleed art */
@@ -2005,7 +2006,7 @@ select option { background: var(--surface2); }
   line-height: 1.2;
 }
 .ct-conv.good { background: rgba(46,204,113,0.22);  color: var(--green); }
-.ct-conv.mid  { background: rgba(240,180,41,0.22);  color: var(--gold);  }
+.ct-conv.mid  { background: rgba(240,180,41,0.22);  color: var(--conv-mid);  }
 .ct-conv.bad  { background: rgba(231,76,60,0.22);   color: var(--red);   }
 
 /* SB label on tile */
@@ -2176,7 +2177,7 @@ select option { background: var(--surface2); }
   white-space: nowrap;
 }
 .conv-pill.good { background: rgba(46,204,113,0.12); color: var(--green); }
-.conv-pill.mid  { background: rgba(240,180,41,0.12);  color: var(--gold); }
+.conv-pill.mid  { background: rgba(240,180,41,0.12);  color: var(--conv-mid); }
 .conv-pill.bad  { background: rgba(231,76,60,0.12);   color: var(--red); }
 .conv-pill.neu  { background: rgba(79,195,247,0.10);  color: var(--blue); }
 
@@ -2660,7 +2661,7 @@ select option { background: var(--surface2); }
   border-radius: 3px;
 }
 .cbl-pill.good { background: rgba(46,204,113,0.15); color: var(--green); }
-.cbl-pill.mid  { background: rgba(240,180,41,0.15);  color: var(--gold); }
+.cbl-pill.mid  { background: rgba(240,180,41,0.15);  color: var(--conv-mid); }
 .cbl-pill.bad  { background: rgba(231,76,60,0.15);   color: var(--red); }
 
 .cbl-right {
@@ -2792,7 +2793,7 @@ select option { background: var(--surface2); }
   line-height: 1;
 }
 .mc-val.good { color: var(--green); }
-.mc-val.mid  { color: var(--gold); }
+.mc-val.mid  { color: var(--conv-mid); }
 .mc-val.bad  { color: var(--red); }
 .mc-val.neu  { color: var(--blue); }
 .mc-val.base { color: var(--purple); }
@@ -4781,7 +4782,7 @@ async function renderLeaderHero(name) {
     const cv   = fmtConv(stats.conversion);
     const tier = tierGrade(stats.conversion);
 
-    const pctColor = v => v == null ? 'var(--text3)' : v >= 1.1 ? 'var(--green)' : v >= 0.9 ? 'var(--gold)' : 'var(--red2)';
+    const pctColor = v => v == null ? 'var(--text3)' : v >= 1.1 ? 'var(--green)' : v >= 0.9 ? 'var(--conv-mid)' : 'var(--red2)';
     const comma    = name.indexOf(',');
     const subtitle = comma > 0 ? name.slice(comma + 1).trim() : '';
     const baseAsp  = currentLeaderBaseAspect && currentLeaderBaseAspect !== 'none' ? currentLeaderBaseAspect : null;
@@ -5184,7 +5185,7 @@ function filterMatchups() {
   grid.innerHTML = visible.map(({ r, i }) => {
     const wr    = r.win_rate ?? 0;
     const pct   = Math.round(wr * 100);
-    const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--gold)' : 'var(--red2)';
+    const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--conv-mid)' : 'var(--red2)';
     return `<div class="matchup-card" data-idx="${i}" id="mu-${i}">
   <div class="matchup-art" id="mu-art-${i}"></div>
   <div class="matchup-info">
@@ -5225,7 +5226,7 @@ async function openMatchupDetail(matchup) {
 
   const wr    = matchup.win_rate ?? 0;
   const pct   = Math.round(wr * 100);
-  const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--gold)' : 'var(--red2)';
+  const color = wr >= 0.55 ? 'var(--green)' : wr >= 0.45 ? 'var(--conv-mid)' : 'var(--red2)';
   document.getElementById('mu-detail-title').textContent = shortName(matchup.opponent) + ' — ' + (matchup.opponent_base_group || '');
   document.getElementById('mu-detail-sub').textContent = matchup.wins + 'W – ' + matchup.losses + 'L (' + matchup.matches + ' matches)';
   document.getElementById('mu-detail-wr').textContent = pct + '%';
@@ -5948,7 +5949,7 @@ function renderOverviewTab() {
     <div class="modal-stat-label">Avg Inclusion</div>
   </div>
   <div class="modal-stat">
-    <div class="modal-stat-val" style="color:var(--${cc==='good'?'green':cc==='bad'?'red':'gold'})">${fmtConv(avgConv)}</div>
+    <div class="modal-stat-val" style="color:var(--${cc==='good'?'green':cc==='bad'?'red':'conv-mid'})">${fmtConv(avgConv)}</div>
     <div class="modal-stat-label">Avg Conversion</div>
   </div>
 </div>
