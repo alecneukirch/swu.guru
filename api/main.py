@@ -1802,7 +1802,8 @@ def leader_matchups(
                 JOIN {t['events']} e ON e.id = m.event_id
                 {top8_join}
                 WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
-                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
+                  AND m.winner IS NOT NULL
                   AND e.date <= CURRENT_DATE {own_as_p1} {top8_where}
                 GROUP BY m.p2_leader, m.p2_base
             ),
@@ -1816,7 +1817,8 @@ def leader_matchups(
                 JOIN {t['events']} e ON e.id = m.event_id
                 {top8_join}
                 WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
-                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
+                  AND m.winner IS NOT NULL
                   AND e.date <= CURRENT_DATE {own_as_p2} {top8_where}
                 GROUP BY m.p1_leader, m.p1_base
             )
@@ -1843,7 +1845,8 @@ def leader_matchups(
                 JOIN {t['events']} e ON e.id = m.event_id
                 {top8_join}
                 WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
-                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
+                  AND m.winner IS NOT NULL
                   AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {top8_where}
                 GROUP BY m.p2_leader, m.p2_base
             ),
@@ -1857,7 +1860,8 @@ def leader_matchups(
                 JOIN {t['events']} e ON e.id = m.event_id
                 {top8_join}
                 WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
-                  AND m.p1_leader != m.p2_leader AND m.winner IS NOT NULL
+                  AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
+                  AND m.winner IS NOT NULL
                   AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where}
                 GROUP BY m.p1_leader, m.p1_base
             )
