@@ -1,8 +1,8 @@
 """
 scraper/seed_swuguru_cards.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Creates and populates the `sets` and `cards` tables in the `swuguru`
-database from the swuapi.com bulk export.
+Creates and populates the `sets`, `cards`, and `base_groups` tables in
+the `swuguru` database from swuapi.com.
 
 Usage:
     python -m scraper.seed_swuguru_cards
@@ -25,7 +25,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-API_URL = "https://api.swuapi.com/export/all"
+API_URL            = "https://api.swuapi.com/export/all"
+BASE_GROUPS_API    = "https://api.swuapi.com/base-groups"
 
 DDL = """
 CREATE TABLE IF NOT EXISTS sets (
@@ -82,11 +83,22 @@ CREATE INDEX IF NOT EXISTS cards_is_leader   ON cards(is_leader) WHERE is_leader
 CREATE INDEX IF NOT EXISTS cards_is_base     ON cards(is_base)   WHERE is_base   = TRUE;
 CREATE INDEX IF NOT EXISTS cards_variant     ON cards(variant_type);
 CREATE INDEX IF NOT EXISTS cards_name        ON cards(name);
+
+CREATE TABLE IF NOT EXISTS base_groups (
+    uuid          TEXT    PRIMARY KEY,
+    canonical_name TEXT   NOT NULL UNIQUE,
+    color         TEXT,
+    hp            INTEGER,
+    rarity_class  TEXT,
+    created_at    TIMESTAMPTZ,
+    updated_at    TIMESTAMPTZ
+);
 """
 
 DROP_DDL = """
-DROP TABLE IF EXISTS cards;
-DROP TABLE IF EXISTS sets;
+DROP TABLE IF EXISTS cards      CASCADE;
+DROP TABLE IF EXISTS sets       CASCADE;
+DROP TABLE IF EXISTS base_groups CASCADE;
 """
 
 
@@ -239,10 +251,48 @@ def upsert_cards(cur, cards: list[dict]):
     log.info(f"  Upserted {len(rows)} cards")
 
 
+def fetch_base_groups() -> list[dict]:
+    log.info(f"Fetching {BASE_GROUPS_API} …")
+    r = httpx.get(BASE_GROUPS_API, timeout=15)
+    r.raise_for_status()
+    groups = r.json()["base_groups"]
+    log.info(f"  {len(groups)} base groups received")
+    return groups
+
+
+def upsert_base_groups(cur, groups: list[dict]):
+    rows = [
+        (
+            g["uuid"],
+            g["canonical_name"],
+            g.get("color"),
+            g.get("hp"),
+            g.get("rarity_class"),
+            g.get("created_at"),
+            g.get("updated_at"),
+        )
+        for g in groups
+    ]
+    psycopg2.extras.execute_values(
+        cur,
+        """
+        INSERT INTO base_groups (uuid, canonical_name, color, hp, rarity_class, created_at, updated_at)
+        VALUES %s
+        ON CONFLICT (uuid) DO UPDATE SET
+            canonical_name = EXCLUDED.canonical_name,
+            color          = EXCLUDED.color,
+            hp             = EXCLUDED.hp,
+            rarity_class   = EXCLUDED.rarity_class,
+            updated_at     = EXCLUDED.updated_at
+        """,
+        rows,
+    )
+    log.info(f"  Upserted {len(rows)} base groups")
+
+
 def main(wipe: bool = False):
-    data   = fetch_export()
-    sets   = data["sets"]
-    cards  = data["cards"]
+    data        = fetch_export()
+    base_groups = fetch_base_groups()
 
     conn = get_conn()
     conn.autocommit = False
@@ -258,11 +308,15 @@ def main(wipe: bool = False):
     conn.commit()
 
     log.info("Upserting sets…")
-    upsert_sets(cur, sets)
+    upsert_sets(cur, data["sets"])
     conn.commit()
 
     log.info("Upserting cards…")
-    upsert_cards(cur, cards)
+    upsert_cards(cur, data["cards"])
+    conn.commit()
+
+    log.info("Upserting base groups…")
+    upsert_base_groups(cur, base_groups)
     conn.commit()
 
     # Summary
@@ -276,10 +330,12 @@ def main(wipe: bool = False):
     n_leaders = cur.fetchone()[0]
     cur.execute("SELECT COUNT(*) FROM cards WHERE is_base")
     n_bases = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM base_groups")
+    n_groups = cur.fetchone()[0]
 
     log.info(
-        f"\nDone — {n_sets} sets, {n_cards} cards total "
-        f"({n_std} Standard, {n_leaders} leaders, {n_bases} bases)"
+        f"\nDone — {n_sets} sets, {n_cards} cards ({n_std} Standard, "
+        f"{n_leaders} leaders, {n_bases} bases), {n_groups} base groups"
     )
 
     cur.close()
