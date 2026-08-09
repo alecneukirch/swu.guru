@@ -1154,6 +1154,124 @@ def sync_from_hub(
     log.info("Done.")
 
 
+# ── Refresh placements ─────────────────────────────────────────────────────
+
+def refresh_placements(
+    set_code: str = None,
+    eternal:  bool = False,
+    limit:    int  = 0,
+):
+    """
+    Re-fetch standings from Melee for already-scraped events and update only
+    the `placement` column.  Useful for picking up top-8 cuts that were run
+    after the initial scrape.
+
+    Does NOT re-scrape matches or decklists.
+    """
+    tbls = _table_names(eternal)
+
+    extra = ""
+    params: list = []
+    if set_code:
+        extra = "AND e.set_code = %s"
+        params.append(set_code)
+    if limit:
+        extra += f" LIMIT {int(limit)}"
+
+    events = db.fetchall(
+        f"""SELECT e.id, e.melee_id, e.name, e.date
+            FROM {tbls['events']} e
+            WHERE e.melee_id IS NOT NULL
+            {extra}
+            ORDER BY e.date DESC NULLS LAST""",
+        params or None,
+    )
+
+    log.info(f"refresh_placements: {len(events)} events to check (eternal={eternal})")
+
+    updated_total = 0
+    fail = 0
+
+    for i, ev in enumerate(events, 1):
+        melee_id = ev["melee_id"]
+        ev_id    = ev["id"]
+        log.info(f"[{i}/{len(events)}] {ev['name']} ({ev.get('date','?')}) melee_id={melee_id}")
+
+        try:
+            page = melee_tournament_rounds(melee_id)
+            standings_rounds = page["standings_rounds"]
+
+            if not standings_rounds:
+                log.warning("  No rounds found — skipping")
+                continue
+
+            elim_order = {"final": 3, "semifinal": 2, "quarterfinal": 1, "top ": 0}
+
+            def elim_priority(r):
+                return max(
+                    (v for k, v in elim_order.items() if r["name"].lower().startswith(k)),
+                    default=-1
+                )
+
+            completed    = [r for r in standings_rounds if r["completed"]]
+            elim_rounds  = sorted(
+                [r for r in completed if elim_priority(r) >= 0],
+                key=elim_priority, reverse=True,
+            )
+            swiss_rounds = [r for r in completed if elim_priority(r) < 0]
+            candidates   = elim_rounds + list(reversed(swiss_rounds))
+            if not candidates:
+                candidates = list(reversed(standings_rounds))
+
+            standings = []
+            final_round = None
+            for candidate in candidates:
+                raw = melee_round_standings(candidate["id"])
+                standings = [parse_standing_row(r) for r in raw]
+                if standings:
+                    final_round = candidate
+                    break
+
+            if not standings:
+                log.warning("  No standings returned — skipping")
+                continue
+
+            log.info(f"  Standings from: {final_round['name']} — {len(standings)} rows")
+
+            for st in standings:
+                melee_pid = st.get("melee_player_id")
+                place     = st.get("place")
+                if not melee_pid or place is None:
+                    continue
+                db.execute(
+                    f"""UPDATE {tbls['standings']}
+                        SET placement = %s
+                        WHERE event_id = %s AND melee_player_id = %s
+                          AND placement IS DISTINCT FROM %s""",
+                    (place, ev_id, melee_pid, place),
+                )
+
+            log.info(f"  Processed {len(standings)} standings")
+            updated_total += len(standings)
+
+        except Exception as e:
+            log.error(f"  Failed: {e}")
+            import traceback; traceback.print_exc()
+            fail += 1
+
+    log.info(
+        f"\nrefresh_placements complete — "
+        f"{updated_total} standings processed, {fail} events failed"
+    )
+
+    log.info("Refreshing materialized views...")
+    if eternal:
+        db.execute_autocommit("SELECT refresh_eternal_views()")
+    else:
+        db.execute_autocommit("SELECT refresh_all_views()")
+    log.info("Done.")
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def _refresh_player_identities():
@@ -1482,7 +1600,8 @@ if __name__ == "__main__":
     parser.add_argument("--days",         type=int, default=5, help="Only scrape events from the last N days (0=all)")
     parser.add_argument("--melee-id",     default=None,    help="Import single tournament by melee ID")
     parser.add_argument("--cards",         action="store_true", help="Also fetch full decklists")
-    parser.add_argument("--refresh-views", action="store_true", help="Just refresh materialized views")
+    parser.add_argument("--refresh-views",      action="store_true", help="Just refresh materialized views")
+    parser.add_argument("--refresh-placements", action="store_true", help="Re-fetch placements for already-scraped events (top-8 catch-up)")
     parser.add_argument("--resolve-uuids", action="store_true", help="Resolve melee account UUIDs from decklist pages")
     parser.add_argument("--eternal",       action="store_true", help="Scrape Eternal format events (uses eternal_ tables)")
     parser.add_argument("--swu",           action="store_true", help="Use official SWU API instead of hub (preferred)")
@@ -1493,6 +1612,12 @@ if __name__ == "__main__":
 
     if args.resolve_uuids:
         _resolve_uuids_from_decklists()
+    elif args.refresh_placements:
+        refresh_placements(
+            set_code = args.set,
+            eternal  = args.eternal,
+            limit    = args.limit,
+        )
     elif args.refresh_views:
         log.info("Refreshing materialized views...")
         db.execute_autocommit("SELECT refresh_all_views()")
