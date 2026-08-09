@@ -1217,10 +1217,12 @@ def leader_cards(
         """, params)
 
     # Attach per-card match win rate (unweighted — not in the materialized views)
+    # Group by is_sideboard so main-deck and sideboard tiles get separate MWR values.
     if rows:
         card_names = list({r['card_name'] for r in rows})
         mwr_rows = db.fetchall(f"""
             SELECT dc.card_name,
+                   dc.is_sideboard,
                    SUM(p.mw)::INT AS wins,
                    SUM(p.mg)::INT AS games
             FROM {t['decklist_cards']} dc
@@ -1244,15 +1246,15 @@ def leader_cards(
               AND dc.card_name = ANY(%s)
               {date_sql if date_sql else "AND e.date <= CURRENT_DATE"}
               {base_filter}
-            GROUP BY dc.card_name
+            GROUP BY dc.card_name, dc.is_sideboard
         """, [leader, card_names] + (date_params if date_sql else []) + base_params)
 
         mwr_map = {
-            r['card_name']: round(r['wins'] / r['games'], 4) if r.get('games') else None
+            (r['card_name'], r['is_sideboard']): round(r['wins'] / r['games'], 4) if r.get('games') else None
             for r in mwr_rows
         }
         for r in rows:
-            r['card_mwr'] = mwr_map.get(r['card_name'])
+            r['card_mwr'] = mwr_map.get((r['card_name'], r.get('is_sideboard', False)))
 
     return rows
 
