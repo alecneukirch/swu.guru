@@ -332,19 +332,28 @@ def import_event(conn, event: dict, fetch_decklists: bool = False, card_uuid_map
 
     # ── Decklists ──
     if fetch_decklists:
+        # Only fetch for standings that don't already have cards loaded
         cur.execute(
-            "SELECT id, melee_deck_id FROM standings WHERE event_id=%s AND has_decklist=TRUE AND melee_deck_id IS NOT NULL",
+            """
+            SELECT s.id, s.melee_deck_id
+            FROM standings s
+            WHERE s.event_id = %s
+              AND s.has_decklist = TRUE
+              AND s.melee_deck_id IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM decklist_cards dc WHERE dc.standing_id = s.id)
+            """,
             (event_id,)
         )
         deck_rows = cur.fetchall()
         fetched = 0
-        for sid, deck_id in deck_rows:
+        for sid, deck_id in (((r["id"], r["melee_deck_id"]) if isinstance(r, dict) else r) for r in deck_rows):
             cards = melee_decklist_cards(deck_id)
             if cards:
                 save_decklist(cur, sid, cards, card_uuid_map or {})
                 fetched += 1
             time.sleep(DECK_DELAY)
-        conn.commit()
+        if fetched:
+            conn.commit()
         log.info(f"    {fetched}/{len(deck_rows)} decklists fetched")
 
     cur.close()
@@ -353,7 +362,28 @@ def import_event(conn, event: dict, fetch_decklists: bool = False, card_uuid_map
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main(event_id: int = 0, limit: int = 0, fetch_decklists: bool = False, refresh: bool = False):
+def repair_card_uuids(cur, card_uuid_map: dict) -> int:
+    """Back-fill card_uuid on existing decklist_cards rows where it's NULL."""
+    # Build a VALUES list of (card_name, uuid) and join once
+    pairs = list(card_uuid_map.items())
+    if not pairs:
+        return 0
+    psycopg2.extras.execute_values(
+        cur,
+        """
+        UPDATE decklist_cards dc
+        SET card_uuid = v.uuid
+        FROM (VALUES %s) AS v(card_name, uuid)
+        WHERE dc.card_uuid IS NULL
+          AND dc.card_name = v.card_name
+        """,
+        pairs,
+    )
+    return cur.rowcount
+
+
+def main(event_id: int = 0, limit: int = 0, fetch_decklists: bool = False,
+         refresh: bool = False, repair_uuids: bool = False):
     conn = get_conn()
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -361,12 +391,22 @@ def main(event_id: int = 0, limit: int = 0, fetch_decklists: bool = False, refre
     cur.execute(DDL)
     conn.commit()
 
-    # Build card name → uuid lookup for decklist resolution
+    # Build card lookup: "Name | Subtitle" (or just "Name") → uuid
+    # Prefer Standard variant; when duplicates exist take lowest card_id (earliest set).
     card_uuid_map = {}
-    if fetch_decklists:
-        cur.execute("SELECT name, uuid FROM cards WHERE variant_type = 'Standard' OR variant_type IS NULL")
+    if fetch_decklists or repair_uuids:
+        cur.execute("""
+            SELECT DISTINCT ON (
+                CASE WHEN subtitle IS NOT NULL THEN name || ' | ' || subtitle ELSE name END
+            )
+                CASE WHEN subtitle IS NOT NULL THEN name || ' | ' || subtitle ELSE name END AS key,
+                uuid
+            FROM cards
+            WHERE variant_type = 'Standard'
+            ORDER BY key, card_id
+        """)
         for row in cur.fetchall():
-            card_uuid_map[row["name"]] = row["uuid"]
+            card_uuid_map[row["key"]] = row["uuid"]
         log.info(f"  Loaded {len(card_uuid_map)} card name→uuid mappings")
 
     # Load events to process
@@ -376,9 +416,20 @@ def main(event_id: int = 0, limit: int = 0, fetch_decklists: bool = False, refre
     if event_id:
         where_clauses.append("id = %s")
         params.append(event_id)
-    elif not refresh:
+    elif refresh:
+        pass  # process all events
+    elif fetch_decklists:
+        # Only events that have standings but are missing at least one decklist
+        where_clauses.append("""
+            id IN (SELECT DISTINCT event_id FROM standings WHERE has_decklist = TRUE)
+            AND id NOT IN (
+                SELECT DISTINCT s.event_id FROM standings s
+                JOIN decklist_cards dc ON dc.standing_id = s.id
+            )
+        """)
+    else:
         # Skip events that already have standings
-        where_clauses.append("""id NOT IN (SELECT DISTINCT event_id FROM standings)""")
+        where_clauses.append("id NOT IN (SELECT DISTINCT event_id FROM standings)")
 
     where = " AND ".join(where_clauses)
     cur.execute(f"SELECT id, melee_id, name, date FROM events WHERE {where} ORDER BY date DESC", params)
@@ -386,6 +437,18 @@ def main(event_id: int = 0, limit: int = 0, fetch_decklists: bool = False, refre
 
     if limit:
         events = events[:limit]
+
+    if repair_uuids:
+        log.info("Repairing null card_uuid rows …")
+        updated = repair_card_uuids(cur, card_uuid_map)
+        conn.commit()
+        cur.execute("SELECT COUNT(*) AS n FROM decklist_cards WHERE card_uuid IS NULL")
+        remaining = cur.fetchone()["n"]
+        log.info(f"  Updated {updated} rows, {remaining} still null (unrecognized card names)")
+        if not fetch_decklists and not event_id:
+            cur.close()
+            conn.close()
+            return
 
     log.info(f"Processing {len(events)} events …")
     cur.close()
@@ -433,5 +496,8 @@ if __name__ == "__main__":
                         help="Also fetch decklist cards for each player")
     parser.add_argument("--refresh", action="store_true",
                         help="Re-scrape events that already have standings")
+    parser.add_argument("--repair-uuids", action="store_true",
+                        help="Back-fill card_uuid on existing decklist_cards rows where it is NULL")
     args = parser.parse_args()
-    main(event_id=args.event_id, limit=args.limit, fetch_decklists=args.decklists, refresh=args.refresh)
+    main(event_id=args.event_id, limit=args.limit, fetch_decklists=args.decklists,
+         refresh=args.refresh, repair_uuids=args.repair_uuids)
