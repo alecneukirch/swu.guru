@@ -120,16 +120,34 @@ def leaders(
 ):
     ef, ep = event_filter(meta_id, event_level)
     rows = fetchall(f"""
-        WITH base AS (
+        WITH match_wins AS (
+            SELECT p1_leader AS leader,
+                   SUM(CASE WHEN winner='p1' THEN 1 ELSE 0 END) AS wins,
+                   COUNT(*) AS games
+            FROM matches m JOIN events e ON e.id = m.event_id
+            WHERE winner IN ('p1','p2') {ef}
+            GROUP BY p1_leader
+            UNION ALL
+            SELECT p2_leader AS leader,
+                   SUM(CASE WHEN winner='p2' THEN 1 ELSE 0 END) AS wins,
+                   COUNT(*) AS games
+            FROM matches m JOIN events e ON e.id = m.event_id
+            WHERE winner IN ('p1','p2') {ef}
+            GROUP BY p2_leader
+        ),
+        match_stats AS (
+            SELECT leader,
+                   SUM(wins)::float / NULLIF(SUM(games), 0) AS win_rate,
+                   SUM(games) AS total_matches
+            FROM match_wins GROUP BY leader
+        ),
+        base AS (
             SELECT
                 s.leader,
-                COUNT(*)                                                         AS entries,
-                AVG(s.match_win_rate)                                            AS win_rate,
-                AVG(s.game_win_rate)                                             AS game_win_rate,
-                COUNT(*) FILTER (WHERE s.placement <= 8)                        AS top8s,
-                COUNT(*) FILTER (WHERE s.placement = 1)                         AS wins,
-                COUNT(*) FILTER (WHERE s.placement <= 8)::float
-                    / NULLIF(COUNT(*), 0)                                        AS top8_rate
+                COUNT(*)                                                    AS entries,
+                AVG(s.game_win_rate)                                        AS game_win_rate,
+                COUNT(*) FILTER (WHERE s.placement <= 8)                   AS top8s,
+                COUNT(*) FILTER (WHERE s.placement = 1)                    AS event_wins
             FROM standings s
             JOIN events e ON e.id = s.event_id
             WHERE s.leader IS NOT NULL {ef}
@@ -137,11 +155,21 @@ def leaders(
             HAVING COUNT(*) >= %s
         ),
         totals AS (SELECT SUM(entries) AS total FROM base),
-        ranked AS (SELECT b.*, ROW_NUMBER() OVER (ORDER BY b.entries DESC) AS rank FROM base b)
-        SELECT r.*, r.entries::float / NULLIF(t.total, 0) AS meta_share
-        FROM ranked r, totals t
+        ranked AS (
+            SELECT b.*, ROW_NUMBER() OVER (ORDER BY b.entries DESC) AS rank
+            FROM base b
+        )
+        SELECT
+            r.*,
+            ms.win_rate,
+            ms.total_matches,
+            r.top8s::float / NULLIF(r.entries, 0)   AS top8_rate,
+            r.entries::float / NULLIF(t.total, 0)   AS meta_share
+        FROM ranked r
+        LEFT JOIN match_stats ms ON ms.leader = r.leader
+        CROSS JOIN totals t
         ORDER BY r.entries DESC
-    """, ep + [min_entries])
+    """, ep + ep + [min_entries])
 
     total = sum(r["entries"] for r in rows)
     return {"leaders": rows, "total_entries": total}
@@ -156,12 +184,20 @@ def leader_stats(
 ):
     ef, ep = event_filter(meta_id, event_level)
     row = fetchone(f"""
-        WITH base AS (
+        WITH match_stats AS (
+            SELECT
+                SUM(CASE WHEN (p1_leader=%s AND winner='p1') OR (p2_leader=%s AND winner='p2') THEN 1 ELSE 0 END)::float
+                    / NULLIF(COUNT(*), 0) AS win_rate,
+                COUNT(*) AS total_matches
+            FROM matches m JOIN events e ON e.id = m.event_id
+            WHERE (m.p1_leader=%s OR m.p2_leader=%s) AND winner IN ('p1','p2') {ef}
+        ),
+        base AS (
             SELECT
                 COUNT(*)                                     AS entries,
-                AVG(s.match_win_rate)                        AS win_rate,
+                AVG(s.game_win_rate)                         AS game_win_rate,
                 COUNT(*) FILTER (WHERE s.placement <= 8)    AS top8s,
-                COUNT(*) FILTER (WHERE s.placement = 1)     AS wins
+                COUNT(*) FILTER (WHERE s.placement = 1)     AS event_wins
             FROM standings s
             JOIN events e ON e.id = s.event_id
             WHERE s.leader = %s {ef}
@@ -172,9 +208,11 @@ def leader_stats(
             JOIN events e ON e.id = s.event_id
             WHERE s.leader IS NOT NULL {ef}
         )
-        SELECT b.*, b.entries::float / NULLIF(t.t, 0) AS meta_share
-        FROM base b, total t
-    """, [leader] + ep + ep)
+        SELECT b.*, ms.win_rate, ms.total_matches,
+               b.entries::float / NULLIF(t.t, 0) AS meta_share,
+               b.top8s::float / NULLIF(b.entries, 0) AS top8_rate
+        FROM base b, total t, match_stats ms
+    """, [leader, leader, leader, leader] + ep + [leader] + ep + ep)
     if not row or not row.get("entries"):
         raise HTTPException(404, f"Leader not found: {leader}")
     return row
