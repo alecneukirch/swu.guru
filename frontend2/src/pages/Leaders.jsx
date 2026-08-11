@@ -160,8 +160,11 @@ function LeaderCard({ row, onClick }) {
   const mwr      = row.win_rate   != null ? Math.round(row.win_rate * 100)    : null
   const meta     = row.meta_share != null ? (row.meta_share * 100).toFixed(1) : null
   const t8p      = row.top8_rate  != null ? Math.round(row.top8_rate * 100)   : null
+  const conv     = row.conversion != null ? Number(row.conversion).toFixed(2) : null
   const mwrColor = mwr >= 55 ? 'text-win' : mwr <= 45 ? 'text-loss' : 'text-gold'
   const t8Color  = t8p >= 20 ? 'text-win' : t8p >= 12 ? 'text-gold' : 'text-t2'
+  const tier     = tierGrade(row.conversion, row.entries)
+  const tc       = TIER_COLORS[tier]
   const aspBorder = ASP_BORDER[row.primary_aspect] ?? 'border-t-border2'
   const imgUrl   = `/api/cards/leader-image/${encodeURIComponent(row.leader)}`
 
@@ -183,12 +186,20 @@ function LeaderCard({ row, onClick }) {
       {/* Strong gradient from bottom covering ~55% of card */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
 
-      {/* Meta % badge top-right */}
-      {meta != null && (
-        <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[14px] font-mono rounded px-1 py-0.5 leading-none z-10">
-          {meta}%
+      {/* Top row badges */}
+      <div className="absolute top-1.5 left-1.5 right-1.5 flex items-start justify-between z-10">
+        {/* Tier badge top-left */}
+        <div className={`font-display font-bold text-[13px] px-1.5 py-0.5 rounded border bg-black/70 ${tc.text} ${tc.border} leading-none`}>
+          {tier}
+          {conv && <span className="font-mono font-normal text-[11px] ml-1 opacity-90">{conv}×</span>}
         </div>
-      )}
+        {/* Meta % badge top-right */}
+        {meta != null && (
+          <div className="bg-black/70 text-gold text-[13px] font-mono rounded px-1 py-0.5 leading-none">
+            {meta}%
+          </div>
+        )}
+      </div>
 
       {/* Name + stats pinned to bottom */}
       <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 pt-1 z-10">
