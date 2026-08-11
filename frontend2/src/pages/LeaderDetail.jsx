@@ -123,7 +123,7 @@ export default function LeaderDetail({ filters }) {
         ))}
       </div>
 
-      {tab === 'Cards'      && <CardsTab leader={leader} filters={filters} baseGroup={selectedBase} />}
+      {tab === 'Cards'      && <CardsTab leader={leader} filters={filters} baseGroup={selectedBase} deckCount={stats?.entries} />}
       {tab === 'Matchups'   && <MatchupsTab leader={leader} filters={filters} baseGroup={selectedBase} />}
       {tab === 'Weaknesses' && <WeaknessesTab leader={leader} filters={filters} baseGroup={selectedBase} />}
       {tab === 'Mirror'     && <MirrorTab leader={leader} filters={filters} baseGroup={selectedBase} />}
@@ -159,7 +159,7 @@ function FunnelStat({ label, value }) {
 
 // ── Cards tab ────────────────────────────────────────────────────────────────
 
-function CardsTab({ leader, filters, baseGroup }) {
+function CardsTab({ leader, filters, baseGroup, deckCount }) {
   const [showSideboard, setShowSideboard] = useState(false)
   const { data, loading } = useApi(
     () => api.leaderCards(leader, { ...filters, base_group: baseGroup }),
@@ -175,7 +175,7 @@ function CardsTab({ leader, filters, baseGroup }) {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <button
           onClick={() => setShowSideboard(false)}
           className={`text-sm font-display font-semibold px-3 py-1 rounded transition-colors ${!showSideboard ? 'bg-gold/20 text-gold' : 'text-t2 hover:text-t1'}`}
@@ -188,6 +188,12 @@ function CardsTab({ leader, filters, baseGroup }) {
         >
           Sideboard ({side.length})
         </button>
+        {deckCount != null && (
+          <span className="ml-auto text-t3 text-xs font-mono">
+            {deckCount.toLocaleString()} decklists
+            {baseGroup && <span className="text-gold/70 ml-1">· {baseGroup}</span>}
+          </span>
+        )}
       </div>
       <CardGrid rows={showSideboard ? side : main} />
     </div>
