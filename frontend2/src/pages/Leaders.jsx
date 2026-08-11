@@ -186,8 +186,13 @@ function LeaderCard({ row, onClick }) {
 
       {/* Name + stats pinned to bottom */}
       <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 pt-1 z-10">
-        <div className="font-display font-semibold text-[16px] text-white leading-tight mb-1.5 truncate drop-shadow">
-          {row.leader}
+        <div className="mb-1.5 drop-shadow">
+          <div className="font-display font-bold text-[16px] text-white leading-tight truncate">
+            {row.leader.split(', ')[0]}
+          </div>
+          <div className="font-display text-[12px] text-t2 leading-tight truncate">
+            {row.leader.split(', ').slice(1).join(', ')}
+          </div>
         </div>
         <div className="grid grid-cols-4 gap-0.5">
           <StatCell label="Decks" value={row.entries}                        color="text-t1" />
