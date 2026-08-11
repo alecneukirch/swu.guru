@@ -120,38 +120,60 @@ def leaders(
 ):
     ef, ep = event_filter(meta_id, event_level)
     rows = fetchall(f"""
-        WITH match_wins AS (
-            SELECT p1_leader AS leader,
+        WITH base_lookup AS (
+            SELECT DISTINCT ON (c.name)
+                c.name AS base_name,
+                COALESCE(
+                    (SELECT bg.canonical_name FROM base_groups bg WHERE bg.canonical_name = c.name LIMIT 1),
+                    (SELECT bg.canonical_name FROM base_groups bg
+                     WHERE bg.hp = c.hp
+                       AND bg.color = CASE c.aspects[1]
+                         WHEN 'Aggression' THEN 'Red'
+                         WHEN 'Command'    THEN 'Green'
+                         WHEN 'Cunning'    THEN 'Yellow'
+                         WHEN 'Vigilance'  THEN 'Blue'
+                         ELSE c.aspects[1] END
+                       AND bg.rarity_class = 'common'
+                     LIMIT 1)
+                ) AS base_group
+            FROM cards c WHERE c.is_base = TRUE
+        ),
+        match_wins AS (
+            SELECT p1_leader AS leader, bl.base_group,
                    SUM(CASE WHEN m.winner='p1' THEN 1 ELSE 0 END) AS wins,
                    COUNT(*) AS games
             FROM matches m JOIN events e ON e.id = m.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = m.p1_base
             WHERE m.winner IN ('p1','p2') {ef}
-            GROUP BY p1_leader
+            GROUP BY p1_leader, bl.base_group
             UNION ALL
-            SELECT p2_leader AS leader,
+            SELECT p2_leader AS leader, bl.base_group,
                    SUM(CASE WHEN m.winner='p2' THEN 1 ELSE 0 END) AS wins,
                    COUNT(*) AS games
             FROM matches m JOIN events e ON e.id = m.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = m.p2_base
             WHERE m.winner IN ('p1','p2') {ef}
-            GROUP BY p2_leader
+            GROUP BY p2_leader, bl.base_group
         ),
         match_stats AS (
-            SELECT leader,
+            SELECT leader, base_group,
                    SUM(wins)::float / NULLIF(SUM(games), 0) AS win_rate,
                    SUM(games) AS total_matches
-            FROM match_wins GROUP BY leader
+            FROM match_wins GROUP BY leader, base_group
         ),
         base AS (
             SELECT
                 s.leader,
+                bl.base_group,
                 COUNT(*)                                                    AS entries,
                 AVG(s.game_win_rate)                                        AS game_win_rate,
                 COUNT(*) FILTER (WHERE s.placement <= 8)                   AS top8s,
                 COUNT(*) FILTER (WHERE s.placement = 1)                    AS event_wins
             FROM standings s
             JOIN events e ON e.id = s.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = s.base
             WHERE s.leader IS NOT NULL {ef}
-            GROUP BY s.leader
+            GROUP BY s.leader, bl.base_group
             HAVING COUNT(*) >= %s
         ),
         totals AS (SELECT SUM(entries) AS total FROM base),
@@ -162,7 +184,6 @@ def leaders(
         aspect_lookup AS (
             SELECT
                 name || ', ' || subtitle AS leader_key,
-                aspects,
                 CASE
                     WHEN 'Villainy' = ANY(aspects) THEN 'Villainy'
                     WHEN 'Heroism'  = ANY(aspects) THEN 'Heroism'
@@ -182,14 +203,15 @@ def leaders(
             r.entries::float / NULLIF(t.total, 0)   AS meta_share,
             ROUND(
                 ((r.top8s::float / NULLIF(r.entries, 0))
-                / NULLIF(bl.meta_t8_rate, 0))::numeric, 3
+                / NULLIF(bsl.meta_t8_rate, 0))::numeric, 3
             )                                        AS conversion,
             al.primary_aspect
         FROM ranked r
         LEFT JOIN match_stats ms ON ms.leader = r.leader
+                                AND ms.base_group IS NOT DISTINCT FROM r.base_group
         LEFT JOIN aspect_lookup al ON al.leader_key = r.leader
         CROSS JOIN totals t
-        CROSS JOIN baseline bl
+        CROSS JOIN baseline bsl
         ORDER BY r.entries DESC
     """, ep + ep + [min_entries])
 

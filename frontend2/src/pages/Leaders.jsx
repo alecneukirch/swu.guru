@@ -60,8 +60,8 @@ export default function Leaders({ filters }) {
 
     const sorted = [...rows].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0))
 
-    const main   = sorted.filter(r => (r.meta_share ?? 0) >= 0.006 || (r.event_wins ?? 0) > 1)
-    const rogues = sorted.filter(r => (r.meta_share ?? 0) <  0.006 && (r.event_wins ?? 0) <= 1)
+    const main   = sorted.filter(r => (r.meta_share ?? 0) >= 0.003 || (r.event_wins ?? 0) > 1)
+    const rogues = sorted.filter(r => (r.meta_share ?? 0) <  0.003 && (r.event_wins ?? 0) <= 1)
 
     const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]))
     main.forEach(r => {
@@ -125,7 +125,7 @@ export default function Leaders({ filters }) {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {group.map(r => (
-                <LeaderCard key={r.leader} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
+                <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
               ))}
             </div>
           </div>
@@ -137,12 +137,12 @@ export default function Leaders({ filters }) {
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-3 pl-1 border-l-2 border-border2">
             <span className="font-display font-bold text-base text-t2">Rogue</span>
-            <span className="text-t3 text-xs">&lt;0.6% meta share</span>
+            <span className="text-t3 text-xs">&lt;0.3% meta share</span>
             <span className="text-t3 text-xs ml-auto">{rogues.length}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {rogues.map(r => (
-              <LeaderCard key={r.leader} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
+              <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
             ))}
           </div>
         </div>
@@ -194,6 +194,11 @@ function LeaderCard({ row, onClick }) {
           <div className="font-display text-[12px] text-t2 leading-tight truncate">
             {row.leader.split(', ').slice(1).join(', ')}
           </div>
+          {row.base_group && (
+            <div className="font-mono text-[10px] text-gold/80 leading-tight truncate mt-0.5">
+              {row.base_group}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-4 gap-0.5">
           <StatCell label="Decks" value={row.entries}                        color="text-t1" />
