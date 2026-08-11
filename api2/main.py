@@ -125,6 +125,7 @@ def leaders(
                 s.leader,
                 COUNT(*)                                                         AS entries,
                 AVG(s.match_win_rate)                                            AS win_rate,
+                AVG(s.game_win_rate)                                             AS game_win_rate,
                 COUNT(*) FILTER (WHERE s.placement <= 8)                        AS top8s,
                 COUNT(*) FILTER (WHERE s.placement = 1)                         AS wins,
                 COUNT(*) FILTER (WHERE s.placement <= 8)::float
@@ -135,10 +136,11 @@ def leaders(
             GROUP BY s.leader
             HAVING COUNT(*) >= %s
         ),
-        totals AS (SELECT SUM(entries) AS total FROM base)
-        SELECT b.*, b.entries::float / NULLIF(t.total, 0) AS meta_share
-        FROM base b, totals t
-        ORDER BY entries DESC
+        totals AS (SELECT SUM(entries) AS total FROM base),
+        ranked AS (SELECT b.*, ROW_NUMBER() OVER (ORDER BY b.entries DESC) AS rank FROM base b)
+        SELECT r.*, r.entries::float / NULLIF(t.total, 0) AS meta_share
+        FROM ranked r, totals t
+        ORDER BY r.entries DESC
     """, ep + [min_entries])
 
     total = sum(r["entries"] for r in rows)
@@ -493,10 +495,12 @@ def leader_image(leader_name: str):
     row = fetchone("""
         SELECT front_image_url FROM cards
         WHERE is_leader = TRUE
-          AND (name = %s OR name || ' | ' || subtitle = %s)
+          AND (name = %s
+               OR name || ' | ' || subtitle = %s
+               OR name || ', ' || subtitle = %s)
           AND variant_type = 'Standard'
         LIMIT 1
-    """, [leader_name, leader_name])
+    """, [leader_name, leader_name, leader_name])
     if row and row.get("front_image_url"):
         return RedirectResponse(row["front_image_url"])
     raise HTTPException(404)

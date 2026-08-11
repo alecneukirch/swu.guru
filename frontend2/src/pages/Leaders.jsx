@@ -80,14 +80,27 @@ export default function Leaders({ filters }) {
 }
 
 function LeaderCard({ row, onClick }) {
-  const pct = row.win_rate != null ? Math.round(row.win_rate * 100) : null
-  const color = row.win_rate >= 0.55 ? 'text-win' : row.win_rate <= 0.45 ? 'text-loss' : 'text-gold'
+  const mwr = row.win_rate != null ? Math.round(row.win_rate * 100) : null
+  const gwr = row.game_win_rate != null ? Math.round(row.game_win_rate * 100) : null
+  const metaPct = row.meta_share != null ? (row.meta_share * 100).toFixed(1) : null
+  const top8Pct = row.top8_rate != null ? Math.round(row.top8_rate * 100) : null
+  const winColor = row.win_rate >= 0.55 ? 'text-win' : row.win_rate <= 0.45 ? 'text-loss' : 'text-gold'
 
   return (
     <button
       onClick={onClick}
       className="group relative bg-surface hover:bg-surface2 border border-border hover:border-border2 rounded-lg overflow-hidden text-left transition-all"
     >
+      {/* Rank badge */}
+      <div className="absolute top-1.5 left-1.5 z-10 bg-black/60 text-t3 text-[10px] font-mono-sw rounded px-1 leading-4">
+        #{row.rank}
+      </div>
+      {/* Meta share badge */}
+      {metaPct != null && (
+        <div className="absolute top-1.5 right-1.5 z-10 bg-black/60 text-gold text-[10px] font-mono-sw rounded px-1 leading-4">
+          {metaPct}%
+        </div>
+      )}
       <div className="aspect-[5/7] overflow-hidden bg-bg2">
         <LeaderImage
           leader={row.leader}
@@ -98,10 +111,25 @@ function LeaderCard({ row, onClick }) {
         <div className="font-display font-semibold text-sm text-t1 leading-tight mb-1 truncate">
           {row.leader}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-t3 text-xs font-mono-sw">{row.entries}</span>
-          {pct != null && (
-            <span className={`text-xs font-mono-sw font-semibold ${color}`}>{pct}%</span>
+        {/* MWR / GWR row */}
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-t3 text-[10px] font-mono-sw">{row.entries} entries</span>
+          {top8Pct != null && (
+            <span className="text-t3 text-[10px] font-mono-sw">T8: {top8Pct}%</span>
+          )}
+        </div>
+        <div className="flex items-center justify-between mb-1">
+          {mwr != null && (
+            <span className="text-[10px] font-mono-sw">
+              <span className="text-t3">MWR </span>
+              <span className={`font-semibold ${winColor}`}>{mwr}%</span>
+            </span>
+          )}
+          {gwr != null && (
+            <span className="text-[10px] font-mono-sw">
+              <span className="text-t3">GWR </span>
+              <span className="text-t2 font-semibold">{gwr}%</span>
+            </span>
           )}
         </div>
         <WinBar rate={row.win_rate} showPct={false} height="h-1" />
