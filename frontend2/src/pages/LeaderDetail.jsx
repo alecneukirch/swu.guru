@@ -168,8 +168,10 @@ function CardsTab({ leader, filters }) {
 
   if (loading) return <Spinner />
 
-  const main = (data ?? []).filter(r => !r.is_sideboard)
-  const side = (data ?? []).filter(r => r.is_sideboard)
+  const leaderFirst = leader.split(', ')[0].toLowerCase()
+  const isLeaderCard = r => r.card_name.toLowerCase().startsWith(leaderFirst) && r.avg_copies <= 1 && r.copy_rate >= 0.99
+  const main = (data ?? []).filter(r => !r.is_sideboard && !isLeaderCard(r))
+  const side = (data ?? []).filter(r => r.is_sideboard && !isLeaderCard(r))
 
   return (
     <div>
