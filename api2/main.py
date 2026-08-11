@@ -158,7 +158,7 @@ def leaders(
         ranked AS (
             SELECT b.*, ROW_NUMBER() OVER (ORDER BY b.entries DESC) AS rank
             FROM base b
-        )
+        ),
         aspect_lookup AS (
             SELECT
                 name || ', ' || subtitle AS leader_key,
