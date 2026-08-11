@@ -229,7 +229,7 @@ def leader_stats(
             FROM standings s
             JOIN events e ON e.id = s.event_id
             WHERE s.leader IS NOT NULL {ef}
-        )
+        ),
         field_t8 AS (
             SELECT SUM(CASE WHEN s.placement <= 8 THEN 1 ELSE 0 END)::float
                    / NULLIF(COUNT(*), 0) AS rate
