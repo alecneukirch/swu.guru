@@ -34,7 +34,7 @@ export default function App() {
     <div className="min-h-screen bg-bg font-body text-t1">
       {/* ── Nav ── */}
       <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-2">
+        <div className="max-w-[1800px] mx-auto px-4 h-14 flex items-center gap-2">
           <span className="font-display font-bold text-xl text-gold tracking-widest mr-4">
             SWU.GURU
           </span>
@@ -50,7 +50,7 @@ export default function App() {
       </header>
 
       {/* ── Pages ── */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-[1800px] mx-auto px-4 py-6">
         <Routes>
           <Route path="/"             element={<Leaders filters={filters} />} />
           <Route path="/leader/:name" element={<LeaderDetail filters={filters} />} />
