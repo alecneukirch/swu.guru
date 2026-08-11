@@ -8,6 +8,25 @@ import LeaderImage from '../components/LeaderImage.jsx'
 
 const TABS = ['Cards', 'Matchups', 'Weaknesses', 'Mirror']
 
+const TIER_COLORS = {
+  S: 'text-tier-s border-tier-s bg-tier-s/10',
+  A: 'text-tier-a border-tier-a bg-tier-a/10',
+  B: 'text-tier-b border-tier-b bg-tier-b/10',
+  C: 'text-tier-c border-tier-c bg-tier-c/10',
+  D: 'text-tier-d border-tier-d bg-tier-d/10',
+  F: 'text-tier-f border-tier-f bg-tier-f/10',
+}
+
+function tierGrade(conv) {
+  if (conv == null) return null
+  if (conv >= 1.3) return 'S'
+  if (conv >= 1.1) return 'A'
+  if (conv >= 0.9) return 'B'
+  if (conv >= 0.7) return 'C'
+  if (conv >= 0.5) return 'D'
+  return 'F'
+}
+
 export default function LeaderDetail({ filters }) {
   const { name } = useParams()
   const leader = decodeURIComponent(name)
@@ -18,28 +37,54 @@ export default function LeaderDetail({ filters }) {
     [leader, JSON.stringify(filters)]
   )
 
+  const namePart     = leader.split(', ')[0]
+  const subtitlePart = leader.split(', ').slice(1).join(', ')
+  const tier         = stats ? tierGrade(stats.conversion != null ? Number(stats.conversion) : null) : null
+  const tierCls      = tier ? TIER_COLORS[tier] : null
+
   return (
     <div>
       {/* Header */}
-      <div className="flex items-start gap-4 mb-6">
-        <Link to="/" className="text-t3 hover:text-t1 text-sm mt-1">← Leaders</Link>
-        <div className="w-20 h-28 rounded-lg overflow-hidden bg-surface flex-shrink-0">
-          <LeaderImage leader={leader} className="w-full h-full" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-display font-bold text-2xl text-t1 leading-tight">{leader}</h1>
-          {stats && (
-            <div className="flex flex-wrap gap-4 mt-2">
-              <Stat label="Entries"  value={stats.entries?.toLocaleString()} />
-              <Stat label="MWR"      value={stats.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : '—'} color={wr(stats.win_rate)} />
-              <Stat label="GWR"      value={stats.game_win_rate != null ? `${Math.round(stats.game_win_rate * 100)}%` : '—'} />
-              <Stat label="Top 8"    value={stats.top8s ?? '—'} />
-              <Stat label="T8 Rate"  value={stats.top8_rate != null ? `${Math.round(stats.top8_rate * 100)}%` : '—'} />
-              <Stat label="Wins"     value={stats.event_wins ?? '—'} />
-              <Stat label="Meta"     value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
-              <Stat label="Matches"  value={stats.total_matches?.toLocaleString() ?? '—'} />
+      <div className="mb-6">
+        <Link to="/" className="text-t3 hover:text-t1 text-sm mb-4 inline-block">← Leaders</Link>
+
+        <div className="flex items-start gap-5">
+          {/* Art thumbnail — landscape crop showing face */}
+          <div className="w-36 h-24 rounded-lg overflow-hidden bg-surface flex-shrink-0">
+            <LeaderImage
+              leader={leader}
+              className="w-full h-full object-cover"
+              style={{ objectPosition: 'center 15%' }}
+            />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {/* Name + tier badge */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="font-display font-bold text-4xl text-t1 leading-tight">{namePart}</h1>
+              {tier && (
+                <span className={`font-display font-bold text-lg px-2 py-0.5 rounded border ${tierCls}`}>
+                  {tier}
+                </span>
+              )}
             </div>
-          )}
+            <div className="text-t2 text-base mb-3">{subtitlePart}</div>
+
+            {/* Stats */}
+            {stats && (
+              <div className="flex flex-wrap gap-5">
+                <Stat label="Decklists" value={stats.entries?.toLocaleString()} />
+                <Stat label="T8 Rate"   value={stats.top8_rate != null ? `${Math.round(stats.top8_rate * 100)}%` : '—'}
+                      color={stats.top8_rate >= 0.2 ? 'text-win' : stats.top8_rate >= 0.12 ? 'text-gold' : 'text-t2'} />
+                <Stat label="Event Wins" value={stats.event_wins ?? '—'} />
+                <Stat label="MWR"        value={stats.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : '—'} color={wr(stats.win_rate)} />
+                <Stat label="GWR"        value={stats.game_win_rate != null ? `${Math.round(stats.game_win_rate * 100)}%` : '—'} />
+                <Stat label="Meta"       value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
+                <Stat label="Conversion" value={stats.conversion != null ? `${Number(stats.conversion).toFixed(2)}×` : '—'}
+                      color={stats.conversion >= 1.1 ? 'text-win' : stats.conversion >= 0.9 ? 'text-gold' : 'text-loss'} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

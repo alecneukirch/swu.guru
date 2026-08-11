@@ -230,11 +230,30 @@ def leader_stats(
             JOIN events e ON e.id = s.event_id
             WHERE s.leader IS NOT NULL {ef}
         )
+        field_t8 AS (
+            SELECT SUM(CASE WHEN s.placement <= 8 THEN 1 ELSE 0 END)::float
+                   / NULLIF(COUNT(*), 0) AS rate
+            FROM standings s JOIN events e ON e.id = s.event_id
+            WHERE s.leader IS NOT NULL {ef}
+        ),
+        aspect_lookup AS (
+            SELECT
+                CASE WHEN 'Villainy' = ANY(aspects) THEN 'Villainy'
+                     WHEN 'Heroism'  = ANY(aspects) THEN 'Heroism'
+                     ELSE aspects[1] END AS primary_aspect
+            FROM cards
+            WHERE is_leader = TRUE AND variant_type = 'Standard'
+              AND (name || ', ' || subtitle = %s OR name = %s)
+            LIMIT 1
+        )
         SELECT b.*, ms.win_rate, ms.total_matches,
-               b.entries::float / NULLIF(t.t, 0) AS meta_share,
-               b.top8s::float / NULLIF(b.entries, 0) AS top8_rate
-        FROM base b, total t, match_stats ms
-    """, [leader, leader, leader, leader] + ep + [leader] + ep + ep)
+               b.entries::float / NULLIF(t.t, 0)   AS meta_share,
+               b.top8s::float  / NULLIF(b.entries, 0) AS top8_rate,
+               ROUND(((b.top8s::float / NULLIF(b.entries, 0))
+                      / NULLIF(ft.rate, 0))::numeric, 3) AS conversion,
+               al.primary_aspect
+        FROM base b, total t, match_stats ms, field_t8 ft, aspect_lookup al
+    """, [leader, leader, leader, leader] + ep + [leader] + ep + ep + ep + [leader, leader])
     if not row or not row.get("entries"):
         raise HTTPException(404, f"Leader not found: {leader}")
     return row

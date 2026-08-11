@@ -171,7 +171,8 @@ function LeaderCard({ row, onClick }) {
         src={imgUrl}
         alt={row.leader}
         onError={e => { e.target.style.display = 'none' }}
-        className="absolute inset-0 w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        style={{ objectPosition: 'center 15%' }}
       />
 
       {/* Strong gradient from bottom covering ~55% of card */}
