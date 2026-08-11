@@ -30,11 +30,14 @@ export default function LeaderDetail({ filters }) {
           <h1 className="font-display font-bold text-2xl text-t1 leading-tight">{leader}</h1>
           {stats && (
             <div className="flex flex-wrap gap-4 mt-2">
-              <Stat label="Entries"  value={stats.entries} />
-              <Stat label="Win Rate" value={stats.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : '—'} color={wr(stats.win_rate)} />
+              <Stat label="Entries"  value={stats.entries?.toLocaleString()} />
+              <Stat label="MWR"      value={stats.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : '—'} color={wr(stats.win_rate)} />
+              <Stat label="GWR"      value={stats.game_win_rate != null ? `${Math.round(stats.game_win_rate * 100)}%` : '—'} />
               <Stat label="Top 8"    value={stats.top8s ?? '—'} />
-              <Stat label="Wins"     value={stats.wins ?? '—'} />
-              <Stat label="Meta %"   value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
+              <Stat label="T8 Rate"  value={stats.top8_rate != null ? `${Math.round(stats.top8_rate * 100)}%` : '—'} />
+              <Stat label="Wins"     value={stats.event_wins ?? '—'} />
+              <Stat label="Meta"     value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
+              <Stat label="Matches"  value={stats.total_matches?.toLocaleString() ?? '—'} />
             </div>
           )}
         </div>

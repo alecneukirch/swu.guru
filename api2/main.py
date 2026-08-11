@@ -159,15 +159,37 @@ def leaders(
             SELECT b.*, ROW_NUMBER() OVER (ORDER BY b.entries DESC) AS rank
             FROM base b
         )
+        aspect_lookup AS (
+            SELECT
+                name || ', ' || subtitle AS leader_key,
+                aspects,
+                CASE
+                    WHEN 'Villainy' = ANY(aspects) THEN 'Villainy'
+                    WHEN 'Heroism'  = ANY(aspects) THEN 'Heroism'
+                    ELSE aspects[1]
+                END AS primary_aspect
+            FROM cards
+            WHERE is_leader = TRUE AND variant_type = 'Standard'
+        ),
+        baseline AS (
+            SELECT SUM(top8s)::float / NULLIF(SUM(entries), 0) AS meta_t8_rate FROM base
+        )
         SELECT
             r.*,
             ms.win_rate,
             ms.total_matches,
             r.top8s::float / NULLIF(r.entries, 0)   AS top8_rate,
-            r.entries::float / NULLIF(t.total, 0)   AS meta_share
+            r.entries::float / NULLIF(t.total, 0)   AS meta_share,
+            ROUND(
+                (r.top8s::float / NULLIF(r.entries, 0))
+                / NULLIF(bl.meta_t8_rate, 0)
+            ::numeric, 3)                            AS conversion,
+            al.primary_aspect
         FROM ranked r
         LEFT JOIN match_stats ms ON ms.leader = r.leader
+        LEFT JOIN aspect_lookup al ON al.leader_key = r.leader
         CROSS JOIN totals t
+        CROSS JOIN baseline bl
         ORDER BY r.entries DESC
     """, ep + ep + [min_entries])
 
@@ -531,7 +553,7 @@ def meta_call(
 def leader_image(leader_name: str):
     # Look up the leader card image from the cards table
     row = fetchone("""
-        SELECT front_image_url FROM cards
+        SELECT back_image_url, front_image_url FROM cards
         WHERE is_leader = TRUE
           AND (name = %s
                OR name || ' | ' || subtitle = %s
@@ -539,8 +561,10 @@ def leader_image(leader_name: str):
           AND variant_type = 'Standard'
         LIMIT 1
     """, [leader_name, leader_name, leader_name])
-    if row and row.get("front_image_url"):
-        return RedirectResponse(row["front_image_url"])
+    if row:
+        url = row.get("back_image_url") or row.get("front_image_url")
+        if url:
+            return RedirectResponse(url)
     raise HTTPException(404)
 
 # ── SPA fallback — must be last so API routes match first ────────────────────

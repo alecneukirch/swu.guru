@@ -3,15 +3,45 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks/useApi.js'
 import Spinner from '../components/Spinner.jsx'
-import WinBar from '../components/WinBar.jsx'
-import LeaderImage from '../components/LeaderImage.jsx'
 
 const SORT_OPTIONS = [
-  { value: 'entries',   label: 'Entries' },
-  { value: 'win_rate',  label: 'Win Rate' },
-  { value: 'top8_rate', label: 'Top 8 Rate' },
-  { value: 'wins',      label: 'Wins' },
+  { value: 'entries',    label: 'Entries' },
+  { value: 'win_rate',   label: 'Win Rate' },
+  { value: 'top8_rate',  label: 'Top 8 Rate' },
+  { value: 'event_wins', label: 'Wins' },
+  { value: 'conversion', label: 'Conversion' },
 ]
+
+const TIER_ORDER  = ['S','A','B','C','D','F']
+const TIER_LABEL  = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' }
+const TIER_COLORS = {
+  S: { text: 'text-tier-s', border: 'border-tier-s', bg: 'bg-tier-s/10' },
+  A: { text: 'text-tier-a', border: 'border-tier-a', bg: 'bg-tier-a/10' },
+  B: { text: 'text-tier-b', border: 'border-tier-b', bg: 'bg-tier-b/10' },
+  C: { text: 'text-tier-c', border: 'border-tier-c', bg: 'bg-tier-c/10' },
+  D: { text: 'text-tier-d', border: 'border-tier-d', bg: 'bg-tier-d/10' },
+  F: { text: 'text-tier-f', border: 'border-tier-f', bg: 'bg-tier-f/10' },
+}
+
+const ASP_BORDER = {
+  Heroism:    'border-t-asp-heroism',
+  Villainy:   'border-t-asp-villainy',
+  Cunning:    'border-t-asp-cunning',
+  Aggression: 'border-t-asp-aggression',
+  Command:    'border-t-asp-command',
+  Vigilance:  'border-t-asp-vigilance',
+  Force:      'border-t-asp-force',
+}
+
+function tierGrade(conv) {
+  if (conv == null) return 'C'
+  if (conv >= 1.3)  return 'S'
+  if (conv >= 1.1)  return 'A'
+  if (conv >= 0.9)  return 'B'
+  if (conv >= 0.7)  return 'C'
+  if (conv >= 0.5)  return 'D'
+  return 'F'
+}
 
 export default function Leaders({ filters }) {
   const [sort, setSort]     = useState('entries')
@@ -23,11 +53,23 @@ export default function Leaders({ filters }) {
     [JSON.stringify(filters), minEntries]
   )
 
-  const leaders = useMemo(() => {
-    if (!data) return []
-    let rows = data.leaders ?? data
+  const { leaders, rogues, byTier, total } = useMemo(() => {
+    if (!data) return { leaders: [], rogues: [], byTier: {}, total: 0 }
+    let rows = (data.leaders ?? data)
     if (search) rows = rows.filter(r => r.leader.toLowerCase().includes(search.toLowerCase()))
-    return [...rows].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0))
+
+    const sorted = [...rows].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0))
+
+    const main   = sorted.filter(r => (r.meta_share ?? 0) >= 0.006 || (r.event_wins ?? 0) > 1)
+    const rogues = sorted.filter(r => (r.meta_share ?? 0) <  0.006 && (r.event_wins ?? 0) <= 1)
+
+    const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]))
+    main.forEach(r => {
+      const g = tierGrade(r.conversion)
+      byTier[g].push(r)
+    })
+
+    return { leaders: main, rogues, byTier, total: data.total_entries ?? rows.reduce((s,r)=>s+(r.entries||0),0) }
   }, [data, sort, search])
 
   const navigate = useNavigate()
@@ -62,78 +104,110 @@ export default function Leaders({ filters }) {
         </label>
         {data && (
           <span className="ml-auto text-t3 text-sm">
-            {leaders.length} leaders · {(data.total_entries ?? 0).toLocaleString()} entries
+            {leaders.length + rogues.length} leaders · {total.toLocaleString()} entries
           </span>
         )}
       </div>
 
       {loading && <Spinner />}
 
-      {/* Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {leaders.map(r => (
-          <LeaderCard key={r.leader} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
-        ))}
-      </div>
+      {/* Tier sections */}
+      {!loading && TIER_ORDER.map(tier => {
+        const group = byTier[tier]
+        if (!group?.length) return null
+        const tc = TIER_COLORS[tier]
+        return (
+          <div key={tier} className="mb-6">
+            <div className={`flex items-center gap-3 mb-3 pl-1 border-l-2 ${tc.border}`}>
+              <span className={`font-display font-bold text-lg ${tc.text}`}>{tier}</span>
+              <span className="text-t3 text-sm">{TIER_LABEL[tier]}</span>
+              <span className="text-t3 text-xs ml-auto">{group.length}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {group.map(r => (
+                <LeaderCard key={r.leader} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Rogue section */}
+      {!loading && rogues.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-3 pl-1 border-l-2 border-border2">
+            <span className="font-display font-bold text-base text-t2">Rogue</span>
+            <span className="text-t3 text-xs">&lt;0.6% meta share</span>
+            <span className="text-t3 text-xs ml-auto">{rogues.length}</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {rogues.map(r => (
+              <LeaderCard key={r.leader} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function LeaderCard({ row, onClick }) {
-  const mwr = row.win_rate != null ? Math.round(row.win_rate * 100) : null
-  const gwr = row.game_win_rate != null ? Math.round(row.game_win_rate * 100) : null
-  const metaPct = row.meta_share != null ? (row.meta_share * 100).toFixed(1) : null
-  const top8Pct = row.top8_rate != null ? Math.round(row.top8_rate * 100) : null
-  const winColor = row.win_rate >= 0.55 ? 'text-win' : row.win_rate <= 0.45 ? 'text-loss' : 'text-gold'
+  const mwr     = row.win_rate    != null ? Math.round(row.win_rate * 100)    : null
+  const meta    = row.meta_share  != null ? (row.meta_share * 100).toFixed(1) : null
+  const t8p     = row.top8_rate   != null ? Math.round(row.top8_rate * 100)   : null
+  const mwrColor = mwr >= 55 ? 'text-win' : mwr <= 45 ? 'text-loss' : 'text-gold'
+  const t8Color  = t8p >= 20 ? 'text-win' : t8p >= 12 ? 'text-gold' : 'text-t2'
+  const aspBorder = ASP_BORDER[row.primary_aspect] ?? 'border-t-border2'
+  const imgUrl   = `/api/cards/leader-image/${encodeURIComponent(row.leader)}`
 
   return (
     <button
       onClick={onClick}
-      className="group relative bg-surface hover:bg-surface2 border border-border hover:border-border2 rounded-lg overflow-hidden text-left transition-all"
+      className={`group relative bg-surface hover:bg-surface2 border border-border hover:border-border2 border-t-2 ${aspBorder} rounded-lg overflow-hidden text-left transition-all`}
     >
-      {/* Rank badge */}
-      <div className="absolute top-1.5 left-1.5 z-10 bg-black/60 text-t3 text-[10px] font-mono-sw rounded px-1 leading-4">
-        #{row.rank}
-      </div>
-      {/* Meta share badge */}
-      {metaPct != null && (
-        <div className="absolute top-1.5 right-1.5 z-10 bg-black/60 text-gold text-[10px] font-mono-sw rounded px-1 leading-4">
-          {metaPct}%
-        </div>
-      )}
-      <div className="aspect-[5/7] overflow-hidden bg-bg2">
-        <LeaderImage
-          leader={row.leader}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+      {/* Card art background */}
+      <div
+        className="relative overflow-hidden"
+        style={{ aspectRatio: '1 / 1' }}
+      >
+        <img
+          src={imgUrl}
+          alt={row.leader}
+          onError={e => { e.target.style.display = 'none' }}
+          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
         />
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent pointer-events-none" />
+        {/* Meta badge */}
+        {meta != null && (
+          <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[10px] font-mono rounded px-1 py-0.5 leading-none">
+            {meta}%
+          </div>
+        )}
       </div>
-      <div className="p-2">
-        <div className="font-display font-semibold text-sm text-t1 leading-tight mb-1 truncate">
+
+      {/* Info section */}
+      <div className="px-2 pt-1 pb-2">
+        <div className="font-display font-semibold text-[11px] text-t1 leading-tight mb-1.5 truncate">
           {row.leader}
         </div>
-        {/* MWR / GWR row */}
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-t3 text-[10px] font-mono-sw">{row.entries} entries</span>
-          {top8Pct != null && (
-            <span className="text-t3 text-[10px] font-mono-sw">T8: {top8Pct}%</span>
-          )}
+        {/* Stats row */}
+        <div className="grid grid-cols-4 gap-0.5">
+          <StatCell label="Decks" value={row.entries} color="text-t1" />
+          <StatCell label="T8" value={t8p != null ? `${t8p}%` : '—'} color={t8Color} />
+          <StatCell label="Wins" value={row.event_wins ?? '—'} color="text-t2" />
+          <StatCell label="MWR" value={mwr != null ? `${mwr}%` : '—'} color={mwrColor} />
         </div>
-        <div className="flex items-center justify-between mb-1">
-          {mwr != null && (
-            <span className="text-[10px] font-mono-sw">
-              <span className="text-t3">MWR </span>
-              <span className={`font-semibold ${winColor}`}>{mwr}%</span>
-            </span>
-          )}
-          {gwr != null && (
-            <span className="text-[10px] font-mono-sw">
-              <span className="text-t3">GWR </span>
-              <span className="text-t2 font-semibold">{gwr}%</span>
-            </span>
-          )}
-        </div>
-        <WinBar rate={row.win_rate} showPct={false} height="h-1" />
       </div>
     </button>
+  )
+}
+
+function StatCell({ label, value, color = 'text-t2' }) {
+  return (
+    <div className="text-center">
+      <div className="text-t3 text-[8px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
+      <div className={`font-mono text-[10px] font-semibold ${color}`}>{value}</div>
+    </div>
   )
 }
