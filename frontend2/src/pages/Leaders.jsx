@@ -180,7 +180,7 @@ function LeaderCard({ row, onClick }) {
         <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent pointer-events-none" />
         {/* Meta badge */}
         {meta != null && (
-          <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[10px] font-mono rounded px-1 py-0.5 leading-none">
+          <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[12px] font-mono rounded px-1 py-0.5 leading-none">
             {meta}%
           </div>
         )}
@@ -188,7 +188,7 @@ function LeaderCard({ row, onClick }) {
 
       {/* Info section */}
       <div className="px-2 pt-1 pb-2">
-        <div className="font-display font-semibold text-[11px] text-t1 leading-tight mb-1.5 truncate">
+        <div className="font-display font-semibold text-[13px] text-t1 leading-tight mb-1.5 truncate">
           {row.leader}
         </div>
         {/* Stats row */}
@@ -206,8 +206,8 @@ function LeaderCard({ row, onClick }) {
 function StatCell({ label, value, color = 'text-t2' }) {
   return (
     <div className="text-center">
-      <div className="text-t3 text-[8px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
-      <div className={`font-mono text-[10px] font-semibold ${color}`}>{value}</div>
+      <div className="text-t3 text-[10px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
+      <div className={`font-mono text-[12px] font-semibold ${color}`}>{value}</div>
     </div>
   )
 }
