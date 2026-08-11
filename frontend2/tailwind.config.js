@@ -16,9 +16,9 @@ export default {
         purple:   '#b39ddb',
         border:   'rgba(255,255,255,0.07)',
         border2:  'rgba(255,255,255,0.12)',
-        t1:       '#e8e8f0',
-        t2:       '#9090a8',
-        t3:       '#9898b0',
+        t1:       '#ffffff',
+        t2:       '#b8b8cc',
+        t3:       '#8888a0',
         // Aspect colors
         'asp-heroism':    '#c6c1a0',
         'asp-villainy':   '#8b3a6b',
