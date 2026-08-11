@@ -171,7 +171,7 @@ function LeaderCard({ row, onClick }) {
         src={imgUrl}
         alt={row.leader}
         onError={e => { e.target.style.display = 'none' }}
-        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        className="absolute inset-0 w-full h-full object-cover scale-125 group-hover:scale-[1.35] transition-transform duration-300"
         style={{ objectPosition: 'center 15%' }}
       />
 
