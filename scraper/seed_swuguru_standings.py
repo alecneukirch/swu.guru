@@ -136,7 +136,7 @@ def get_conn():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "192.168.1.200"),
         port=int(os.getenv("DB_PORT", 5432)),
-        dbname="swuguru",
+        dbname=os.getenv("DB_NAME", "swuguru"),
         user=os.getenv("DB_USER", "swu_user"),
         password=os.getenv("DB_PASS", "981273465aA!"),
     )
