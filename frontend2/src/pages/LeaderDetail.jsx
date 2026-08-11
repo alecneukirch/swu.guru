@@ -46,53 +46,54 @@ export default function LeaderDetail({ filters }) {
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <Link to="/" className="text-t3 hover:text-t1 text-sm mb-4 inline-block">← Leaders</Link>
+      {/* Hero banner */}
+      <div className="relative rounded-xl overflow-hidden mb-6 bg-surface" style={{ height: '260px' }}>
+        {/* Art — fills right half, zoomed on face */}
+        <LeaderImage
+          leader={leader}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ objectPosition: 'center 15%', transform: 'scale(1.15)', transformOrigin: 'center 15%' }}
+        />
+        {/* Gradient: heavy dark on left, fades right */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/20 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-        <div className="flex items-start gap-5">
-          {/* Art thumbnail — landscape crop showing face */}
-          <div className="w-36 h-24 rounded-lg overflow-hidden bg-surface flex-shrink-0">
-            <LeaderImage
-              leader={leader}
-              className="w-full h-full object-cover"
-              style={{ objectPosition: 'center 15%' }}
-            />
+        {/* Back link */}
+        <Link to="/" className="absolute top-4 left-4 text-t3 hover:text-t1 text-sm z-10">← Leaders</Link>
+
+        {/* Content pinned to bottom-left */}
+        <div className="absolute bottom-0 left-0 right-0 px-6 pb-5 z-10">
+          {/* Name + tier */}
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
+            <h1 className="font-display font-bold text-5xl text-white leading-tight drop-shadow">{namePart}</h1>
+            {tier && (
+              <span className={`font-display font-bold text-xl px-2.5 py-1 rounded border ${tierCls}`}>
+                {tier}
+                {stats?.conversion != null && (
+                  <span className="font-mono font-normal text-sm ml-1.5 opacity-90">
+                    {Number(stats.conversion).toFixed(2)}×
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          <div className="text-t2 text-base mb-4 drop-shadow">
+            {subtitlePart}
+            {selectedBase && <span className="text-gold/80 font-mono ml-3 text-sm">{selectedBase}</span>}
           </div>
 
-          <div className="flex-1 min-w-0">
-            {/* Name + tier badge */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="font-display font-bold text-4xl text-t1 leading-tight">{namePart}</h1>
-              {tier && (
-                <span className={`font-display font-bold text-lg px-2 py-0.5 rounded border ${tierCls}`}>
-                  {tier}
-                </span>
-              )}
+          {/* Stats row */}
+          {stats && (
+            <div className="flex flex-wrap gap-5">
+              <Stat label="Decklists"  value={stats.entries?.toLocaleString()} />
+              <Stat label="Meta Share" value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
+              <Stat label="T8 Rate"    value={stats.top8_rate != null ? `${Math.round(stats.top8_rate * 100)}%` : '—'}
+                    color={stats.top8_rate >= 0.2 ? 'text-win' : stats.top8_rate >= 0.12 ? 'text-gold' : 'text-t2'} />
+              <Stat label="Event Wins" value={stats.event_wins ?? '—'} />
+              <Stat label="MWR"        value={stats.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : '—'} color={wr(stats.win_rate)} />
+              <Stat label="GWR"        value={stats.game_win_rate != null ? `${Math.round(stats.game_win_rate * 100)}%` : '—'} />
             </div>
-            <div className="text-t2 text-base">{subtitlePart}</div>
-            {selectedBase && (
-              <div className="text-gold/80 font-mono text-sm mb-3">
-                {selectedBase}
-              </div>
-            )}
-            {!selectedBase && <div className="mb-3" />}
-
-            {/* Stats */}
-            {stats && (
-              <div className="flex flex-wrap gap-5">
-                <Stat label="Decklists" value={stats.entries?.toLocaleString()} />
-                <Stat label="T8 Rate"   value={stats.top8_rate != null ? `${Math.round(stats.top8_rate * 100)}%` : '—'}
-                      color={stats.top8_rate >= 0.2 ? 'text-win' : stats.top8_rate >= 0.12 ? 'text-gold' : 'text-t2'} />
-                <Stat label="Event Wins" value={stats.event_wins ?? '—'} />
-                <Stat label="MWR"        value={stats.win_rate != null ? `${Math.round(stats.win_rate * 100)}%` : '—'} color={wr(stats.win_rate)} />
-                <Stat label="GWR"        value={stats.game_win_rate != null ? `${Math.round(stats.game_win_rate * 100)}%` : '—'} />
-                <Stat label="Meta"       value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
-                <Stat label="Conversion" value={stats.conversion != null ? `${Number(stats.conversion).toFixed(2)}×` : '—'}
-                      color={stats.conversion >= 1.1 ? 'text-win' : stats.conversion >= 0.9 ? 'text-gold' : 'text-loss'} />
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
