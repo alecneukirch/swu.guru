@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useApi } from '../hooks/useApi.js'
 import Spinner from '../components/Spinner.jsx'
@@ -29,7 +29,9 @@ function tierGrade(conv) {
 
 export default function LeaderDetail({ filters }) {
   const { name } = useParams()
+  const [searchParams] = useSearchParams()
   const leader = decodeURIComponent(name)
+  const selectedBase = searchParams.get('base')
   const [tab, setTab] = useState('Cards')
 
   const { data: stats } = useApi(
@@ -68,7 +70,13 @@ export default function LeaderDetail({ filters }) {
                 </span>
               )}
             </div>
-            <div className="text-t2 text-base mb-3">{subtitlePart}</div>
+            <div className="text-t2 text-base">{subtitlePart}</div>
+            {selectedBase && (
+              <div className="text-gold/80 font-mono text-sm mb-3">
+                {selectedBase}
+              </div>
+            )}
+            {!selectedBase && <div className="mb-3" />}
 
             {/* Stats */}
             {stats && (
