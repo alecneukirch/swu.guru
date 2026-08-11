@@ -33,13 +33,15 @@ const ASP_BORDER = {
   Force:      'border-t-asp-force',
 }
 
-function tierGrade(conv) {
+function tierGrade(conv, entries) {
   if (conv == null) return 'C'
-  if (conv >= 1.3)  return 'S'
-  if (conv >= 1.1)  return 'A'
-  if (conv >= 0.9)  return 'B'
-  if (conv >= 0.7)  return 'C'
-  if (conv >= 0.5)  return 'D'
+  const c = Number(conv)
+  const reliable = (entries ?? 0) >= 20
+  if (c >= 1.3 && reliable) return 'S'
+  if (c >= 1.1 && reliable) return 'A'
+  if (c >= 0.9) return 'B'
+  if (c >= 0.7) return 'C'
+  if (c >= 0.5) return 'D'
   return 'F'
 }
 
@@ -56,7 +58,10 @@ export default function Leaders({ filters }) {
   const { leaders, rogues, byTier, total } = useMemo(() => {
     if (!data) return { leaders: [], rogues: [], byTier: {}, total: 0 }
     let rows = (data.leaders ?? data)
-    if (search) rows = rows.filter(r => r.leader.toLowerCase().includes(search.toLowerCase()))
+    if (search) {
+      const q = search.toLowerCase()
+      rows = rows.filter(r => r.leader.toLowerCase().includes(q) || (r.base_group ?? '').toLowerCase().includes(q))
+    }
 
     const sorted = [...rows].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0))
 
@@ -65,7 +70,7 @@ export default function Leaders({ filters }) {
 
     const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]))
     main.forEach(r => {
-      const g = tierGrade(r.conversion)
+      const g = tierGrade(r.conversion, r.entries)
       byTier[g].push(r)
     })
 
@@ -80,7 +85,7 @@ export default function Leaders({ filters }) {
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <input
           type="text"
-          placeholder="Search leaders…"
+          placeholder="Search leader or base…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="bg-surface border border-border text-t1 text-sm rounded px-3 py-1.5 w-48 focus:outline-none focus:border-border2 placeholder:text-t3"
@@ -104,7 +109,7 @@ export default function Leaders({ filters }) {
         </label>
         {data && (
           <span className="ml-auto text-t3 text-sm">
-            {leaders.length + rogues.length} leaders · {total.toLocaleString()} entries
+            {leaders.length + rogues.length} combos · {total.toLocaleString()} entries
           </span>
         )}
       </div>
