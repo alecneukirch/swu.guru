@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Base font size — outside @layer so it wins over Tailwind preflight */
-html, body { font-size: 30px; }
+html, body { font-size: 17px; }
 
 @layer base {
   html { background: #09090f; color: #e8e8f0; }

@@ -179,14 +179,14 @@ function LeaderCard({ row, onClick }) {
 
       {/* Meta % badge top-right */}
       {meta != null && (
-        <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[11px] font-mono rounded px-1 py-0.5 leading-none z-10">
+        <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[14px] font-mono rounded px-1 py-0.5 leading-none z-10">
           {meta}%
         </div>
       )}
 
       {/* Name + stats pinned to bottom */}
       <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 pt-1 z-10">
-        <div className="font-display font-semibold text-[13px] text-white leading-tight mb-1.5 truncate drop-shadow">
+        <div className="font-display font-semibold text-[16px] text-white leading-tight mb-1.5 truncate drop-shadow">
           {row.leader}
         </div>
         <div className="grid grid-cols-4 gap-0.5">
@@ -203,8 +203,8 @@ function LeaderCard({ row, onClick }) {
 function StatCell({ label, value, color = 'text-t2' }) {
   return (
     <div className="text-center">
-      <div className="text-t3 text-[9px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
-      <div className={`font-mono text-[11px] font-semibold ${color}`}>{value}</div>
+      <div className="text-t3 text-[11px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
+      <div className={`font-mono text-[14px] font-semibold ${color}`}>{value}</div>
     </div>
   )
 }
