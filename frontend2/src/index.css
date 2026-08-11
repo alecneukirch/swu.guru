@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { background: #09090f; color: #e8e8f0; }
+  body { font-family: 'Barlow', sans-serif; }
+
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0f0f1a; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+}
+
+@layer utilities {
+  .font-display { font-family: 'Rajdhani', sans-serif; }
+  .font-mono-sw { font-family: 'Share Tech Mono', monospace; }
+}
