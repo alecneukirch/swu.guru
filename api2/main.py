@@ -181,9 +181,9 @@ def leaders(
             r.top8s::float / NULLIF(r.entries, 0)   AS top8_rate,
             r.entries::float / NULLIF(t.total, 0)   AS meta_share,
             ROUND(
-                (r.top8s::float / NULLIF(r.entries, 0))
-                / NULLIF(bl.meta_t8_rate, 0)
-            ::numeric, 3)                            AS conversion,
+                ((r.top8s::float / NULLIF(r.entries, 0))
+                / NULLIF(bl.meta_t8_rate, 0))::numeric, 3
+            )                                        AS conversion,
             al.primary_aspect
         FROM ranked r
         LEFT JOIN match_stats ms ON ms.leader = r.leader
