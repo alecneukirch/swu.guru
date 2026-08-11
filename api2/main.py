@@ -122,17 +122,17 @@ def leaders(
     rows = fetchall(f"""
         WITH match_wins AS (
             SELECT p1_leader AS leader,
-                   SUM(CASE WHEN winner='p1' THEN 1 ELSE 0 END) AS wins,
+                   SUM(CASE WHEN m.winner='p1' THEN 1 ELSE 0 END) AS wins,
                    COUNT(*) AS games
             FROM matches m JOIN events e ON e.id = m.event_id
-            WHERE winner IN ('p1','p2') {ef}
+            WHERE m.winner IN ('p1','p2') {ef}
             GROUP BY p1_leader
             UNION ALL
             SELECT p2_leader AS leader,
-                   SUM(CASE WHEN winner='p2' THEN 1 ELSE 0 END) AS wins,
+                   SUM(CASE WHEN m.winner='p2' THEN 1 ELSE 0 END) AS wins,
                    COUNT(*) AS games
             FROM matches m JOIN events e ON e.id = m.event_id
-            WHERE winner IN ('p1','p2') {ef}
+            WHERE m.winner IN ('p1','p2') {ef}
             GROUP BY p2_leader
         ),
         match_stats AS (
@@ -186,11 +186,11 @@ def leader_stats(
     row = fetchone(f"""
         WITH match_stats AS (
             SELECT
-                SUM(CASE WHEN (p1_leader=%s AND winner='p1') OR (p2_leader=%s AND winner='p2') THEN 1 ELSE 0 END)::float
+                SUM(CASE WHEN (m.p1_leader=%s AND m.winner='p1') OR (m.p2_leader=%s AND m.winner='p2') THEN 1 ELSE 0 END)::float
                     / NULLIF(COUNT(*), 0) AS win_rate,
                 COUNT(*) AS total_matches
             FROM matches m JOIN events e ON e.id = m.event_id
-            WHERE (m.p1_leader=%s OR m.p2_leader=%s) AND winner IN ('p1','p2') {ef}
+            WHERE (m.p1_leader=%s OR m.p2_leader=%s) AND m.winner IN ('p1','p2') {ef}
         ),
         base AS (
             SELECT
