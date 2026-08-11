@@ -267,15 +267,29 @@ def leader_stats(
             WHERE is_leader = TRUE AND variant_type = 'Standard'
               AND (name || ', ' || subtitle = %s OR name = %s)
             LIMIT 1
+        ),
+        funnel AS (
+            SELECT
+                ROUND(COUNT(*) FILTER (WHERE s.placement <= GREATEST(CEIL(e.player_count * 0.50)::int, 1))::numeric
+                      / NULLIF(COUNT(*), 0) / 0.50, 3) AS t50_conv,
+                ROUND(COUNT(*) FILTER (WHERE s.placement <= GREATEST(CEIL(e.player_count * 0.25)::int, 1))::numeric
+                      / NULLIF(COUNT(*), 0) / 0.25, 3) AS t25_conv,
+                ROUND(COUNT(*) FILTER (WHERE s.placement <= GREATEST(CEIL(e.player_count * 0.10)::int, 1))::numeric
+                      / NULLIF(COUNT(*), 0) / 0.10, 3) AS t10_conv,
+                ROUND(COUNT(*) FILTER (WHERE s.placement <= GREATEST(CEIL(e.player_count * 0.01)::int, 1))::numeric
+                      / NULLIF(COUNT(*), 0) / 0.01, 3) AS t1_conv
+            FROM standings s JOIN events e ON e.id = s.event_id
+            WHERE s.leader = %s AND e.player_count > 0 {ef}
         )
         SELECT b.*, ms.win_rate, ms.total_matches,
                b.entries::float / NULLIF(t.t, 0)   AS meta_share,
                b.top8s::float  / NULLIF(b.entries, 0) AS top8_rate,
                ROUND(((b.top8s::float / NULLIF(b.entries, 0))
                       / NULLIF(ft.rate, 0))::numeric, 3) AS conversion,
-               al.primary_aspect
-        FROM base b, total t, match_stats ms, field_t8 ft, aspect_lookup al
-    """, [leader, leader, leader, leader] + ep + [leader] + ep + ep + ep + [leader, leader])
+               al.primary_aspect,
+               f.t50_conv, f.t25_conv, f.t10_conv, f.t1_conv
+        FROM base b, total t, match_stats ms, field_t8 ft, aspect_lookup al, funnel f
+    """, [leader, leader, leader, leader] + ep + [leader] + ep + ep + ep + [leader, leader] + [leader] + ep)
     if not row or not row.get("entries"):
         raise HTTPException(404, f"Leader not found: {leader}")
     return row
@@ -587,6 +601,23 @@ def meta_call(
 
     results.sort(key=lambda r: r["score"], reverse=True)
     return results
+
+# ── /api/cards/card-image ────────────────────────────────────────────────────
+
+@app.get("/api/cards/card-image/{card_name:path}")
+def card_image(card_name: str):
+    row = fetchone("""
+        SELECT front_image_url FROM cards
+        WHERE (name || ' | ' || COALESCE(subtitle,'') = %s
+               OR name || ', ' || COALESCE(subtitle,'') = %s
+               OR name = %s)
+          AND is_leader = FALSE AND is_base = FALSE
+          AND variant_type = 'Standard'
+        LIMIT 1
+    """, [card_name, card_name, card_name])
+    if row and row.get("front_image_url"):
+        return RedirectResponse(row["front_image_url"])
+    raise HTTPException(404)
 
 # ── /api/cards/leader-image (proxy from old API or swuapi) ───────────────────
 
