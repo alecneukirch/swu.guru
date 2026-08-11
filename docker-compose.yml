@@ -141,12 +141,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=swuguru_dmz"
-      # HTTPS router — direct TLS (Cloudflare / external)
-      - "traefik.http.routers.app.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.app.rule=Host(`v2.${DOMAIN}`)"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       - "traefik.http.routers.app.middlewares=secure-headers@file,rate-limit@file"
-      # HTTP router — plain HTTP from local NGINX reverse proxy
-      - "traefik.http.routers.app-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.app-http.rule=Host(`v2.${DOMAIN}`)"
       - "traefik.http.routers.app-http.entrypoints=web"
       - "traefik.http.routers.app-http.middlewares=secure-headers@file,rate-limit@file"
       - "traefik.http.services.app.loadbalancer.server.port=8000"
@@ -179,9 +177,12 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=swuguru_dmz"
-      - "traefik.http.routers.app2.rule=Host(`v2.${DOMAIN}`)"
+      - "traefik.http.routers.app2.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.app2.tls.certresolver=letsencrypt"
       - "traefik.http.routers.app2.middlewares=secure-headers@file,rate-limit@file"
+      - "traefik.http.routers.app2-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.app2-http.entrypoints=web"
+      - "traefik.http.routers.app2-http.middlewares=secure-headers@file,rate-limit@file"
       - "traefik.http.services.app2.loadbalancer.server.port=8001"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/summary')"]
