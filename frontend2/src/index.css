@@ -2,8 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Base font size — outside @layer so it wins over Tailwind preflight */
+html, body { font-size: 30px; }
+
 @layer base {
-  html { background: #09090f; color: #e8e8f0; font-size: 20px; }
+  html { background: #09090f; color: #e8e8f0; }
   body { font-family: 'Barlow', sans-serif; }
 
   ::-webkit-scrollbar       { width: 6px; height: 6px; }
