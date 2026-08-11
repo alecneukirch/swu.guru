@@ -319,12 +319,21 @@ def leader_cards(
             COUNT(DISTINCT dc.standing_id)                                               AS deck_count,
             COUNT(DISTINCT dc.standing_id)::float / NULLIF((SELECT n FROM totals), 0)   AS copy_rate,
             AVG(dc.quantity)                                                             AS avg_copies,
-            -- MWR: win rate of decks that include this card
             SUM(d.match_wins)::float
-                / NULLIF(SUM(d.match_wins + d.match_losses + COALESCE(d.match_draws,0)), 0) AS card_mwr
+                / NULLIF(SUM(d.match_wins + d.match_losses + COALESCE(d.match_draws,0)), 0) AS card_mwr,
+            c.type,
+            c.arena,
+            c.cost
         FROM decklist_cards dc
         JOIN decks d ON d.standing_id = dc.standing_id
-        GROUP BY dc.card_name, dc.is_sideboard
+        LEFT JOIN LATERAL (
+            SELECT type, arena, cost FROM cards
+            WHERE (name || ' | ' || COALESCE(subtitle,'') = dc.card_name
+                   OR name = dc.card_name)
+              AND variant_type = 'Standard'
+            LIMIT 1
+        ) c ON TRUE
+        GROUP BY dc.card_name, dc.is_sideboard, c.type, c.arena, c.cost
         HAVING COUNT(DISTINCT dc.standing_id) >= %s
         ORDER BY copy_rate DESC, dc.card_name
     """, [leader] + ep + [min_decks])

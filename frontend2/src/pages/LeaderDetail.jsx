@@ -194,37 +194,44 @@ function CardsTab({ leader, filters }) {
   )
 }
 
+const CARD_SECTIONS = [
+  { label: 'Ground Units', filter: r => r.type === 'Unit' && r.arena === 'Ground' },
+  { label: 'Space Units',  filter: r => r.type === 'Unit' && r.arena === 'Space'  },
+  { label: 'Events',       filter: r => r.type === 'Event'   },
+  { label: 'Upgrades',     filter: r => r.type === 'Upgrade' },
+  { label: 'Other',        filter: r => !['Unit','Event','Upgrade'].includes(r.type) },
+]
+
 function CardGrid({ rows }) {
-  const [sort, setSort] = useState('copy_rate')
-  const sorted = [...rows].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0))
+  const byCost = (a, b) => (a.cost ?? 99) - (b.cost ?? 99) || a.card_name.localeCompare(b.card_name)
 
   return (
-    <div>
-      {/* Sort controls */}
-      <div className="flex gap-2 mb-4">
-        {[['copy_rate','Inclusion'],['card_mwr','MWR'],['avg_copies','Avg Copies']].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setSort(key)}
-            className={`text-xs font-display font-semibold px-3 py-1 rounded transition-colors ${sort === key ? 'bg-gold/20 text-gold' : 'text-t2 hover:text-t1'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-3">
-        {sorted.map(r => <CardTile key={r.card_name} row={r} />)}
-      </div>
+    <div className="space-y-8">
+      {CARD_SECTIONS.map(({ label, filter }) => {
+        const section = rows.filter(filter).sort(byCost)
+        if (!section.length) return null
+        return (
+          <div key={label}>
+            <div className="flex items-center gap-3 mb-3 pl-1 border-l-2 border-border2">
+              <span className="font-display font-bold text-base text-t1">{label}</span>
+              <span className="text-t3 text-xs">{section.length}</span>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-3">
+              {section.map(r => <CardTile key={r.card_name} row={r} />)}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
 function CardTile({ row }) {
-  const inc  = row.copy_rate  != null ? Math.round(row.copy_rate * 100)  : null
-  const mwr  = row.card_mwr   != null ? Math.round(row.card_mwr * 100)   : null
+  const inc     = row.copy_rate  != null ? Math.round(row.copy_rate * 100) : null
+  const mwr     = row.card_mwr   != null ? Math.round(row.card_mwr * 100)  : null
+  const copies  = row.avg_copies != null ? row.avg_copies.toFixed(2) : null
   const mwrColor = mwr == null ? 'text-t3' : mwr >= 55 ? 'text-win' : mwr <= 45 ? 'text-loss' : 'text-gold'
-  const imgUrl = `/api/cards/card-image/${encodeURIComponent(row.card_name)}`
+  const imgUrl   = `/api/cards/card-image/${encodeURIComponent(row.card_name)}`
   const displayName = row.card_name.includes(' | ')
     ? row.card_name.split(' | ')[0]
     : row.card_name.split(', ')[0]
@@ -238,8 +245,14 @@ function CardTile({ row }) {
         onError={e => { e.target.style.display = 'none' }}
         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
       />
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent pointer-events-none" />
+
+      {/* Cost badge top-left */}
+      {row.cost != null && (
+        <div className="absolute top-1 left-1 bg-black/80 text-t1 font-bold font-mono text-[13px] rounded-full w-6 h-6 flex items-center justify-center leading-none">
+          {row.cost}
+        </div>
+      )}
 
       {/* Inclusion badge top-right */}
       {inc != null && (
@@ -248,16 +261,20 @@ function CardTile({ row }) {
         </div>
       )}
 
-      {/* Name + MWR at bottom */}
+      {/* Name + stats at bottom */}
       <div className="absolute bottom-0 left-0 right-0 px-1.5 pb-1.5 pt-1">
-        <div className="font-display font-semibold text-[12px] text-white leading-tight truncate mb-0.5">
+        <div className="font-display font-semibold text-[12px] text-white leading-tight truncate mb-1">
           {displayName}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-t3 text-[10px]">MWR</span>
-          <span className={`font-mono-sw text-[11px] font-semibold ${mwrColor}`}>
-            {mwr != null ? `${mwr}%` : '—'}
-          </span>
+        <div className="grid grid-cols-2 gap-0.5">
+          <div className="text-center">
+            <div className="text-t3 text-[9px] uppercase leading-none mb-0.5">Copies</div>
+            <div className="font-mono-sw text-[11px] text-t1 font-semibold">{copies ?? '—'}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-t3 text-[9px] uppercase leading-none mb-0.5">MWR</div>
+            <div className={`font-mono-sw text-[11px] font-semibold ${mwrColor}`}>{mwr != null ? `${mwr}%` : '—'}</div>
+          </div>
         </div>
       </div>
     </div>
