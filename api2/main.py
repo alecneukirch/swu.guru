@@ -378,26 +378,26 @@ def matchups(
         WITH raw AS (
             SELECT
                 p1_leader AS leader, p2_leader AS opponent,
-                SUM(CASE WHEN winner='p1' THEN 1 ELSE 0 END) AS wins,
-                SUM(CASE WHEN winner='p2' THEN 1 ELSE 0 END) AS losses,
+                SUM(CASE WHEN m.winner='p1' THEN 1 ELSE 0 END) AS wins,
+                SUM(CASE WHEN m.winner='p2' THEN 1 ELSE 0 END) AS losses,
                 COUNT(*) AS games
             FROM matches m
             JOIN events e ON e.id = m.event_id
             WHERE p1_leader = ANY(%s) AND p2_leader = ANY(%s)
               AND p1_leader != p2_leader
-              AND winner IN ('p1','p2') {ef}
+              AND m.winner IN ('p1','p2') {ef}
             GROUP BY p1_leader, p2_leader
             UNION ALL
             SELECT
                 p2_leader, p1_leader,
-                SUM(CASE WHEN winner='p2' THEN 1 ELSE 0 END),
-                SUM(CASE WHEN winner='p1' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN m.winner='p2' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN m.winner='p1' THEN 1 ELSE 0 END),
                 COUNT(*)
             FROM matches m
             JOIN events e ON e.id = m.event_id
             WHERE p1_leader = ANY(%s) AND p2_leader = ANY(%s)
               AND p1_leader != p2_leader
-              AND winner IN ('p1','p2') {ef}
+              AND m.winner IN ('p1','p2') {ef}
             GROUP BY p2_leader, p1_leader
         )
         SELECT
@@ -440,24 +440,24 @@ def meta_call(
 
     total = sum(r["entries"] for r in leaders_data)
     meta_shares = {r["leader"]: r["entries"] / total for r in leaders_data}
-    win_rates   = {r["leader"]: r["win_rate"] or 0.5 for r in leaders_data}
+    win_rates   = {r["leader"]: float(r["win_rate"] or 0.5) for r in leaders_data}
     leader_list = list(meta_shares.keys())
 
     # Matchup matrix
     mu_rows = fetchall(f"""
         WITH raw AS (
             SELECT p1_leader AS l, p2_leader AS o,
-                   SUM(CASE WHEN winner='p1' THEN 1 ELSE 0 END) AS w, COUNT(*) AS g
+                   SUM(CASE WHEN m.winner='p1' THEN 1 ELSE 0 END) AS w, COUNT(*) AS g
             FROM matches m JOIN events e ON e.id = m.event_id
             WHERE p1_leader = ANY(%s) AND p2_leader = ANY(%s)
-              AND winner IN ('p1','p2') {ef}
+              AND m.winner IN ('p1','p2') {ef}
             GROUP BY p1_leader, p2_leader
             UNION ALL
             SELECT p2_leader, p1_leader,
-                   SUM(CASE WHEN winner='p2' THEN 1 ELSE 0 END), COUNT(*)
+                   SUM(CASE WHEN m.winner='p2' THEN 1 ELSE 0 END), COUNT(*)
             FROM matches m JOIN events e ON e.id = m.event_id
             WHERE p1_leader = ANY(%s) AND p2_leader = ANY(%s)
-              AND winner IN ('p1','p2') {ef}
+              AND m.winner IN ('p1','p2') {ef}
             GROUP BY p2_leader, p1_leader
         )
         SELECT l, o, SUM(w)::float/NULLIF(SUM(g),0) AS wr
