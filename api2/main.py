@@ -225,16 +225,38 @@ def leader_stats(
     leader:      str,
     meta_id:     Optional[str] = None,
     event_level: Optional[str] = None,
+    base_group:  Optional[str] = None,
 ):
     ef, ep = event_filter(meta_id, event_level)
     row = fetchone(f"""
-        WITH match_stats AS (
+        WITH base_lookup AS (
+            SELECT DISTINCT ON (c.name)
+                c.name AS base_name,
+                COALESCE(
+                    (SELECT bg.canonical_name FROM base_groups bg WHERE bg.canonical_name = c.name LIMIT 1),
+                    (SELECT bg.canonical_name FROM base_groups bg
+                     WHERE bg.hp = c.hp
+                       AND bg.color = CASE c.aspects[1]
+                         WHEN 'Aggression' THEN 'Red'
+                         WHEN 'Command'    THEN 'Green'
+                         WHEN 'Cunning'    THEN 'Yellow'
+                         WHEN 'Vigilance'  THEN 'Blue'
+                         ELSE c.aspects[1] END
+                       AND bg.rarity_class = 'common'
+                     LIMIT 1)
+                ) AS base_group
+            FROM cards c WHERE c.is_base = TRUE
+        ),
+        match_stats AS (
             SELECT
                 SUM(CASE WHEN (m.p1_leader=%s AND m.winner='p1') OR (m.p2_leader=%s AND m.winner='p2') THEN 1 ELSE 0 END)::float
                     / NULLIF(COUNT(*), 0) AS win_rate,
                 COUNT(*) AS total_matches
-            FROM matches m JOIN events e ON e.id = m.event_id
+            FROM matches m
+            JOIN events e ON e.id = m.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = CASE WHEN m.p1_leader=%s THEN m.p1_base ELSE m.p2_base END
             WHERE (m.p1_leader=%s OR m.p2_leader=%s) AND m.winner IN ('p1','p2') {ef}
+              AND (%s::text IS NULL OR bl.base_group = %s)
         ),
         base AS (
             SELECT
@@ -244,7 +266,9 @@ def leader_stats(
                 COUNT(*) FILTER (WHERE s.placement = 1)     AS event_wins
             FROM standings s
             JOIN events e ON e.id = s.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = s.base
             WHERE s.leader = %s {ef}
+              AND (%s::text IS NULL OR bl.base_group = %s)
         ),
         total AS (
             SELECT COUNT(*) AS t
@@ -279,7 +303,9 @@ def leader_stats(
                 ROUND(COUNT(*) FILTER (WHERE s.placement <= GREATEST(CEIL(e.player_count * 0.01)::int, 1))::numeric
                       / NULLIF(COUNT(*), 0) / 0.01, 3) AS t1_conv
             FROM standings s JOIN events e ON e.id = s.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = s.base
             WHERE s.leader = %s AND e.player_count > 0 {ef}
+              AND (%s::text IS NULL OR bl.base_group = %s)
         )
         SELECT b.*, ms.win_rate, ms.total_matches,
                b.entries::float / NULLIF(t.t, 0)   AS meta_share,
@@ -289,7 +315,14 @@ def leader_stats(
                al.primary_aspect,
                f.t50_conv, f.t25_conv, f.t10_conv, f.t1_conv
         FROM base b, total t, match_stats ms, field_t8 ft, aspect_lookup al, funnel f
-    """, [leader, leader, leader, leader] + ep + [leader] + ep + ep + ep + [leader, leader] + [leader] + ep)
+    """,
+        [leader, leader, leader, leader, leader] + ep + [base_group, base_group] +  # match_stats
+        [leader] + ep + [base_group, base_group] +                                   # base
+        ep +                                                                          # total
+        ep +                                                                          # field_t8
+        [leader, leader] +                                                            # aspect_lookup
+        [leader] + ep + [base_group, base_group]                                     # funnel
+    )
     if not row or not row.get("entries"):
         raise HTTPException(404, f"Leader not found: {leader}")
     return row
@@ -301,16 +334,37 @@ def leader_cards(
     leader:      str,
     meta_id:     Optional[str] = None,
     event_level: Optional[str] = None,
+    base_group:  Optional[str] = None,
     min_decks:   int = Query(3, ge=1),
 ):
     ef, ep = event_filter(meta_id, event_level)
     rows = fetchall(f"""
-        WITH decks AS (
+        WITH base_lookup AS (
+            SELECT DISTINCT ON (c.name)
+                c.name AS base_name,
+                COALESCE(
+                    (SELECT bg.canonical_name FROM base_groups bg WHERE bg.canonical_name = c.name LIMIT 1),
+                    (SELECT bg.canonical_name FROM base_groups bg
+                     WHERE bg.hp = c.hp
+                       AND bg.color = CASE c.aspects[1]
+                         WHEN 'Aggression' THEN 'Red'
+                         WHEN 'Command'    THEN 'Green'
+                         WHEN 'Cunning'    THEN 'Yellow'
+                         WHEN 'Vigilance'  THEN 'Blue'
+                         ELSE c.aspects[1] END
+                       AND bg.rarity_class = 'common'
+                     LIMIT 1)
+                ) AS base_group
+            FROM cards c WHERE c.is_base = TRUE
+        ),
+        decks AS (
             SELECT s.id AS standing_id, s.match_wins, s.match_losses, s.match_draws
             FROM standings s
             JOIN events e ON e.id = s.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = s.base
             WHERE s.leader = %s
               AND s.has_decklist = TRUE {ef}
+              AND (%s::text IS NULL OR bl.base_group = %s)
         ),
         totals AS (SELECT COUNT(*) AS n FROM decks)
         SELECT
@@ -336,7 +390,7 @@ def leader_cards(
         GROUP BY dc.card_name, dc.is_sideboard, c.type, c.arena, c.cost
         HAVING COUNT(DISTINCT dc.standing_id) >= %s
         ORDER BY copy_rate DESC, dc.card_name
-    """, [leader] + ep + [min_decks])
+    """, [leader] + ep + [base_group, base_group] + [min_decks])
     return rows
 
 # ── /api/leader/{leader}/matchups ─────────────────────────────────────────────
@@ -346,21 +400,42 @@ def leader_matchups(
     leader:      str,
     meta_id:     Optional[str] = None,
     event_level: Optional[str] = None,
+    base_group:  Optional[str] = None,
     min_games:   int = Query(5, ge=1),
 ):
     ef, ep = event_filter(meta_id, event_level)
     rows = fetchall(f"""
-        WITH m AS (
+        WITH base_lookup AS (
+            SELECT DISTINCT ON (c.name)
+                c.name AS base_name,
+                COALESCE(
+                    (SELECT bg.canonical_name FROM base_groups bg WHERE bg.canonical_name = c.name LIMIT 1),
+                    (SELECT bg.canonical_name FROM base_groups bg
+                     WHERE bg.hp = c.hp
+                       AND bg.color = CASE c.aspects[1]
+                         WHEN 'Aggression' THEN 'Red'
+                         WHEN 'Command'    THEN 'Green'
+                         WHEN 'Cunning'    THEN 'Yellow'
+                         WHEN 'Vigilance'  THEN 'Blue'
+                         ELSE c.aspects[1] END
+                       AND bg.rarity_class = 'common'
+                     LIMIT 1)
+                ) AS base_group
+            FROM cards c WHERE c.is_base = TRUE
+        ),
+        m AS (
             SELECT
                 CASE WHEN m.p1_leader = %s THEN m.p2_leader ELSE m.p1_leader END AS opponent,
                 CASE WHEN m.p1_leader = %s THEN m.winner = 'p1'
                                            ELSE m.winner = 'p2' END AS won
             FROM matches m
             JOIN events e ON e.id = m.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = CASE WHEN m.p1_leader = %s THEN m.p1_base ELSE m.p2_base END
             WHERE (m.p1_leader = %s OR m.p2_leader = %s)
               AND m.p1_leader IS NOT NULL AND m.p2_leader IS NOT NULL
               AND m.p1_leader != m.p2_leader
               AND m.winner IN ('p1','p2') {ef}
+              AND (%s::text IS NULL OR bl.base_group = %s)
         )
         SELECT
             opponent,
@@ -373,7 +448,7 @@ def leader_matchups(
         GROUP BY opponent
         HAVING COUNT(*) >= %s
         ORDER BY win_rate DESC
-    """, [leader, leader, leader, leader] + ep + [min_games])
+    """, [leader, leader, leader, leader, leader] + ep + [base_group, base_group] + [min_games])
     return rows
 
 # ── /api/leader/{leader}/weaknesses ───────────────────────────────────────────
@@ -383,23 +458,49 @@ def leader_weaknesses(
     leader:      str,
     meta_id:     Optional[str] = None,
     event_level: Optional[str] = None,
+    base_group:  Optional[str] = None,
     min_games:   int = Query(5, ge=1),
 ):
     """Cards that opponents play that correlate with beating this leader."""
     ef, ep = event_filter(meta_id, event_level)
 
-    # Baseline: overall win rate of opponents vs this leader
+    base_lookup_cte = """
+        WITH base_lookup AS (
+            SELECT DISTINCT ON (c.name)
+                c.name AS base_name,
+                COALESCE(
+                    (SELECT bg.canonical_name FROM base_groups bg WHERE bg.canonical_name = c.name LIMIT 1),
+                    (SELECT bg.canonical_name FROM base_groups bg
+                     WHERE bg.hp = c.hp
+                       AND bg.color = CASE c.aspects[1]
+                         WHEN 'Aggression' THEN 'Red'
+                         WHEN 'Command'    THEN 'Green'
+                         WHEN 'Cunning'    THEN 'Yellow'
+                         WHEN 'Vigilance'  THEN 'Blue'
+                         ELSE c.aspects[1] END
+                       AND bg.rarity_class = 'common'
+                     LIMIT 1)
+                ) AS base_group
+            FROM cards c WHERE c.is_base = TRUE
+        )
+    """
+
+    # Baseline: overall win rate of opponents vs this leader (filtered by base_group)
     baseline = fetchone(f"""
+        {base_lookup_cte}
         SELECT AVG((m.winner != CASE WHEN m.p1_leader = %s THEN 'p1' ELSE 'p2' END)::int) AS baseline_wr
         FROM matches m
         JOIN events e ON e.id = m.event_id
+        LEFT JOIN base_lookup bl ON bl.base_name = CASE WHEN m.p1_leader = %s THEN m.p1_base ELSE m.p2_base END
         WHERE (m.p1_leader = %s OR m.p2_leader = %s)
           AND m.winner IN ('p1','p2') {ef}
-    """, [leader, leader, leader] + ep)
+          AND (%s::text IS NULL OR bl.base_group = %s)
+    """, [leader, leader, leader, leader] + ep + [base_group, base_group])
     baseline_wr = (baseline or {}).get("baseline_wr") or 0.5
 
     rows = fetchall(f"""
-        WITH matchups AS (
+        {base_lookup_cte},
+        matchups AS (
             SELECT
                 m.id AS match_id,
                 CASE WHEN m.p1_leader = %s THEN m.p2_standing_id ELSE m.p1_standing_id END AS opp_standing_id,
@@ -407,9 +508,11 @@ def leader_weaknesses(
                                            ELSE m.winner != 'p2' END AS opp_won
             FROM matches m
             JOIN events e ON e.id = m.event_id
+            LEFT JOIN base_lookup bl ON bl.base_name = CASE WHEN m.p1_leader = %s THEN m.p1_base ELSE m.p2_base END
             WHERE (m.p1_leader = %s OR m.p2_leader = %s)
               AND m.winner IN ('p1','p2')
               AND m.p1_leader != m.p2_leader {ef}
+              AND (%s::text IS NULL OR bl.base_group = %s)
         )
         SELECT
             dc.card_name,
@@ -423,27 +526,41 @@ def leader_weaknesses(
         HAVING COUNT(*) >= %s
         ORDER BY opp_win_rate DESC
         LIMIT 50
-    """, [leader, leader, leader, leader] + ep + [baseline_wr, min_games])
+    """, [leader, leader, leader, leader, leader] + ep + [base_group, base_group] + [baseline_wr, min_games])
     return rows
 
 # ── /api/leader/{leader}/mirror ───────────────────────────────────────────────
 
 @app.get("/api/leader/{leader}/mirror")
 def leader_mirror(
-    leader:    str,
-    meta_id:   Optional[str] = None,
+    leader:      str,
+    meta_id:     Optional[str] = None,
     event_level: Optional[str] = None,
-    min_games: int = Query(3, ge=1),
+    base_group:  Optional[str] = None,
+    min_games:   int = Query(3, ge=1),
 ):
     ef, ep = event_filter(meta_id, event_level)
 
-    baseline = fetchone(f"""
-        SELECT 0.5 AS baseline_wr
-    """, [])
-    baseline_wr = 0.5
-
     rows = fetchall(f"""
-        WITH mirror AS (
+        WITH base_lookup AS (
+            SELECT DISTINCT ON (c.name)
+                c.name AS base_name,
+                COALESCE(
+                    (SELECT bg.canonical_name FROM base_groups bg WHERE bg.canonical_name = c.name LIMIT 1),
+                    (SELECT bg.canonical_name FROM base_groups bg
+                     WHERE bg.hp = c.hp
+                       AND bg.color = CASE c.aspects[1]
+                         WHEN 'Aggression' THEN 'Red'
+                         WHEN 'Command'    THEN 'Green'
+                         WHEN 'Cunning'    THEN 'Yellow'
+                         WHEN 'Vigilance'  THEN 'Blue'
+                         ELSE c.aspects[1] END
+                       AND bg.rarity_class = 'common'
+                     LIMIT 1)
+                ) AS base_group
+            FROM cards c WHERE c.is_base = TRUE
+        ),
+        mirror AS (
             SELECT
                 m.id,
                 m.p1_standing_id,
@@ -451,8 +568,11 @@ def leader_mirror(
                 m.winner
             FROM matches m
             JOIN events e ON e.id = m.event_id
+            LEFT JOIN base_lookup bl1 ON bl1.base_name = m.p1_base
+            LEFT JOIN base_lookup bl2 ON bl2.base_name = m.p2_base
             WHERE m.p1_leader = %s AND m.p2_leader = %s
               AND m.winner IN ('p1','p2') {ef}
+              AND (%s::text IS NULL OR (bl1.base_group = %s AND bl2.base_group = %s))
         ),
         winners AS (
             SELECT
@@ -472,7 +592,7 @@ def leader_mirror(
         HAVING COUNT(*) >= %s
         ORDER BY win_rate DESC
         LIMIT 60
-    """, [leader, leader] + ep + [min_games])
+    """, [leader, leader] + ep + [base_group, base_group, base_group] + [min_games])
     return rows
 
 # ── /api/matchups (matrix) ────────────────────────────────────────────────────

@@ -35,8 +35,8 @@ export default function LeaderDetail({ filters }) {
   const [tab, setTab] = useState('Cards')
 
   const { data: stats } = useApi(
-    () => api.leaderStats(leader, filters),
-    [leader, JSON.stringify(filters)]
+    () => api.leaderStats(leader, { ...filters, base_group: selectedBase }),
+    [leader, JSON.stringify(filters), selectedBase]
   )
 
   const namePart     = leader.split(', ')[0]
@@ -123,10 +123,10 @@ export default function LeaderDetail({ filters }) {
         ))}
       </div>
 
-      {tab === 'Cards'      && <CardsTab leader={leader} filters={filters} />}
-      {tab === 'Matchups'   && <MatchupsTab leader={leader} filters={filters} />}
-      {tab === 'Weaknesses' && <WeaknessesTab leader={leader} filters={filters} />}
-      {tab === 'Mirror'     && <MirrorTab leader={leader} filters={filters} />}
+      {tab === 'Cards'      && <CardsTab leader={leader} filters={filters} baseGroup={selectedBase} />}
+      {tab === 'Matchups'   && <MatchupsTab leader={leader} filters={filters} baseGroup={selectedBase} />}
+      {tab === 'Weaknesses' && <WeaknessesTab leader={leader} filters={filters} baseGroup={selectedBase} />}
+      {tab === 'Mirror'     && <MirrorTab leader={leader} filters={filters} baseGroup={selectedBase} />}
     </div>
   )
 }
@@ -159,11 +159,11 @@ function FunnelStat({ label, value }) {
 
 // ── Cards tab ────────────────────────────────────────────────────────────────
 
-function CardsTab({ leader, filters }) {
+function CardsTab({ leader, filters, baseGroup }) {
   const [showSideboard, setShowSideboard] = useState(false)
   const { data, loading } = useApi(
-    () => api.leaderCards(leader, filters),
-    [leader, JSON.stringify(filters)]
+    () => api.leaderCards(leader, { ...filters, base_group: baseGroup }),
+    [leader, JSON.stringify(filters), baseGroup]
   )
 
   if (loading) return <Spinner />
@@ -283,10 +283,10 @@ function CardTile({ row }) {
 
 // ── Matchups tab ─────────────────────────────────────────────────────────────
 
-function MatchupsTab({ leader, filters }) {
+function MatchupsTab({ leader, filters, baseGroup }) {
   const { data, loading } = useApi(
-    () => api.leaderMatchups(leader, filters),
-    [leader, JSON.stringify(filters)]
+    () => api.leaderMatchups(leader, { ...filters, base_group: baseGroup }),
+    [leader, JSON.stringify(filters), baseGroup]
   )
   if (loading) return <Spinner />
   const rows = [...(data ?? [])].sort((a, b) => (b.win_rate ?? 0) - (a.win_rate ?? 0))
@@ -317,10 +317,10 @@ function MatchupsTab({ leader, filters }) {
 
 // ── Weaknesses tab ───────────────────────────────────────────────────────────
 
-function WeaknessesTab({ leader, filters }) {
+function WeaknessesTab({ leader, filters, baseGroup }) {
   const { data, loading } = useApi(
-    () => api.leaderWeaknesses(leader, filters),
-    [leader, JSON.stringify(filters)]
+    () => api.leaderWeaknesses(leader, { ...filters, base_group: baseGroup }),
+    [leader, JSON.stringify(filters), baseGroup]
   )
   if (loading) return <Spinner />
   const rows = data ?? []
@@ -355,10 +355,10 @@ function WeaknessesTab({ leader, filters }) {
 
 // ── Mirror tab ───────────────────────────────────────────────────────────────
 
-function MirrorTab({ leader, filters }) {
+function MirrorTab({ leader, filters, baseGroup }) {
   const { data, loading } = useApi(
-    () => api.leaderMirror(leader, filters),
-    [leader, JSON.stringify(filters)]
+    () => api.leaderMirror(leader, { ...filters, base_group: baseGroup }),
+    [leader, JSON.stringify(filters), baseGroup]
   )
   if (loading) return <Spinner />
   const rows = data ?? []
