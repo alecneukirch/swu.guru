@@ -152,9 +152,9 @@ export default function Leaders({ filters }) {
 }
 
 function LeaderCard({ row, onClick }) {
-  const mwr     = row.win_rate    != null ? Math.round(row.win_rate * 100)    : null
-  const meta    = row.meta_share  != null ? (row.meta_share * 100).toFixed(1) : null
-  const t8p     = row.top8_rate   != null ? Math.round(row.top8_rate * 100)   : null
+  const mwr      = row.win_rate   != null ? Math.round(row.win_rate * 100)    : null
+  const meta     = row.meta_share != null ? (row.meta_share * 100).toFixed(1) : null
+  const t8p      = row.top8_rate  != null ? Math.round(row.top8_rate * 100)   : null
   const mwrColor = mwr >= 55 ? 'text-win' : mwr <= 45 ? 'text-loss' : 'text-gold'
   const t8Color  = t8p >= 20 ? 'text-win' : t8p >= 12 ? 'text-gold' : 'text-t2'
   const aspBorder = ASP_BORDER[row.primary_aspect] ?? 'border-t-border2'
@@ -164,39 +164,36 @@ function LeaderCard({ row, onClick }) {
     <button
       onClick={onClick}
       className={`group relative bg-surface hover:bg-surface2 border border-border hover:border-border2 border-t-2 ${aspBorder} rounded-lg overflow-hidden text-left transition-all`}
+      style={{ aspectRatio: '1 / 1' }}
     >
-      {/* Card art background */}
-      <div
-        className="relative overflow-hidden"
-        style={{ aspectRatio: '1 / 1' }}
-      >
-        <img
-          src={imgUrl}
-          alt={row.leader}
-          onError={e => { e.target.style.display = 'none' }}
-          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
-        />
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent pointer-events-none" />
-        {/* Meta badge */}
-        {meta != null && (
-          <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[12px] font-mono rounded px-1 py-0.5 leading-none">
-            {meta}%
-          </div>
-        )}
-      </div>
+      {/* Card art */}
+      <img
+        src={imgUrl}
+        alt={row.leader}
+        onError={e => { e.target.style.display = 'none' }}
+        className="absolute inset-0 w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+      />
 
-      {/* Info section */}
-      <div className="px-2 pt-1 pb-2">
-        <div className="font-display font-semibold text-[13px] text-t1 leading-tight mb-1.5 truncate">
+      {/* Strong gradient from bottom covering ~55% of card */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none" />
+
+      {/* Meta % badge top-right */}
+      {meta != null && (
+        <div className="absolute top-1.5 right-1.5 bg-black/70 text-gold text-[11px] font-mono rounded px-1 py-0.5 leading-none z-10">
+          {meta}%
+        </div>
+      )}
+
+      {/* Name + stats pinned to bottom */}
+      <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 pt-1 z-10">
+        <div className="font-display font-semibold text-[13px] text-white leading-tight mb-1.5 truncate drop-shadow">
           {row.leader}
         </div>
-        {/* Stats row */}
         <div className="grid grid-cols-4 gap-0.5">
-          <StatCell label="Decks" value={row.entries} color="text-t1" />
-          <StatCell label="T8" value={t8p != null ? `${t8p}%` : '—'} color={t8Color} />
-          <StatCell label="Wins" value={row.event_wins ?? '—'} color="text-t2" />
-          <StatCell label="MWR" value={mwr != null ? `${mwr}%` : '—'} color={mwrColor} />
+          <StatCell label="Decks" value={row.entries}                        color="text-t1" />
+          <StatCell label="T8"    value={t8p  != null ? `${t8p}%`  : '—'}   color={t8Color} />
+          <StatCell label="Wins"  value={row.event_wins ?? '—'}              color="text-t2" />
+          <StatCell label="MWR"   value={mwr  != null ? `${mwr}%`  : '—'}   color={mwrColor} />
         </div>
       </div>
     </button>
@@ -206,8 +203,8 @@ function LeaderCard({ row, onClick }) {
 function StatCell({ label, value, color = 'text-t2' }) {
   return (
     <div className="text-center">
-      <div className="text-t3 text-[10px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
-      <div className={`font-mono text-[12px] font-semibold ${color}`}>{value}</div>
+      <div className="text-t3 text-[9px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
+      <div className={`font-mono text-[11px] font-semibold ${color}`}>{value}</div>
     </div>
   )
 }

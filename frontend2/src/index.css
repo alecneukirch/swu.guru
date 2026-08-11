@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  html { background: #09090f; color: #e8e8f0; font-size: 17px; }
+  html { background: #09090f; color: #e8e8f0; font-size: 20px; }
   body { font-family: 'Barlow', sans-serif; }
 
   ::-webkit-scrollbar       { width: 6px; height: 6px; }
