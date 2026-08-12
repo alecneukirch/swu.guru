@@ -176,7 +176,11 @@ def leaders(
             GROUP BY s.leader, bl.base_group
             HAVING COUNT(*) >= %s
         ),
-        totals AS (SELECT SUM(entries) AS total FROM base),
+        totals AS (
+            SELECT COUNT(*) AS total
+            FROM standings s JOIN events e ON e.id = s.event_id
+            WHERE s.leader IS NOT NULL {ef}
+        ),
         ranked AS (
             SELECT b.*, ROW_NUMBER() OVER (ORDER BY b.entries DESC) AS rank
             FROM base b
@@ -193,7 +197,10 @@ def leaders(
             WHERE is_leader = TRUE AND variant_type = 'Standard'
         ),
         baseline AS (
-            SELECT SUM(top8s)::float / NULLIF(SUM(entries), 0) AS meta_t8_rate FROM base
+            SELECT SUM(CASE WHEN s.placement <= 8 THEN 1 ELSE 0 END)::float
+                   / NULLIF(COUNT(*), 0) AS meta_t8_rate
+            FROM standings s JOIN events e ON e.id = s.event_id
+            WHERE s.leader IS NOT NULL {ef}
         )
         SELECT
             r.*,
@@ -213,7 +220,7 @@ def leaders(
         CROSS JOIN totals t
         CROSS JOIN baseline bsl
         ORDER BY r.entries DESC
-    """, ep + ep + [min_entries])
+    """, ep + ep + ep + ep + ep + [min_entries])
 
     total = sum(r["entries"] for r in rows)
     return {"leaders": rows, "total_entries": total}
