@@ -50,9 +50,9 @@ export default function LeaderDetail({ filters }) {
       <div className="mb-6">
         <Link to="/" className="text-t3 hover:text-t1 text-sm mb-4 inline-block">← Leaders</Link>
 
-        <div className="flex items-start gap-5">
+        <div className="flex items-start gap-6">
           {/* Portrait thumbnail */}
-          <div className="w-24 h-24 rounded-lg overflow-hidden bg-surface flex-shrink-0 border border-border">
+          <div className="w-36 h-36 rounded-xl overflow-hidden bg-surface flex-shrink-0 border border-border">
             <LeaderImage
               leader={leader}
               className="w-full h-full object-cover"
@@ -62,20 +62,20 @@ export default function LeaderDetail({ filters }) {
 
           <div className="flex-1 min-w-0">
             {/* Name + tier badge */}
-            <div className="flex items-center gap-3 flex-wrap mb-0.5">
-              <h1 className="font-display font-bold text-4xl text-t1 leading-tight">{namePart}</h1>
+            <div className="flex items-center gap-3 flex-wrap mb-1">
+              <h1 className="font-display font-bold text-5xl text-t1 leading-tight">{namePart}</h1>
               {tier && (
-                <span className={`font-display font-bold text-base px-2 py-0.5 rounded border ${tierCls}`}>
+                <span className={`font-display font-bold text-lg px-2.5 py-1 rounded border ${tierCls}`}>
                   {tier}
                   {stats?.conversion != null && (
-                    <span className="font-mono font-normal text-sm ml-1 opacity-90">
+                    <span className="font-mono font-normal text-base ml-1.5 opacity-90">
                       {Number(stats.conversion).toFixed(2)}×
                     </span>
                   )}
                 </span>
               )}
             </div>
-            <div className="text-t2 text-sm mb-3">
+            <div className="text-t2 text-base mb-4">
               {subtitlePart}
               {selectedBase && <span className="text-gold/80 font-mono ml-3">{selectedBase}</span>}
             </div>
@@ -83,7 +83,7 @@ export default function LeaderDetail({ filters }) {
             {/* Stats row */}
             {stats && (
               <>
-                <div className="flex flex-wrap gap-5 mb-3">
+                <div className="flex flex-wrap gap-6 mb-4">
                   <Stat label="Decklists"  value={stats.entries?.toLocaleString()} />
                   <Stat label="Meta"       value={stats.meta_share != null ? `${(stats.meta_share * 100).toFixed(1)}%` : '—'} />
                   <Stat label="T8 Rate"    value={stats.top8_rate != null ? `${Math.round(stats.top8_rate * 100)}%` : '—'}
@@ -94,7 +94,7 @@ export default function LeaderDetail({ filters }) {
                 </div>
                 {/* Conversion funnel */}
                 {(stats.t50_conv || stats.t25_conv || stats.t10_conv || stats.t1_conv) && (
-                  <div className="flex gap-4">
+                  <div className="flex gap-6">
                     <FunnelStat label="T50" value={stats.t50_conv} />
                     <FunnelStat label="T25" value={stats.t25_conv} />
                     <FunnelStat label="T10" value={stats.t10_conv} />
@@ -134,8 +134,8 @@ export default function LeaderDetail({ filters }) {
 function Stat({ label, value, color }) {
   return (
     <div>
-      <div className="text-t3 text-xs uppercase tracking-wide">{label}</div>
-      <div className={`font-mono-sw text-base font-semibold ${color ?? 'text-t1'}`}>{value}</div>
+      <div className="text-t3 text-sm uppercase tracking-wide">{label}</div>
+      <div className={`font-mono-sw text-2xl font-semibold ${color ?? 'text-t1'}`}>{value}</div>
     </div>
   )
 }
@@ -151,8 +151,8 @@ function FunnelStat({ label, value }) {
   const color = v >= 1.3 ? 'text-tier-s' : v >= 1.1 ? 'text-tier-a' : v >= 0.9 ? 'text-tier-b' : v >= 0.7 ? 'text-tier-c' : 'text-loss'
   return (
     <div className="text-center">
-      <div className="text-t3 text-[10px] uppercase tracking-wide leading-none mb-0.5">{label}</div>
-      <div className={`font-mono-sw text-sm font-semibold ${color}`}>{v.toFixed(2)}×</div>
+      <div className="text-t3 text-xs uppercase tracking-wide leading-none mb-1">{label}</div>
+      <div className={`font-mono-sw text-xl font-semibold ${color}`}>{v.toFixed(2)}×</div>
     </div>
   )
 }
