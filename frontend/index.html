@@ -3972,8 +3972,8 @@ select.sl-input { cursor: pointer; }
     <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
       onkeydown="if(event.key==='Enter')findPQs()">
     <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
-    <label class="pq-date-label">From <input type="date" id="pq-date-from"></label>
-    <label class="pq-date-label">To <input type="date" id="pq-date-to"></label>
+    <label class="pq-date-label" onclick="this.querySelector('input').showPicker()">From <input type="date" id="pq-date-from" onclick="event.stopPropagation()"></label>
+    <label class="pq-date-label" onclick="this.querySelector('input').showPicker()">To <input type="date" id="pq-date-to" onclick="event.stopPropagation()"></label>
     <button class="btn" onclick="findPQs()">Search</button>
   </div>
   <div class="pq-results">
