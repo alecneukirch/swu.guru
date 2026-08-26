@@ -3669,6 +3669,7 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-picks"   onclick="showPage('picks')">Meta Call</button>
   <button class="nav-btn"        id="nav-cards"   onclick="showPage('cards')">Cards</button>
   <button class="nav-btn"        id="nav-matrix"  onclick="showPage('matrix')">Matrix</button>
+  <button class="nav-btn"        id="nav-pqfinder" onclick="showPage('pqfinder')">Find PQs</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
   <select id="meta-select" class="nav-meta-select" onchange="setMeta(this.value)"></select>
@@ -3920,50 +3921,52 @@ select.sl-input { cursor: pointer; }
       <div class="page-sub" id="events-sub">loading…</div>
     </div>
   </div>
-  <div class="lp-tabs">
-    <button class="lp-tab active" id="ev-tab-results-btn" onclick="switchEventsTab('results')">Tournament Results</button>
-    <button class="lp-tab" id="ev-tab-pq-btn" onclick="switchEventsTab('pq')">Find PQs</button>
+  <div class="controls">
+    <input type="text" id="ev-search" placeholder="Search events…" oninput="filterEvents()" style="width:200px">
   </div>
-  <div id="ev-tab-results">
-    <div class="controls">
-      <input type="text" id="ev-search" placeholder="Search events…" oninput="filterEvents()" style="width:200px">
-    </div>
-    <div class="table-wrap">
-      <table class="ev-table">
-        <thead>
-          <tr>
-            <th>Event</th>
-            <th>Date</th>
-            <th>Location</th>
-            <th>Players</th>
-            <th>Set</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="ev-tbody">
-          <tr><td colspan="6" class="loading">loading…</td></tr>
-        </tbody>
-      </table>
+  <div class="table-wrap">
+    <table class="ev-table">
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Date</th>
+          <th>Location</th>
+          <th>Players</th>
+          <th>Set</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="ev-tbody">
+        <tr><td colspan="6" class="loading">loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ PQ FINDER PAGE ══ -->
+<div class="page" id="page-pqfinder">
+  <div class="page-header">
+    <div>
+      <div class="page-title">FIND PQs</div>
+      <div class="page-sub" id="pq-page-sub">Find upcoming Planetary Qualifiers near you</div>
     </div>
   </div>
-  <div id="ev-tab-pq" style="display:none">
-    <div class="pq-search-bar">
-      <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
-        onkeydown="if(event.key==='Enter')findPQs()">
-      <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
-      <select class="pq-radius-select" id="pq-radius">
-        <option value="50">50 mi</option>
-        <option value="100" selected>100 mi</option>
-        <option value="200">200 mi</option>
-        <option value="500">500 mi</option>
-        <option value="0">Any distance</option>
-      </select>
-      <button class="btn" onclick="findPQs()">Search</button>
-    </div>
-    <div class="pq-results">
-      <div class="pq-status" id="pq-status"></div>
-      <div class="pq-grid" id="pq-grid"></div>
-    </div>
+  <div class="pq-search-bar">
+    <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
+      onkeydown="if(event.key==='Enter')findPQs()">
+    <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
+    <select class="pq-radius-select" id="pq-radius">
+      <option value="50">50 mi</option>
+      <option value="100" selected>100 mi</option>
+      <option value="200">200 mi</option>
+      <option value="500">500 mi</option>
+      <option value="0">Any distance</option>
+    </select>
+    <button class="btn" onclick="findPQs()">Search</button>
+  </div>
+  <div class="pq-results">
+    <div class="pq-status" id="pq-status"></div>
+    <div class="pq-grid" id="pq-grid"></div>
   </div>
 </div>
 
@@ -4510,6 +4513,7 @@ function showPage(name) {
   else location.hash = name;
   if (name === 'home')      loadHome();
   if (name === 'events')    loadEvents();
+  if (name === 'pqfinder') { /* loaded on demand via search */ }
   if (name === 'matrix')    loadMatrix();
   if (name === 'decklists') loadDecklists();
   if (name === 'players')   loadPlayers();
@@ -5742,14 +5746,6 @@ function renderEvents(rows) {
   };
 }
 
-function switchEventsTab(tab) {
-  document.getElementById('ev-tab-results').style.display = tab === 'results' ? '' : 'none';
-  document.getElementById('ev-tab-pq').style.display      = tab === 'pq'      ? '' : 'none';
-  document.getElementById('ev-tab-results-btn').classList.toggle('active', tab === 'results');
-  document.getElementById('ev-tab-pq-btn').classList.toggle('active', tab === 'pq');
-  if (tab === 'results') document.getElementById('events-sub').textContent = `${eventsData.length} events`;
-  else document.getElementById('events-sub').textContent = 'Upcoming Planetary Qualifiers';
-}
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -5840,8 +5836,10 @@ async function findPQs() {
         : 'No upcoming PQs found.';
       return;
     }
-    status.textContent = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
+    const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
       (radiusMi > 0 ? ` within ${radiusMi} miles` : '');
+    status.textContent = summary;
+    document.getElementById('pq-page-sub').textContent = summary;
     renderPQResults(results);
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
@@ -5910,8 +5908,10 @@ async function pqUseGeolocation() {
         status.textContent = radiusMi > 0 ? `No upcoming PQs within ${radiusMi} miles.` : 'No upcoming PQs found.';
         return;
       }
-      status.textContent = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
+      const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
         (radiusMi > 0 ? ` within ${radiusMi} miles` : '');
+      status.textContent = summary;
+      document.getElementById('pq-page-sub').textContent = summary;
       renderPQResults(results);
     } catch(e) {
       status.textContent = `Error: ${e.message}`;
@@ -8847,9 +8847,10 @@ function _correctSideOf(cardId) {
   <button class="mob-nav-btn active" id="mob-home"    onclick="showPage('home')">Leaders</button>
   <button class="mob-nav-btn"        id="mob-picks"   onclick="showPage('picks')">Meta</button>
   <button class="mob-nav-btn"        id="mob-cards"   onclick="showPage('cards')">Cards</button>
-  <button class="mob-nav-btn"        id="mob-matrix"  onclick="showPage('matrix')">Matrix</button>
-  <button class="mob-nav-btn"        id="mob-events"  onclick="showPage('events')">Events</button>
-  <button class="mob-nav-btn"        id="mob-players" onclick="showPage('players')">Players</button>
+  <button class="mob-nav-btn"        id="mob-matrix"   onclick="showPage('matrix')">Matrix</button>
+  <button class="mob-nav-btn"        id="mob-pqfinder" onclick="showPage('pqfinder')">Find PQs</button>
+  <button class="mob-nav-btn"        id="mob-events"   onclick="showPage('events')">Events</button>
+  <button class="mob-nav-btn"        id="mob-players"  onclick="showPage('players')">Players</button>
 </nav>
 
 </body>
