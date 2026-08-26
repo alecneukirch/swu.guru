@@ -2317,7 +2317,7 @@ select option { background: var(--surface2); }
 .pq-store { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; }
 .pq-dist { font-family: var(--mono); font-size: 16px; color: var(--gold); white-space: nowrap; flex-shrink: 0; }
 .pq-event-name { font-size: 14px; color: var(--text3); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.pq-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+.pq-divider { border: none; border-top: 1px solid var(--border); margin: 0; margin-top: auto; }
 .pq-meta { display: flex; gap: 28px; flex-wrap: wrap; }
 .pq-meta-item { display: flex; flex-direction: column; gap: 4px; }
 .pq-meta-label { font-size: 11px; color: var(--text3); letter-spacing: 0.09em; text-transform: uppercase; font-family: var(--display); font-weight: 600; }
@@ -5939,7 +5939,10 @@ function renderPQResults(results) {
   const grid = document.getElementById('pq-grid');
   grid.innerHTML = results.map(ev => {
     const addr = ev.address;
-    const city = [addr.city, addr.state || addr.country].filter(Boolean).join(', ');
+    const countryShort = (addr.country || '')
+      .replace('United States of America', 'USA')
+      .replace('United Kingdom of Great Britain and Northern Ireland', 'UK');
+    const city = [addr.city, addr.state || countryShort].filter(Boolean).join(', ');
     const dateStr = ev.startDate
       ? new Date(ev.startDate).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
       : '—';
