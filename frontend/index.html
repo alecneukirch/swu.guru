@@ -2322,6 +2322,20 @@ select option { background: var(--surface2); }
 .pq-meta-val { font-family: var(--mono); font-size: 13px; color: var(--text); }
 .pq-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .pq-addr { font-size: 12px; color: var(--text3); }
+.pq-format-badge {
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid;
+}
+.pq-format-badge.premier  { color: var(--gold);   border-color: rgba(240,180,41,0.4);  background: rgba(240,180,41,0.08); }
+.pq-format-badge.limited  { color: var(--blue);   border-color: rgba(79,195,247,0.4);  background: rgba(79,195,247,0.08); }
+.pq-format-badge.eternal  { color: var(--purple); border-color: rgba(179,157,219,0.4); background: rgba(179,157,219,0.08); }
+.pq-format-badge.default  { color: var(--text3);  border-color: var(--border); background: transparent; }
 
 /* ── Picks page ───────────────────────────────────────────── */
 
@@ -5776,15 +5790,16 @@ async function fetchAllPQs() {
 
 function normalizePQ(ev) {
   const a = ev.attributes || {};
-  // location can be at ev.location.data.attributes OR ev.attributes.location.data.attributes
   const locData = ev.location?.data || a.location?.data || {};
   const locAttrs = locData.attributes || locData || {};
   const addr = locAttrs.address || {};
+  const format = a.format?.data?.attributes?.name || ev.format?.data?.attributes?.name || '';
   return {
     name:      a.name      || ev.name      || '',
     startDate: a.startDate || ev.startDate || null,
     cost:      a.cost      || ev.cost      || '',
     url:       a.url       || ev.url       || '',
+    format,
     storeName: locAttrs.name || '',
     address:   addr,
     lat:       addr.latitude  ?? null,
@@ -5849,12 +5864,17 @@ function renderPQResults(results) {
     const regBtn = ev.url
       ? `<a href="${ev.url}" target="_blank" class="btn" style="font-size:11px;padding:4px 10px">REGISTER ↗</a>`
       : '';
+    const fmtLower = (ev.format || '').toLowerCase();
+    const fmtCls = ['premier','limited','eternal'].includes(fmtLower) ? fmtLower : 'default';
+    const fmtBadge = ev.format
+      ? `<span class="pq-format-badge ${fmtCls}">${ev.format}</span>`
+      : '';
     return `<div class="pq-card">
   <div class="pq-card-top">
     <div class="pq-store">${ev.storeName || '—'}</div>
     <div class="pq-dist">${distStr} mi</div>
   </div>
-  <div class="pq-event-name">${ev.name}</div>
+  <div class="pq-event-name" style="display:flex;align-items:center;gap:8px">${ev.name}${fmtBadge ? ' ' + fmtBadge : ''}</div>
   <div class="pq-meta">
     <div class="pq-meta-item">
       <span class="pq-meta-label">Date</span>
