@@ -2258,6 +2258,70 @@ select option { background: var(--surface2); }
   border-top: 1px solid var(--border2);
 }
 
+/* ── PQ Finder ────────────────────────────────────────────── */
+.pq-search-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 16px 24px;
+  flex-wrap: wrap;
+}
+.pq-search-bar input {
+  flex: 1;
+  min-width: 220px;
+  max-width: 420px;
+}
+.pq-radius-select {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.pq-radius-select option { background: var(--surface2); }
+.pq-geo-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text3);
+  font-size: 16px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+.pq-geo-btn:hover { color: var(--gold); border-color: rgba(240,180,41,0.4); }
+.pq-results { padding: 0 24px 32px; }
+.pq-status { padding: 12px 0 16px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
+.pq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.pq-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pq-card:hover { border-color: var(--border2); background: var(--surface2); }
+.pq-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.pq-store { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.pq-dist { font-family: var(--mono); font-size: 13px; color: var(--gold); white-space: nowrap; }
+.pq-event-name { font-size: 13px; color: var(--text3); }
+.pq-meta { display: flex; gap: 14px; flex-wrap: wrap; }
+.pq-meta-item { display: flex; flex-direction: column; gap: 1px; }
+.pq-meta-label { font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; font-family: var(--display); }
+.pq-meta-val { font-family: var(--mono); font-size: 13px; color: var(--text); }
+.pq-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.pq-addr { font-size: 12px; color: var(--text3); }
 
 /* ── Picks page ───────────────────────────────────────────── */
 
@@ -3579,6 +3643,11 @@ select.sl-input { cursor: pointer; }
 </head>
 <body>
 
+<!-- BAN BANNER (hidden by default; shown on /no-bane via injected CSS) -->
+<div id="ban-banner" style="display:none;background:#7c2d12;color:#fef2f2;text-align:center;padding:6px 12px;font-size:0.85rem;font-weight:600;letter-spacing:0.02em;">
+  Cad Bane excluded — simulated post-ban meta
+</div>
+
 <!-- NAV -->
 <nav id="nav">
   <div class="nav-logo" onclick="goHome();loadHome();" style="cursor:pointer">SWU<span>//</span>GURU</div>
@@ -3837,25 +3906,50 @@ select.sl-input { cursor: pointer; }
       <div class="page-sub" id="events-sub">loading…</div>
     </div>
   </div>
-  <div class="controls">
-    <input type="text" id="ev-search" placeholder="Search events…" oninput="filterEvents()" style="width:200px">
+  <div class="lp-tabs">
+    <button class="lp-tab active" id="ev-tab-results-btn" onclick="switchEventsTab('results')">Tournament Results</button>
+    <button class="lp-tab" id="ev-tab-pq-btn" onclick="switchEventsTab('pq')">Find PQs</button>
   </div>
-  <div class="table-wrap">
-    <table class="ev-table">
-      <thead>
-        <tr>
-          <th>Event</th>
-          <th>Date</th>
-          <th>Location</th>
-          <th>Players</th>
-          <th>Set</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="ev-tbody">
-        <tr><td colspan="6" class="loading">loading…</td></tr>
-      </tbody>
-    </table>
+  <div id="ev-tab-results">
+    <div class="controls">
+      <input type="text" id="ev-search" placeholder="Search events…" oninput="filterEvents()" style="width:200px">
+    </div>
+    <div class="table-wrap">
+      <table class="ev-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Date</th>
+            <th>Location</th>
+            <th>Players</th>
+            <th>Set</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ev-tbody">
+          <tr><td colspan="6" class="loading">loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div id="ev-tab-pq" style="display:none">
+    <div class="pq-search-bar">
+      <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
+        onkeydown="if(event.key==='Enter')findPQs()">
+      <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
+      <select class="pq-radius-select" id="pq-radius">
+        <option value="50">50 mi</option>
+        <option value="100" selected>100 mi</option>
+        <option value="200">200 mi</option>
+        <option value="500">500 mi</option>
+        <option value="0">Any distance</option>
+      </select>
+      <button class="btn" onclick="findPQs()">Search</button>
+    </div>
+    <div class="pq-results">
+      <div class="pq-status" id="pq-status"></div>
+      <div class="pq-grid" id="pq-grid"></div>
+    </div>
   </div>
 </div>
 
@@ -4220,6 +4314,9 @@ let modalMatrixData = {};
 
 // ── API ─────────────────────────────────────────────────────────────────────
 async function api(path, opts) {
+  if (window.__BAN_BANE) {
+    path = path + (path.includes('?') ? '&' : '?') + 'ban=1';
+  }
   const r = await fetch(API + path, opts || {});
   if (!r.ok) throw new Error(r.status + ' ' + path);
   return r.json();
@@ -5629,6 +5726,177 @@ function renderEvents(rows) {
     if (!row) return;
     openEvent(row.dataset.evId, row.dataset.evName, row.dataset.evDate, row.dataset.evPlayers);
   };
+}
+
+function switchEventsTab(tab) {
+  document.getElementById('ev-tab-results').style.display = tab === 'results' ? '' : 'none';
+  document.getElementById('ev-tab-pq').style.display      = tab === 'pq'      ? '' : 'none';
+  document.getElementById('ev-tab-results-btn').classList.toggle('active', tab === 'results');
+  document.getElementById('ev-tab-pq-btn').classList.toggle('active', tab === 'pq');
+  if (tab === 'results') document.getElementById('events-sub').textContent = `${eventsData.length} events`;
+  else document.getElementById('events-sub').textContent = 'Upcoming Planetary Qualifiers';
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function geocodeAddress(address) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const data = await res.json();
+  if (!data.length) throw new Error('Address not found — try a city name or zip code');
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
+}
+
+async function fetchAllPQs() {
+  const nowMs = Date.now();
+  const pageSize = 100;
+  let page = 1, allEvents = [];
+  while (true) {
+    const url = `https://admin.starwarsunlimited.com/api/event-search?locale=en&populate[0]=*` +
+      `&pagination[pageSize]=${pageSize}&pagination[page]=${page}` +
+      `&filters[$and][0][type][id][$eq]=4` +
+      `&filters[startDate][$gte]=${nowMs}` +
+      `&sort[0]=startDate%3Aasc`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const events = (data.data || []).map(normalizePQ);
+    allEvents = allEvents.concat(events);
+    const meta = data.meta?.pagination;
+    if (!meta || page >= meta.pageCount) break;
+    page++;
+  }
+  return allEvents;
+}
+
+function normalizePQ(ev) {
+  const a = ev.attributes || {};
+  // location can be at ev.location.data.attributes OR ev.attributes.location.data.attributes
+  const locData = ev.location?.data || a.location?.data || {};
+  const locAttrs = locData.attributes || locData || {};
+  const addr = locAttrs.address || {};
+  return {
+    name:      a.name      || ev.name      || '',
+    startDate: a.startDate || ev.startDate || null,
+    cost:      a.cost      || ev.cost      || '',
+    url:       a.url       || ev.url       || '',
+    storeName: locAttrs.name || '',
+    address:   addr,
+    lat:       addr.latitude  ?? null,
+    lon:       addr.longitude ?? null,
+  };
+}
+
+function pqDistanceResults(events, userLat, userLon, radiusMi) {
+  const KM_PER_MI = 1.60934;
+  const radiusKm = radiusMi > 0 ? radiusMi * KM_PER_MI : Infinity;
+  return events
+    .filter(ev => ev.lat != null && ev.lon != null)
+    .map(ev => {
+      const distKm = haversineKm(userLat, userLon, ev.lat, ev.lon);
+      return { ...ev, distKm, distMi: distKm / KM_PER_MI };
+    })
+    .filter(ev => ev.distKm <= radiusKm)
+    .sort((a, b) => a.distKm - b.distKm);
+}
+
+async function findPQs() {
+  const address = document.getElementById('pq-address').value.trim();
+  const radiusMi = parseInt(document.getElementById('pq-radius').value);
+  const status = document.getElementById('pq-status');
+  const grid = document.getElementById('pq-grid');
+  if (!address) { status.textContent = 'Enter an address to search.'; return; }
+
+  status.textContent = 'Geocoding address…';
+  grid.innerHTML = '';
+  try {
+    const { lat, lon, display } = await geocodeAddress(address);
+    status.textContent = `Found: ${display.split(',').slice(0,3).join(',')} — fetching PQs…`;
+    const events = await fetchAllPQs();
+    const results = pqDistanceResults(events, lat, lon, radiusMi);
+    if (!results.length) {
+      status.textContent = radiusMi > 0
+        ? `No upcoming PQs within ${radiusMi} miles. Try a larger radius.`
+        : 'No upcoming PQs found.';
+      return;
+    }
+    status.textContent = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
+      (radiusMi > 0 ? ` within ${radiusMi} miles` : '');
+    renderPQResults(results);
+  } catch(e) {
+    status.textContent = `Error: ${e.message}`;
+  }
+}
+
+function renderPQResults(results) {
+  const grid = document.getElementById('pq-grid');
+  grid.innerHTML = results.map(ev => {
+    const addr = ev.address;
+    const city = [addr.city, addr.state || addr.country].filter(Boolean).join(', ');
+    const dateStr = ev.startDate
+      ? new Date(ev.startDate).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
+      : '—';
+    const distStr = ev.distMi < 10 ? ev.distMi.toFixed(1) : Math.round(ev.distMi);
+    const rawCost = (ev.cost || '').trim();
+    const costDisplay = rawCost
+      ? (rawCost.match(/^\d/) ? '$' + rawCost : rawCost)
+      : '—';
+    const regBtn = ev.url
+      ? `<a href="${ev.url}" target="_blank" class="btn" style="font-size:11px;padding:4px 10px">REGISTER ↗</a>`
+      : '';
+    return `<div class="pq-card">
+  <div class="pq-card-top">
+    <div class="pq-store">${ev.storeName || '—'}</div>
+    <div class="pq-dist">${distStr} mi</div>
+  </div>
+  <div class="pq-event-name">${ev.name}</div>
+  <div class="pq-meta">
+    <div class="pq-meta-item">
+      <span class="pq-meta-label">Date</span>
+      <span class="pq-meta-val">${dateStr}</span>
+    </div>
+    <div class="pq-meta-item">
+      <span class="pq-meta-label">Cost</span>
+      <span class="pq-meta-val">${costDisplay}</span>
+    </div>
+  </div>
+  <div class="pq-card-footer">
+    <div class="pq-addr">${city}</div>
+    ${regBtn}
+  </div>
+</div>`;
+  }).join('');
+}
+
+async function pqUseGeolocation() {
+  const status = document.getElementById('pq-status');
+  if (!navigator.geolocation) { status.textContent = 'Geolocation not supported by your browser.'; return; }
+  status.textContent = 'Getting your location…';
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude, longitude } = pos.coords;
+    const radiusMi = parseInt(document.getElementById('pq-radius').value);
+    document.getElementById('pq-address').value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    document.getElementById('pq-grid').innerHTML = '';
+    status.textContent = 'Fetching upcoming PQs…';
+    try {
+      const events = await fetchAllPQs();
+      const results = pqDistanceResults(events, latitude, longitude, radiusMi);
+      if (!results.length) {
+        status.textContent = radiusMi > 0 ? `No upcoming PQs within ${radiusMi} miles.` : 'No upcoming PQs found.';
+        return;
+      }
+      status.textContent = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
+        (radiusMi > 0 ? ` within ${radiusMi} miles` : '');
+      renderPQResults(results);
+    } catch(e) {
+      status.textContent = `Error: ${e.message}`;
+    }
+  }, () => { status.textContent = 'Location access denied.'; });
 }
 
 // ── Event detail page ────────────────────────────────────────────────────────
