@@ -3972,13 +3972,6 @@ select.sl-input { cursor: pointer; }
     <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
       onkeydown="if(event.key==='Enter')findPQs()">
     <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
-    <select class="pq-radius-select" id="pq-radius">
-      <option value="50">50 mi</option>
-      <option value="100" selected>100 mi</option>
-      <option value="200">200 mi</option>
-      <option value="500">500 mi</option>
-      <option value="0">Any distance</option>
-    </select>
     <input type="date" id="pq-date-from" class="pq-radius-select" title="From date">
     <input type="date" id="pq-date-to"   class="pq-radius-select" title="To date">
     <button class="btn" onclick="findPQs()">Search</button>
@@ -5874,9 +5867,10 @@ function applyDateFilter(results) {
   });
 }
 
+const PQ_RADIUS_MI = 700;
+
 async function findPQs() {
   const address = document.getElementById('pq-address').value.trim();
-  const radiusMi = parseInt(document.getElementById('pq-radius').value);
   const status = document.getElementById('pq-status');
   const grid = document.getElementById('pq-grid');
   if (!address) { status.textContent = 'Enter an address to search.'; return; }
@@ -5887,15 +5881,12 @@ async function findPQs() {
     const { lat, lon, display } = await geocodeAddress(address);
     status.textContent = `Found: ${display.split(',').slice(0,3).join(',')} — fetching PQs…`;
     const events = await fetchAllPQs();
-    const results = applyDateFilter(pqDistanceResults(events, lat, lon, radiusMi));
+    const results = applyDateFilter(pqDistanceResults(events, lat, lon, PQ_RADIUS_MI));
     if (!results.length) {
-      status.textContent = radiusMi > 0
-        ? `No upcoming PQs within ${radiusMi} miles. Try a larger radius or wider date range.`
-        : 'No upcoming PQs found in that date range.';
+      status.textContent = 'No upcoming PQs within 700 miles in that date range.';
       return;
     }
-    const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
-      (radiusMi > 0 ? ` within ${radiusMi} miles` : '');
+    const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within 700 miles`;
     status.textContent = summary;
     document.getElementById('pq-page-sub').textContent = summary;
     renderPQResults(results);
@@ -5966,19 +5957,17 @@ async function pqUseGeolocation(silent = false) {
   status.textContent = 'Getting your location…';
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude, longitude } = pos.coords;
-    const radiusMi = parseInt(document.getElementById('pq-radius').value);
     document.getElementById('pq-address').value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     document.getElementById('pq-grid').innerHTML = '';
     status.textContent = 'Fetching upcoming PQs…';
     try {
       const events = await fetchAllPQs();
-      const results = applyDateFilter(pqDistanceResults(events, latitude, longitude, radiusMi));
+      const results = applyDateFilter(pqDistanceResults(events, latitude, longitude, PQ_RADIUS_MI));
       if (!results.length) {
-        status.textContent = radiusMi > 0 ? `No upcoming PQs within ${radiusMi} miles.` : 'No upcoming PQs found.';
+        status.textContent = 'No upcoming PQs within 700 miles in that date range.';
         return;
       }
-      const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
-        (radiusMi > 0 ? ` within ${radiusMi} miles` : '');
+      const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within 700 miles`;
       status.textContent = summary;
       document.getElementById('pq-page-sub').textContent = summary;
       renderPQResults(results);
