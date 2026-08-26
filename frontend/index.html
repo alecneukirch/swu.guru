@@ -2295,39 +2295,40 @@ select option { background: var(--surface2); }
   line-height: 1;
 }
 .pq-geo-btn:hover { color: var(--gold); border-color: rgba(240,180,41,0.4); }
-.pq-results { padding: 0 24px 32px; }
-.pq-status { padding: 12px 0 16px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
+.pq-results { padding: 0 24px 48px; }
+.pq-status { padding: 14px 0 20px; font-family: var(--mono); font-size: 13px; color: var(--text3); }
 .pq-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  gap: 16px;
 }
 .pq-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px 18px;
+  border-radius: 12px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
   transition: border-color 0.15s, background 0.15s;
 }
 .pq-card:hover { border-color: var(--border2); background: var(--surface2); }
-.pq-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.pq-store { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.2; }
-.pq-dist { font-family: var(--mono); font-size: 13px; color: var(--gold); white-space: nowrap; }
-.pq-event-name { font-size: 13px; color: var(--text3); }
-.pq-meta { display: flex; gap: 14px; flex-wrap: wrap; }
-.pq-meta-item { display: flex; flex-direction: column; gap: 1px; }
-.pq-meta-label { font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; font-family: var(--display); }
-.pq-meta-val { font-family: var(--mono); font-size: 13px; color: var(--text); }
-.pq-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
-.pq-addr { font-size: 12px; color: var(--text3); }
+.pq-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pq-store { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.pq-dist { font-family: var(--mono); font-size: 16px; color: var(--gold); white-space: nowrap; flex-shrink: 0; }
+.pq-event-name { font-size: 14px; color: var(--text3); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pq-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+.pq-meta { display: flex; gap: 28px; flex-wrap: wrap; }
+.pq-meta-item { display: flex; flex-direction: column; gap: 4px; }
+.pq-meta-label { font-size: 11px; color: var(--text3); letter-spacing: 0.09em; text-transform: uppercase; font-family: var(--display); font-weight: 600; }
+.pq-meta-val { font-family: var(--mono); font-size: 17px; color: var(--text); }
+.pq-card-footer { display: flex; justify-content: space-between; align-items: center; }
+.pq-addr { font-size: 14px; color: var(--text3); }
 .pq-days-badge {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 11px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 8px;
   border-radius: 4px;
   border: 1px solid rgba(144,144,168,0.3);
   color: var(--text3);
@@ -2341,11 +2342,11 @@ select option { background: var(--surface2); }
 }
 .pq-format-badge {
   font-family: var(--display);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 2px 7px;
+  padding: 3px 9px;
   border-radius: 4px;
   border: 1px solid;
 }
@@ -5965,7 +5966,8 @@ function renderPQResults(results) {
     <div class="pq-store">${ev.storeName || '—'}</div>
     <div class="pq-dist">${distStr} mi</div>
   </div>
-  <div class="pq-event-name" style="display:flex;align-items:center;gap:8px">${ev.name}${fmtBadge ? ' ' + fmtBadge : ''}</div>
+  <div class="pq-event-name">${ev.name}${fmtBadge ? ' ' + fmtBadge : ''}</div>
+  <hr class="pq-divider">
   <div class="pq-meta">
     <div class="pq-meta-item">
       <span class="pq-meta-label">Date</span>
