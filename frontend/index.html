@@ -5820,6 +5820,7 @@ function normalizePQ(ev) {
 function pqDistanceResults(events, userLat, userLon, radiusMi) {
   const KM_PER_MI = 1.60934;
   const radiusKm = radiusMi > 0 ? radiusMi * KM_PER_MI : Infinity;
+  const seen = new Set();
   return events
     .filter(ev => ev.lat != null && ev.lon != null)
     .map(ev => {
@@ -5827,7 +5828,43 @@ function pqDistanceResults(events, userLat, userLon, radiusMi) {
       return { ...ev, distKm, distMi: distKm / KM_PER_MI };
     })
     .filter(ev => ev.distKm <= radiusKm)
-    .sort((a, b) => a.distKm - b.distKm);
+    .sort((a, b) => a.distKm - b.distKm)
+    .filter(ev => {
+      const key = `${ev.storeName}|${(ev.startDate || '').slice(0, 10)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function pqCurrencySymbol(country) {
+  if (!country) return '$';
+  const c = country.toLowerCase();
+  if (c.includes('united kingdom') || c.includes('britain')) return '£';
+  if (c.includes('japan'))   return '¥';
+  if (c.includes('korea'))   return '₩';
+  if (c.includes('india'))   return '₹';
+  if (c.includes('brazil'))  return 'R$';
+  if (c.includes('sweden'))  return 'kr';
+  if (c.includes('norway'))  return 'kr';
+  if (c.includes('denmark')) return 'kr';
+  if (c.includes('switzerland')) return 'CHF ';
+  const eur = ['germany','france','spain','italy','netherlands','belgium','austria','portugal',
+                'finland','ireland','greece','luxembourg','malta','slovakia','slovenia','estonia',
+                'latvia','lithuania','croatia','cyprus'];
+  if (eur.some(e => c.includes(e))) return '€';
+  return '$';
+}
+
+function formatPQCost(rawCost, country) {
+  if (!rawCost) return '—';
+  const cost = rawCost.trim();
+  // Already has a currency symbol or code — show as-is, just strip a leading $ if country isn't US
+  if (/[€£¥₩₹]/.test(cost)) return cost.replace(/^\$/, '');
+  if (/[A-Z]{2,}/.test(cost)) return cost.replace(/^\$/, ''); // e.g. "119,90 PLN"
+  if (cost.startsWith('$')) return cost;
+  if (/^\d/.test(cost)) return pqCurrencySymbol(country) + cost;
+  return cost;
 }
 
 let _pqAutoGeoFired = false;
@@ -5914,10 +5951,7 @@ function renderPQResults(results) {
       ? `<span class="pq-days-badge${daysUrgent ? ' urgent' : ''}">${daysLabel}</span>`
       : '';
     const distStr = ev.distMi < 10 ? ev.distMi.toFixed(1) : Math.round(ev.distMi);
-    const rawCost = (ev.cost || '').trim();
-    const costDisplay = rawCost
-      ? (rawCost.match(/^\d/) ? '$' + rawCost : rawCost)
-      : '—';
+    const costDisplay = formatPQCost(ev.cost, ev.address.country);
     const regBtn = ev.url
       ? `<a href="${ev.url}" target="_blank" class="btn" style="font-size:11px;padding:4px 10px">REGISTER ↗</a>`
       : '';
