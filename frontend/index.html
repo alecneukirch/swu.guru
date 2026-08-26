@@ -2280,6 +2280,7 @@ select option { background: var(--surface2); }
   font-size: 13px;
   padding: 7px 10px;
   cursor: pointer;
+  color-scheme: dark;
 }
 .pq-radius-select option { background: var(--surface2); }
 .pq-geo-btn {
@@ -3978,6 +3979,8 @@ select.sl-input { cursor: pointer; }
       <option value="500">500 mi</option>
       <option value="0">Any distance</option>
     </select>
+    <input type="date" id="pq-date-from" class="pq-radius-select" title="From date">
+    <input type="date" id="pq-date-to"   class="pq-radius-select" title="To date">
     <button class="btn" onclick="findPQs()">Search</button>
   </div>
   <div class="pq-results">
@@ -4529,7 +4532,7 @@ function showPage(name) {
   else location.hash = name;
   if (name === 'home')      loadHome();
   if (name === 'events')    loadEvents();
-  if (name === 'pqfinder') { /* loaded on demand via search */ }
+  if (name === 'pqfinder') initPQFinder();
   if (name === 'matrix')    loadMatrix();
   if (name === 'decklists') loadDecklists();
   if (name === 'players')   loadPlayers();
@@ -5832,6 +5835,45 @@ function pqDistanceResults(events, userLat, userLon, radiusMi) {
     .sort((a, b) => a.distKm - b.distKm);
 }
 
+let _pqAutoGeoFired = false;
+
+function initPQFinder() {
+  // Set date defaults once (today → +3 months)
+  const fromEl = document.getElementById('pq-date-from');
+  const toEl   = document.getElementById('pq-date-to');
+  if (!fromEl.value) {
+    const today = new Date();
+    const plus3m = new Date(today);
+    plus3m.setMonth(plus3m.getMonth() + 3);
+    fromEl.value = today.toISOString().slice(0, 10);
+    toEl.value   = plus3m.toISOString().slice(0, 10);
+  }
+  if (!_pqAutoGeoFired) {
+    _pqAutoGeoFired = true;
+    pqUseGeolocation(true);
+  }
+}
+
+function pqDateRange() {
+  const from = document.getElementById('pq-date-from').value;
+  const to   = document.getElementById('pq-date-to').value;
+  return {
+    from: from ? new Date(from + 'T00:00:00') : null,
+    to:   to   ? new Date(to   + 'T23:59:59') : null,
+  };
+}
+
+function applyDateFilter(results) {
+  const { from, to } = pqDateRange();
+  return results.filter(ev => {
+    if (!ev.startDate) return true;
+    const d = new Date(ev.startDate);
+    if (from && d < from) return false;
+    if (to   && d > to)   return false;
+    return true;
+  });
+}
+
 async function findPQs() {
   const address = document.getElementById('pq-address').value.trim();
   const radiusMi = parseInt(document.getElementById('pq-radius').value);
@@ -5845,11 +5887,11 @@ async function findPQs() {
     const { lat, lon, display } = await geocodeAddress(address);
     status.textContent = `Found: ${display.split(',').slice(0,3).join(',')} — fetching PQs…`;
     const events = await fetchAllPQs();
-    const results = pqDistanceResults(events, lat, lon, radiusMi);
+    const results = applyDateFilter(pqDistanceResults(events, lat, lon, radiusMi));
     if (!results.length) {
       status.textContent = radiusMi > 0
-        ? `No upcoming PQs within ${radiusMi} miles. Try a larger radius.`
-        : 'No upcoming PQs found.';
+        ? `No upcoming PQs within ${radiusMi} miles. Try a larger radius or wider date range.`
+        : 'No upcoming PQs found in that date range.';
       return;
     }
     const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''}` +
@@ -5915,9 +5957,12 @@ function renderPQResults(results) {
   }).join('');
 }
 
-async function pqUseGeolocation() {
+async function pqUseGeolocation(silent = false) {
   const status = document.getElementById('pq-status');
-  if (!navigator.geolocation) { status.textContent = 'Geolocation not supported by your browser.'; return; }
+  if (!navigator.geolocation) {
+    if (!silent) status.textContent = 'Geolocation not supported by your browser.';
+    return;
+  }
   status.textContent = 'Getting your location…';
   navigator.geolocation.getCurrentPosition(async pos => {
     const { latitude, longitude } = pos.coords;
@@ -5927,7 +5972,7 @@ async function pqUseGeolocation() {
     status.textContent = 'Fetching upcoming PQs…';
     try {
       const events = await fetchAllPQs();
-      const results = pqDistanceResults(events, latitude, longitude, radiusMi);
+      const results = applyDateFilter(pqDistanceResults(events, latitude, longitude, radiusMi));
       if (!results.length) {
         status.textContent = radiusMi > 0 ? `No upcoming PQs within ${radiusMi} miles.` : 'No upcoming PQs found.';
         return;
@@ -5940,7 +5985,7 @@ async function pqUseGeolocation() {
     } catch(e) {
       status.textContent = `Error: ${e.message}`;
     }
-  }, () => { status.textContent = 'Location access denied.'; });
+  }, () => { if (!silent) status.textContent = 'Location access denied.'; else status.textContent = ''; });
 }
 
 // ── Event detail page ────────────────────────────────────────────────────────
