@@ -2283,6 +2283,31 @@ select option { background: var(--surface2); }
   color-scheme: dark;
 }
 .pq-radius-select option { background: var(--surface2); }
+.pq-date-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pq-date-label input[type="date"] {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 0;
+  cursor: pointer;
+  color-scheme: dark;
+  outline: none;
+}
 .pq-geo-btn {
   background: var(--surface2);
   border: 1px solid var(--border2);
@@ -3972,8 +3997,8 @@ select.sl-input { cursor: pointer; }
     <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
       onkeydown="if(event.key==='Enter')findPQs()">
     <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
-    <input type="date" id="pq-date-from" class="pq-radius-select" title="From date">
-    <input type="date" id="pq-date-to"   class="pq-radius-select" title="To date">
+    <label class="pq-date-label">From <input type="date" id="pq-date-from"></label>
+    <label class="pq-date-label">To <input type="date" id="pq-date-to"></label>
     <button class="btn" onclick="findPQs()">Search</button>
   </div>
   <div class="pq-results">
@@ -5768,10 +5793,12 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 async function geocodeAddress(address) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+  const isZip = /^\d{5}(-\d{4})?$/.test(address.trim());
+  const query = isZip ? address.trim() + ', USA' : address;
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
   const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
   const data = await res.json();
-  if (!data.length) throw new Error('Address not found — try a city name or zip code');
+  if (!data.length) throw new Error('Address not found — try a city, state, or zip code');
   return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
 }
 
