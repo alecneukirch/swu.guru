@@ -2322,6 +2322,22 @@ select option { background: var(--surface2); }
 .pq-meta-val { font-family: var(--mono); font-size: 13px; color: var(--text); }
 .pq-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .pq-addr { font-size: 12px; color: var(--text3); }
+.pq-days-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(144,144,168,0.3);
+  color: var(--text3);
+  background: rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+.pq-days-badge.urgent {
+  color: var(--gold);
+  border-color: rgba(240,180,41,0.4);
+  background: rgba(240,180,41,0.08);
+}
 .pq-format-badge {
   font-family: var(--display);
   font-size: 10px;
@@ -5854,6 +5870,14 @@ function renderPQResults(results) {
     const dateStr = ev.startDate
       ? new Date(ev.startDate).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
       : '—';
+    const daysUntil = ev.startDate
+      ? Math.ceil((new Date(ev.startDate) - new Date().setHours(0,0,0,0)) / 86400000)
+      : null;
+    const daysLabel = daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : daysUntil != null ? `${daysUntil}d` : '';
+    const daysUrgent = daysUntil != null && daysUntil <= 7;
+    const daysBadge = daysLabel
+      ? `<span class="pq-days-badge${daysUrgent ? ' urgent' : ''}">${daysLabel}</span>`
+      : '';
     const distStr = ev.distMi < 10 ? ev.distMi.toFixed(1) : Math.round(ev.distMi);
     const rawCost = (ev.cost || '').trim();
     const costDisplay = rawCost
@@ -5876,7 +5900,7 @@ function renderPQResults(results) {
   <div class="pq-meta">
     <div class="pq-meta-item">
       <span class="pq-meta-label">Date</span>
-      <span class="pq-meta-val">${dateStr}</span>
+      <span class="pq-meta-val">${dateStr} ${daysBadge}</span>
     </div>
     <div class="pq-meta-item">
       <span class="pq-meta-label">Cost</span>
