@@ -2315,8 +2315,9 @@ select option { background: var(--surface2); }
 .pq-card:hover { border-color: var(--border2); background: var(--surface2); }
 .pq-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .pq-store { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; }
-.pq-dist { font-family: var(--mono); font-size: 16px; color: var(--gold); white-space: nowrap; flex-shrink: 0; }
-.pq-event-name { font-size: 14px; color: var(--text3); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pq-card-top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.pq-dist { font-family: var(--mono); font-size: 16px; color: var(--gold); white-space: nowrap; }
+.pq-event-name { font-size: 14px; color: var(--text3); }
 .pq-divider { border: none; border-top: 1px solid var(--border); margin: 0; margin-top: auto; }
 .pq-meta { display: flex; gap: 28px; flex-wrap: wrap; }
 .pq-meta-item { display: flex; flex-direction: column; gap: 4px; }
@@ -5967,9 +5968,12 @@ function renderPQResults(results) {
     return `<div class="pq-card">
   <div class="pq-card-top">
     <div class="pq-store">${ev.storeName || '—'}</div>
-    <div class="pq-dist">${distStr} mi</div>
+    <div class="pq-card-top-right">
+      <div class="pq-dist">${distStr} mi</div>
+      ${fmtBadge}
+    </div>
   </div>
-  <div class="pq-event-name">${ev.name}${fmtBadge ? ' ' + fmtBadge : ''}</div>
+  <div class="pq-event-name">${ev.name}</div>
   <hr class="pq-divider">
   <div class="pq-meta">
     <div class="pq-meta-item">
