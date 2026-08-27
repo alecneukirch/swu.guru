@@ -5769,14 +5769,39 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+const PQ_MILES_COUNTRIES = new Set(['us', 'gb']); // countries that use miles
+const PQ_RADIUS_KM = 1127; // ~700 miles
+
+function pqUseMiles(countryCode) {
+  return PQ_MILES_COUNTRIES.has((countryCode || '').toLowerCase());
+}
+
+function pqFormatDist(distKm, useMiles) {
+  if (useMiles) {
+    const mi = distKm / 1.60934;
+    return (mi < 10 ? mi.toFixed(1) : Math.round(mi)) + ' mi';
+  }
+  return (distKm < 10 ? distKm.toFixed(1) : Math.round(distKm)) + ' km';
+}
+
 async function geocodeAddress(address) {
   const isZip = /^\d{5}(-\d{4})?$/.test(address.trim());
   const query = isZip ? address.trim() + ', USA' : address;
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`;
   const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
   const data = await res.json();
   if (!data.length) throw new Error('Address not found — try a city, state, or zip code');
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name };
+  const countryCode = data[0].address?.country_code || 'us';
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), display: data[0].display_name, countryCode };
+}
+
+async function reverseGeocodeCountry(lat, lon) {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
+  try {
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    return data.address?.country_code || 'us';
+  } catch { return 'us'; }
 }
 
 async function fetchAllPQs() {
@@ -5819,17 +5844,12 @@ function normalizePQ(ev) {
   };
 }
 
-function pqDistanceResults(events, userLat, userLon, radiusMi) {
-  const KM_PER_MI = 1.60934;
-  const radiusKm = radiusMi > 0 ? radiusMi * KM_PER_MI : Infinity;
+function pqDistanceResults(events, userLat, userLon) {
   const seen = new Set();
   return events
     .filter(ev => ev.lat != null && ev.lon != null)
-    .map(ev => {
-      const distKm = haversineKm(userLat, userLon, ev.lat, ev.lon);
-      return { ...ev, distKm, distMi: distKm / KM_PER_MI };
-    })
-    .filter(ev => ev.distKm <= radiusKm)
+    .map(ev => ({ ...ev, distKm: haversineKm(userLat, userLon, ev.lat, ev.lon) }))
+    .filter(ev => ev.distKm <= PQ_RADIUS_KM)
     .sort((a, b) => a.distKm - b.distKm)
     .filter(ev => {
       const key = `${ev.storeName}|${(ev.startDate || '').slice(0, 10)}`;
@@ -5908,8 +5928,6 @@ function applyDateFilter(results) {
   });
 }
 
-const PQ_RADIUS_MI = 700;
-
 async function findPQs() {
   const address = document.getElementById('pq-address').value.trim();
   const status = document.getElementById('pq-status');
@@ -5919,24 +5937,25 @@ async function findPQs() {
   status.textContent = 'Geocoding address…';
   grid.innerHTML = '';
   try {
-    const { lat, lon, display } = await geocodeAddress(address);
+    const { lat, lon, display, countryCode } = await geocodeAddress(address);
+    const useMiles = pqUseMiles(countryCode);
     status.textContent = `Found: ${display.split(',').slice(0,3).join(',')} — fetching PQs…`;
     const events = await fetchAllPQs();
-    const results = applyDateFilter(pqDistanceResults(events, lat, lon, PQ_RADIUS_MI));
+    const results = applyDateFilter(pqDistanceResults(events, lat, lon));
     if (!results.length) {
-      status.textContent = 'No upcoming PQs within 700 miles in that date range.';
+      status.textContent = `No upcoming PQs within ${useMiles ? '700 mi' : '1,100 km'} in that date range.`;
       return;
     }
-    const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within 700 miles`;
+    const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within ${useMiles ? '700 mi' : '1,100 km'}`;
     status.textContent = summary;
     document.getElementById('pq-page-sub').textContent = summary;
-    renderPQResults(results);
+    renderPQResults(results, useMiles);
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
   }
 }
 
-function renderPQResults(results) {
+function renderPQResults(results, useMiles = true) {
   const grid = document.getElementById('pq-grid');
   grid.innerHTML = results.map(ev => {
     const addr = ev.address;
@@ -5955,7 +5974,7 @@ function renderPQResults(results) {
     const daysBadge = daysLabel
       ? `<span class="pq-days-badge${daysUrgent ? ' urgent' : ''}">${daysLabel}</span>`
       : '';
-    const distStr = ev.distMi < 10 ? ev.distMi.toFixed(1) : Math.round(ev.distMi);
+    const distStr = pqFormatDist(ev.distKm, useMiles);
     const costDisplay = formatPQCost(ev.cost, ev.address.country);
     const regBtn = ev.url
       ? `<a href="${ev.url}" target="_blank" class="btn" style="font-size:11px;padding:4px 10px">REGISTER ↗</a>`
@@ -5969,7 +5988,7 @@ function renderPQResults(results) {
   <div class="pq-card-top">
     <div class="pq-store">${ev.storeName || '—'}</div>
     <div class="pq-card-top-right">
-      <div class="pq-dist">${distStr} mi</div>
+      <div class="pq-dist">${distStr}</div>
       ${fmtBadge}
     </div>
   </div>
@@ -6006,16 +6025,20 @@ async function pqUseGeolocation(silent = false) {
     document.getElementById('pq-grid').innerHTML = '';
     status.textContent = 'Fetching upcoming PQs…';
     try {
-      const events = await fetchAllPQs();
-      const results = applyDateFilter(pqDistanceResults(events, latitude, longitude, PQ_RADIUS_MI));
+      const [events, countryCode] = await Promise.all([
+        fetchAllPQs(),
+        reverseGeocodeCountry(latitude, longitude),
+      ]);
+      const useMiles = pqUseMiles(countryCode);
+      const results = applyDateFilter(pqDistanceResults(events, latitude, longitude));
       if (!results.length) {
-        status.textContent = 'No upcoming PQs within 700 miles in that date range.';
+        status.textContent = `No upcoming PQs within ${useMiles ? '700 mi' : '1,100 km'} in that date range.`;
         return;
       }
-      const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within 700 miles`;
+      const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within ${useMiles ? '700 mi' : '1,100 km'}`;
       status.textContent = summary;
       document.getElementById('pq-page-sub').textContent = summary;
-      renderPQResults(results);
+      renderPQResults(results, useMiles);
     } catch(e) {
       status.textContent = `Error: ${e.message}`;
     }
