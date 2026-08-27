@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Optional
 
 
+import httpx
+
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +35,21 @@ app = FastAPI(title="SWU Cards", version="1.0.0")
 # Exponential time-decay for "Full" (unfiltered) stats.
 # Half-life of 30 days: events from 30d ago count ~50%, 60d ~25%, 120d ~6%.
 _DECAY_LAMBDA = 0.693147 / 30.0  # ln(2) / 30
+
+BAN_LEADER = "Cad Bane, Still Faster than You"
+_BL = BAN_LEADER.replace("'", "''")
+
+def ban_snippets(ban: bool) -> tuple[str, str]:
+    """Returns ("", matches_sql) WHERE fragments for Cad Bane exclusion.
+    Standings filter is handled by the standings_no_bane materialized view via _tnames().
+    """
+    if not ban:
+        return "", ""
+    return (
+        "",  # standings filter handled by standings_no_bane view
+        f"AND p1_leader != '{_BL}' AND p2_leader != '{_BL}'"
+    )
+
 
 def decay_weight(event_alias: str = "e") -> str:
     """SQL expression for per-row exponential decay weight by event date.
@@ -79,13 +96,14 @@ def meta_date_filter(meta_id: Optional[str], days: Optional[int] = None) -> tupl
 
     return "AND " + " AND ".join(parts), params
 
-def _tnames(format: str) -> dict:
+def _tnames(format: str, ban: bool = False) -> dict:
     """Return DB table/view names for the given format ('standard' or 'eternal')."""
     eternal = format == "eternal"
     p = "eternal_" if eternal else ""
+    standings_tbl = "standings_no_bane" if (ban and not eternal) else f"{p}standings"
     return {
         "events":               f"{p}events",
-        "standings":            f"{p}standings",
+        "standings":            standings_tbl,
         "decklist_cards":       f"{p}decklist_cards",
         "matches":              f"{p}matches",
         "mv_leader_stats":      "mv_eternal_leader_stats"      if eternal else "mv_leader_stats",
@@ -121,20 +139,40 @@ def favicon_svg():
 def favicon_ico():
     return FileResponse(str(FRONTEND_DIR / "favicon.svg"), media_type="image/svg+xml")
 
+@app.get("/no-bane", include_in_schema=False)
+def no_bane():
+    content = (FRONTEND_DIR / "index.html").read_text()
+    inject = (
+        "<script>window.__BAN_BANE=true;</script>"
+        "<style>"
+        "#ban-banner{display:block!important}"
+        "</style>"
+    )
+    content = content.replace("</head>", inject + "</head>", 1)
+    return Response(
+        content=content,
+        media_type="text/html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
 
 # =============================================================================
 #  SUMMARY
 # =============================================================================
 
 @app.get("/api/summary")
-def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None), days: Optional[int] = Query(None)):
-    t = _tnames(format)
+def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None), days: Optional[int] = Query(None), ban: bool = Query(False)):
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
+    ban_s, ban_m = ban_snippets(ban)
+    ban_m_alias = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader") if ban else ""
 
     if date_sql:
+        date_sql_ev = date_sql.replace("e.date", "ev.date")
         row = db.fetchone(f"""
             SELECT
-                COUNT(DISTINCT e.id)                                    AS total_events,
+                (SELECT COUNT(*) FROM {t['events']} ev
+                 WHERE 1=1 {date_sql_ev})                              AS total_events,
                 COUNT(DISTINCT s.id)                                    AS total_standings,
                 COUNT(DISTINCT s.leader) FILTER (WHERE s.leader IS NOT NULL)
                                                                         AS unique_leaders,
@@ -142,24 +180,27 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
                 MAX(e.date)                                             AS last_event_date,
                 (SELECT COUNT(*) FROM {t['matches']} m
                  JOIN {t['events']} e ON e.id = m.event_id
-                 WHERE 1=1 {date_sql})                                  AS total_matches
+                 WHERE 1=1 {date_sql} {ban_m_alias})                   AS total_matches
             FROM {t['events']} e
             LEFT JOIN {t['standings']} s ON s.event_id = e.id
-            WHERE 1=1 {date_sql} AND e.date <= CURRENT_DATE
-        """, date_params + date_params)
+            WHERE 1=1 {date_sql} AND e.date <= CURRENT_DATE {ban_s}
+        """, date_params + date_params + date_params)
     else:
+        ban_m_raw = f"AND m.p1_leader != '{_BL}' AND m.p2_leader != '{_BL}'" if ban else ""
         row = db.fetchone(f"""
             SELECT
                 (SELECT COUNT(*) FROM {t['events']} WHERE date <= CURRENT_DATE)
                                                                        AS total_events,
-                (SELECT COUNT(*) FROM {t['standings']})                AS total_standings,
+                (SELECT COUNT(*) FROM {t['standings']})
+                                                                       AS total_standings,
                 (SELECT COUNT(DISTINCT leader) FROM {t['standings']} WHERE leader IS NOT NULL)
                                                                        AS unique_leaders,
                 (SELECT COUNT(*) FROM {t['standings']} WHERE has_decklist)
                                                                        AS decklists_with_cards,
                 (SELECT MAX(date) FROM {t['events']} WHERE date <= CURRENT_DATE)
                                                                        AS last_event_date,
-                (SELECT COUNT(*) FROM {t['matches']})                  AS total_matches
+                (SELECT COUNT(*) FROM {t['matches']} m WHERE 1=1 {ban_m_raw})
+                                                                       AS total_matches
         """)
     return row or {}
 
@@ -461,13 +502,15 @@ def leaders_by_base(
     format:    str            = Query("standard"),
     days:      Optional[int]  = Query(None),
     decay:     bool           = Query(True),
+    ban:       bool           = Query(False),
 ):
     """
     Returns stats for each leader+base-group combo.
     Base groups use aspect/ability classification: plain, splash, force, or rare.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
+    ban_s, ban_m = ban_snippets(ban)
 
     t8_having_raw = (
         "OR COUNT(DISTINCT s.id) FILTER "
@@ -501,6 +544,7 @@ def leaders_by_base(
                            COUNT(*) FILTER (WHERE winner IN ('p1','p2')) AS mg
                     FROM {t['matches']}
                     WHERE p1_leader IS NOT NULL AND p1_base IS NOT NULL AND winner IS NOT NULL
+                    {ban_m}
                     GROUP BY p1_leader, p1_base
                     UNION ALL
                     SELECT p2_leader, p2_base,
@@ -508,17 +552,19 @@ def leaders_by_base(
                            COUNT(*) FILTER (WHERE winner IN ('p1','p2'))
                     FROM {t['matches']}
                     WHERE p2_leader IS NOT NULL AND p2_base IS NOT NULL AND winner IS NOT NULL
+                    {ban_m}
                     GROUP BY p2_leader, p2_base
                 ) t2 GROUP BY leader, base
             ) ms ON ms.leader = s.leader AND ms.base = s.base
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
-              {date_sql}
+              {date_sql} {ban_s}
             GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
         """, date_params + [min_decks])
-    elif decay:
-        # Full dataset with exponential time-decay (half-life 30 days)
+    elif decay or ban:
+        # Full dataset with exponential time-decay (half-life 30 days).
+        # Also used when ban=True: MV has stale pre-computed top8_count, so bypass it.
         w = decay_weight()
         t8_having_decay = (
             f"OR SUM({w}) FILTER "
@@ -542,6 +588,7 @@ def leaders_by_base(
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               AND e.date <= CURRENT_DATE
+              {ban_s}
             GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
             HAVING SUM({w}) >= %s {t8_having_decay}
         """, [min_decks])
@@ -555,12 +602,14 @@ def leaders_by_base(
                     SUM(CASE WHEN winner='p1' THEN 1 ELSE 0 END) AS mw,
                     COUNT(*) AS mg
                 FROM {t['matches']} WHERE p1_leader IS NOT NULL AND p1_base IS NOT NULL AND winner IN ('p1','p2')
+                {ban_m}
                 GROUP BY event_id, p1_leader, p1_base
                 UNION ALL
                 SELECT event_id, p2_leader, p2_base,
                     SUM(CASE WHEN winner='p2' THEN 1 ELSE 0 END),
                     COUNT(*)
                 FROM {t['matches']} WHERE p2_leader IS NOT NULL AND p2_base IS NOT NULL AND winner IN ('p1','p2')
+                {ban_m}
                 GROUP BY event_id, p2_leader, p2_base
             ) ml
             JOIN {t['events']} e ON e.id = ml.event_id
@@ -606,6 +655,7 @@ def leaders_by_base(
                            COUNT(*) FILTER (WHERE winner IN ('p1','p2')) AS mg
                     FROM {t['matches']}
                     WHERE p1_leader IS NOT NULL AND p1_base IS NOT NULL AND winner IS NOT NULL
+                    {ban_m}
                     GROUP BY p1_leader, p1_base
                     UNION ALL
                     SELECT p2_leader, p2_base,
@@ -613,6 +663,7 @@ def leaders_by_base(
                            COUNT(*) FILTER (WHERE winner IN ('p1','p2'))
                     FROM {t['matches']}
                     WHERE p2_leader IS NOT NULL AND p2_base IS NOT NULL AND winner IS NOT NULL
+                    {ban_m}
                     GROUP BY p2_leader, p2_base
                 ) t2 GROUP BY leader, base
             ) ms ON ms.leader = v.leader AND ms.base = v.base
@@ -641,7 +692,7 @@ def leaders_by_base(
         WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
           AND s.placement IS NOT NULL
           AND pi.hri_rating IS NOT NULL
-          {date_sql}
+          {date_sql} {ban_s}
         GROUP BY s.leader, s.base
     """, date_params)
     hri_by_pair = {(r['leader'], r['base']): r for r in hri_rows}
@@ -662,7 +713,7 @@ def leaders_by_base(
           AND s.placement IS NOT NULL
           AND pi.hri_rating IS NOT NULL
           AND s.placement <= GREATEST(CEIL(e.player_count::numeric * 0.08)::INT, 1)
-          {date_sql}
+          {date_sql} {ban_s}
         GROUP BY s.leader, s.base
     """, date_params)
     hri_t8_by_pair = {(r['leader'], r['base']): r for r in hri_t8_rows}
@@ -678,7 +729,7 @@ def leaders_by_base(
         WHERE s.leader IS NOT NULL
           AND s.placement IS NOT NULL
           AND pi.hri_rating IS NOT NULL
-          {date_sql}
+          {date_sql} {ban_s}
     """, date_params)
     global_avg_hri = global_hri_row['global_avg_hri'] if global_hri_row else None
 
@@ -1014,6 +1065,7 @@ def leader_cards(
     format:       str             = Query("standard"),
     days:         Optional[int]   = Query(None),
     decay:        bool            = Query(True),
+    ban:          bool            = Query(False),
 ):
     """
     Card list for a leader with inclusion %, avg copies, T8 conversion.
@@ -1021,7 +1073,7 @@ def leader_cards(
     group — same aspect/ability/rarity) so they can be filtered together.
     top8_only restricts the deck universe to only decks that made top 8.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
     base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     sb_filter   = "" if is_sideboard is None else ("AND dc.is_sideboard = true" if is_sideboard else "AND dc.is_sideboard = false")
@@ -1269,12 +1321,13 @@ def card_by_leader(
     format:    str           = Query("standard"),
     meta_id:   Optional[str] = Query(None),
     days:      Optional[int] = Query(None),
+    ban:       bool          = Query(False),
 ):
     """
     For a single card: performance broken down by each leader.
     Used for the 'Conversion by Legend' section in the card modal.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
     rows = db.fetchall(f"""
@@ -1348,12 +1401,13 @@ def card_copy_matrix(
     format:    str           = Query("standard"),
     meta_id:   Optional[str] = Query(None),
     days:      Optional[int] = Query(None),
+    ban:       bool          = Query(False),
 ):
     """
     For a single card: the MD-copies × SB-copies conversion matrix,
     broken down per leader + base combination.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
     rows = db.fetchall(f"""
@@ -1535,13 +1589,14 @@ def cards_stats(
     meta_id:   Optional[str] = Query(None),
     days:      Optional[int] = Query(None),
     min_decks: int           = Query(5),
+    ban:       bool          = Query(False),
 ):
     """
     All non-leader non-base cards with meta-wide conversion stats:
     deck_count, t8_count, inclusion_rate, conversion vs. meta baseline.
     Aspects, traits, keywords are returned for client-side filtering.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
     rows = db.fetchall(f"""
@@ -1764,14 +1819,17 @@ def leader_matchups(
     format:      str            = Query("standard"),
     days:        Optional[int]  = Query(None),
     decay:       bool           = Query(True),
+    ban:         bool           = Query(False),
 ):
     """
     Win/loss record for a leader against each opponent leader+base combo.
     base_group filters to only matches where THIS leader used those bases.
     top8_only restricts to matches where at least one player made top 8.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
+    _, ban_m = ban_snippets(ban)
+    ban_m_a = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader")
     own_bases = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
 
     own_as_p1  = "AND m.p1_base = ANY(%s::text[])" if own_bases else ""
@@ -1806,7 +1864,7 @@ def leader_matchups(
                 WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
                   AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {own_as_p1} {top8_where}
+                  AND e.date <= CURRENT_DATE {own_as_p1} {top8_where} {ban_m_a}
                 GROUP BY m.p2_leader, m.p2_base
             ),
             as_p2 AS (
@@ -1821,7 +1879,7 @@ def leader_matchups(
                 WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
                   AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {own_as_p2} {top8_where}
+                  AND e.date <= CURRENT_DATE {own_as_p2} {top8_where} {ban_m_a}
                 GROUP BY m.p1_leader, m.p1_base
             )
             SELECT t.opponent, t.opponent_base,
@@ -1849,7 +1907,7 @@ def leader_matchups(
                 WHERE m.p1_leader = %s AND m.p2_leader IS NOT NULL AND m.p2_base IS NOT NULL
                   AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {top8_where}
+                  AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {top8_where} {ban_m_a}
                 GROUP BY m.p2_leader, m.p2_base
             ),
             as_p2 AS (
@@ -1864,7 +1922,7 @@ def leader_matchups(
                 WHERE m.p2_leader = %s AND m.p1_leader IS NOT NULL AND m.p1_base IS NOT NULL
                   AND NOT (m.p1_leader = m.p2_leader AND m.p1_base = m.p2_base)
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where}
+                  AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {top8_where} {ban_m_a}
                 GROUP BY m.p1_leader, m.p1_base
             )
             SELECT t.opponent, t.opponent_base,
@@ -1930,12 +1988,13 @@ def leader_matchup_cards(
     top8_only:      bool            = Query(False),
     format:         str             = Query("standard"),
     days:           Optional[int]   = Query(None),
+    ban:            bool            = Query(False),
 ):
     """
     Cards that over/underperform for {leader} vs {opponent}+bases.
     win_rate per card vs baseline_win_rate; sorted by delta DESC.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
     own_bases = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
@@ -1947,6 +2006,9 @@ def leader_matchup_cards(
     opp_as_p2  = "AND m.p1_base = ANY(%s::text[])" if opp_bases else ""
     own_param  = [own_bases] if own_bases else []
     opp_param  = [opp_bases] if opp_bases else []
+
+    _, ban_m = ban_snippets(ban)
+    ban_m_a = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader")
 
     top8_join  = ""
     top8_where = ""
@@ -1972,7 +2034,7 @@ def leader_matchup_cards(
             {top8_join}
             WHERE m.p1_leader = %s AND m.p2_leader = %s
               AND m.winner IS NOT NULL
-              AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {opp_as_p1} {top8_where}
+              AND e.date <= CURRENT_DATE {date_sql} {own_as_p1} {opp_as_p1} {top8_where} {ban_m_a}
             UNION ALL
             SELECT m.p2_standing_id AS standing_id,
                    (m.winner = 'p2') AS won
@@ -1981,7 +2043,7 @@ def leader_matchup_cards(
             {top8_join}
             WHERE m.p2_leader = %s AND m.p1_leader = %s
               AND m.winner IS NOT NULL
-              AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {opp_as_p2} {top8_where}
+              AND e.date <= CURRENT_DATE {date_sql} {own_as_p2} {opp_as_p2} {top8_where} {ban_m_a}
         ),
         totals AS (
             SELECT COUNT(*)::INT AS total_matches,
@@ -2182,18 +2244,22 @@ def leader_weaknesses(
     sort:        str           = Query("count"),  # "count" | "delta"
     days:       Optional[int] = Query(None),
     decay:      bool          = Query(True),
+    ban:        bool          = Query(False),
 ):
     """
     Cards with the highest win rates when played against this leader+base combo,
     regardless of the opponent deck/leader they're played in.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
     base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     base_as_p1 = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
     base_as_p2 = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
     base_param = [base_names] if base_names else []
+
+    _, ban_m = ban_snippets(ban)
+    ban_m_a = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader")
 
     if decay and not date_sql:
         w = decay_weight()
@@ -2206,7 +2272,7 @@ def leader_weaknesses(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.winner IS NOT NULL
                   AND m.p1_leader != m.p2_leader
-                  AND e.date <= CURRENT_DATE {base_as_p1}
+                  AND e.date <= CURRENT_DATE {base_as_p1} {ban_m_a}
                 UNION ALL
                 SELECT m.p1_standing_id AS standing_id,
                        {w}              AS weight,
@@ -2215,7 +2281,7 @@ def leader_weaknesses(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p2_leader = %s AND m.winner IS NOT NULL
                   AND m.p1_leader != m.p2_leader
-                  AND e.date <= CURRENT_DATE {base_as_p2}
+                  AND e.date <= CURRENT_DATE {base_as_p2} {ban_m_a}
             ),
             totals AS (
                 SELECT SUM(weight) AS total_matches,
@@ -2262,7 +2328,7 @@ def leader_weaknesses(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.winner IS NOT NULL
                   AND m.p1_leader != m.p2_leader
-                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p1} {ban_m_a}
                 UNION ALL
                 SELECT m.p1_standing_id AS standing_id,
                        (m.winner = 'p1') AS won
@@ -2270,7 +2336,7 @@ def leader_weaknesses(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p2_leader = %s AND m.winner IS NOT NULL
                   AND m.p1_leader != m.p2_leader
-                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p2} {ban_m_a}
             ),
             totals AS (
                 SELECT COUNT(*)::INT AS total_matches,
@@ -2328,18 +2394,22 @@ def leader_mirror_breakers(
     sort:        str           = Query("count"),  # "count" | "delta"
     days:        Optional[int] = Query(None),
     decay:       bool          = Query(True),
+    ban:         bool          = Query(False),
 ):
     """
     Cards with the highest win rates when played in the mirror matchup
     (both players running the same leader). The baseline is always ~50%.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
 
     base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     base_as_p1  = "AND m.p1_base = ANY(%s::text[])" if base_names else ""
     base_as_p2  = "AND m.p2_base = ANY(%s::text[])" if base_names else ""
     base_param  = [base_names] if base_names else []
+
+    _, ban_m = ban_snippets(ban)
+    ban_m_a = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader")
 
     if decay and not date_sql:
         w = decay_weight()
@@ -2352,7 +2422,7 @@ def leader_mirror_breakers(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.p2_leader = %s
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {base_as_p1}
+                  AND e.date <= CURRENT_DATE {base_as_p1} {ban_m_a}
                 UNION ALL
                 SELECT m.p2_standing_id AS standing_id,
                        {w}              AS weight,
@@ -2361,7 +2431,7 @@ def leader_mirror_breakers(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.p2_leader = %s
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {base_as_p2}
+                  AND e.date <= CURRENT_DATE {base_as_p2} {ban_m_a}
             ),
             totals AS (
                 SELECT SUM(weight)                                    AS total_matches,
@@ -2408,7 +2478,7 @@ def leader_mirror_breakers(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.p2_leader = %s
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p1}
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p1} {ban_m_a}
                 UNION ALL
                 SELECT m.p2_standing_id AS standing_id,
                        (m.winner = 'p2') AS won
@@ -2416,7 +2486,7 @@ def leader_mirror_breakers(
                 JOIN {t['events']} e ON e.id = m.event_id
                 WHERE m.p1_leader = %s AND m.p2_leader = %s
                   AND m.winner IS NOT NULL
-                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p2}
+                  AND e.date <= CURRENT_DATE {date_sql} {base_as_p2} {ban_m_a}
             ),
             totals AS (
                 SELECT COUNT(*)::INT                                      AS total_matches,
@@ -2534,14 +2604,16 @@ def matchup_matrix_by_base(
     opp_min_elo: int            = Query(0, description="Min HRI rating for the opponent (0 = no filter)"),
     format:      str            = Query("standard"),
     days:        Optional[int]  = Query(None),
+    ban:         bool           = Query(False),
 ):
     """
     Win-rate matrix of top leader+base combos vs each other.
     Rows = player's deck, columns = opponent's deck.
     win_rate > 0.5 means the row deck wins more than 50%% vs that column.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
+    ban_s, ban_m = ban_snippets(ban)
 
     # Step 1: get the top combos by deck count, with group info from base_reference
     combos_raw = db.fetchall(f"""
@@ -2554,7 +2626,7 @@ def matchup_matrix_by_base(
         LEFT JOIN base_reference br ON br.name = s.base
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
-          AND e.date <= CURRENT_DATE {date_sql}
+          AND e.date <= CURRENT_DATE {date_sql} {ban_s}
         GROUP BY s.leader, s.base, br.label, br.group_key
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
@@ -2616,6 +2688,7 @@ def matchup_matrix_by_base(
             LEFT JOIN player_identities pi2e ON pi2e.id = pm2e.identity_id"""
         extra_select = ", pi1e.hri_rating AS p1_elo, pi2e.hri_rating AS p2_elo"
 
+    ban_m_alias = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader") if ban else ""
     matches = db.fetchall(f"""
         SELECT m.p1_leader, m.p1_base, m.p2_leader, m.p2_base, m.winner{extra_select}
         FROM {t['matches']} m
@@ -2626,6 +2699,7 @@ def matchup_matrix_by_base(
           AND m.p1_leader IN ({ldr_ph}) AND m.p2_leader IN ({ldr_ph})
           AND m.p1_leader != m.p2_leader
           AND e.date <= CURRENT_DATE {date_sql}
+          {ban_m_alias}
           {extra_where}
     """, all_leaders + all_leaders + date_params)
 
@@ -2719,14 +2793,17 @@ def meta_call(
     top_n:       int            = Query(30),
     format:      str            = Query("standard"),
     days:        Optional[int]  = Query(None),
+    ban:         bool           = Query(False),
 ):
     """
     Ranks leader+base combos by field EV: expected win rate against the current
     meta field, weighted by each opponent's meta share.
     field_ev > 0.5 = positive expectation vs the field.
     """
-    t = _tnames(format)
+    t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
+    ban_s, ban_m = ban_snippets(ban)
+    ban_m_a = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader")
 
     combos_raw = db.fetchall(f"""
         SELECT s.leader, s.base,
@@ -2739,7 +2816,7 @@ def meta_call(
         LEFT JOIN base_reference br ON br.name = s.base
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
-          AND e.date <= CURRENT_DATE {date_sql}
+          AND e.date <= CURRENT_DATE {date_sql} {ban_s}
         GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
@@ -2795,7 +2872,7 @@ def meta_call(
           AND m.p1_leader IS NOT NULL AND m.p2_leader IS NOT NULL
           AND m.p1_leader IN ({ldr_ph}) AND m.p2_leader IN ({ldr_ph})
           AND m.p1_leader != m.p2_leader
-          AND e.date <= CURRENT_DATE {date_sql}
+          AND e.date <= CURRENT_DATE {date_sql} {ban_m_a}
     """, all_leaders + all_leaders + date_params)
 
     base_to_combo: dict = {}
@@ -4412,3 +4489,28 @@ def add_sealed_pool_card(payload: dict):
         (pool_id, section, card_number, card_name, pool_count, played_count),
     )
     return {"id": row["id"], "ok": True}
+
+
+# ---------------------------------------------------------------------------
+# OSRM proxy — keeps routing engine off the public internet
+# ---------------------------------------------------------------------------
+@app.get("/api/osrm/table")
+async def osrm_table(coordinates: str = Query(...)):
+    """Proxy to internal OSRM Table API.
+    Expects coordinates in OSRM format: lon,lat;lon,lat;...
+    sources=0 means only compute durations from the first coordinate.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                f"http://osrm:5000/table/v1/driving/{coordinates}",
+                params={"sources": "0", "annotations": "duration"},
+            )
+            r.raise_for_status()
+            return r.json()
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Routing service unavailable")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Routing service timed out")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Routing service error: {e.response.status_code}")

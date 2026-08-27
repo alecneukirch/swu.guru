@@ -5963,6 +5963,7 @@ async function findPQs() {
     status.textContent = summary;
     document.getElementById('pq-page-sub').textContent = summary;
     renderPQResults(results, useMiles);
+    updateOsrmDriveTimes(results, lat, lon);
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
   }
@@ -5970,7 +5971,7 @@ async function findPQs() {
 
 function renderPQResults(results, useMiles = true) {
   const grid = document.getElementById('pq-grid');
-  grid.innerHTML = results.map(ev => {
+  grid.innerHTML = results.map((ev, i) => {
     const addr = ev.address;
     const countryShort = (addr.country || '')
       .replace('United States of America', 'USA')
@@ -6002,7 +6003,7 @@ function renderPQResults(results, useMiles = true) {
   <div class="pq-card-top">
     <div class="pq-store">${ev.storeName || '—'}</div>
     <div class="pq-card-top-right">
-      <div class="pq-dist">${distStr} <span class="pq-drive">${driveStr} drive</span></div>
+      <div class="pq-dist">${distStr} <span class="pq-drive" id="pq-drive-${i}">${driveStr} drive</span></div>
       ${fmtBadge}
     </div>
   </div>
@@ -6024,6 +6025,33 @@ function renderPQResults(results, useMiles = true) {
   </div>
 </div>`;
   }).join('');
+}
+
+async function updateOsrmDriveTimes(results, userLat, userLon) {
+  const coords = [
+    `${userLon},${userLat}`,
+    ...results.map(ev => `${ev.lon},${ev.lat}`)
+  ].join(';');
+  try {
+    const r = await fetch(`/api/osrm/table?coordinates=${encodeURIComponent(coords)}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const durations = data.durations?.[0];
+    if (!durations) return;
+    results.forEach((ev, i) => {
+      const secs = durations[i + 1]; // +1: index 0 is the user origin
+      if (secs == null) return;
+      const el = document.getElementById(`pq-drive-${i}`);
+      if (!el) return;
+      const h = Math.floor(secs / 3600);
+      const m = Math.round((secs % 3600) / 60);
+      let driveStr;
+      if (h === 0) driveStr = `~${m}m`;
+      else if (m < 5) driveStr = `~${h}h`;
+      else driveStr = `~${h}h ${m}m`;
+      el.textContent = `${driveStr} drive`;
+    });
+  } catch(e) { /* fall back to formula estimates already shown */ }
 }
 
 async function pqUseGeolocation(silent = false) {
@@ -6053,6 +6081,7 @@ async function pqUseGeolocation(silent = false) {
       status.textContent = summary;
       document.getElementById('pq-page-sub').textContent = summary;
       renderPQResults(results, useMiles);
+      updateOsrmDriveTimes(results, latitude, longitude);
     } catch(e) {
       status.textContent = `Error: ${e.message}`;
     }

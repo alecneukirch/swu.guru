@@ -40,6 +40,13 @@ networks:
       config:
         - subnet: 172.20.2.0/24
 
+  routing:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.3.0/24
+
 # ---------------------------------------------------------------------------
 # Volumes
 # ---------------------------------------------------------------------------
@@ -49,6 +56,7 @@ volumes:
   grafana_data:
   loki_data:
   filedrops_data:
+  osrm_data:
 
 # =============================================================================
 # Services
@@ -136,15 +144,16 @@ services:
       - /tmp:size=64m,mode=1777
     networks:
       - dmz          # outbound access needed to reach external Postgres
+      - routing      # reach osrm for drive-time proxy
     env_file:
       - .env
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=swuguru_dmz"
-      - "traefik.http.routers.app.rule=Host(`v2.${DOMAIN}`)"
+      - "traefik.http.routers.app.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       - "traefik.http.routers.app.middlewares=secure-headers@file,rate-limit@file"
-      - "traefik.http.routers.app-http.rule=Host(`v2.${DOMAIN}`)"
+      - "traefik.http.routers.app-http.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.app-http.entrypoints=web"
       - "traefik.http.routers.app-http.middlewares=secure-headers@file,rate-limit@file"
       - "traefik.http.services.app.loadbalancer.server.port=8000"
@@ -177,10 +186,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=swuguru_dmz"
-      - "traefik.http.routers.app2.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.app2.rule=Host(`v2.${DOMAIN}`)"
       - "traefik.http.routers.app2.tls.certresolver=letsencrypt"
       - "traefik.http.routers.app2.middlewares=secure-headers@file,rate-limit@file"
-      - "traefik.http.routers.app2-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.app2-http.rule=Host(`v2.${DOMAIN}`)"
       - "traefik.http.routers.app2-http.entrypoints=web"
       - "traefik.http.routers.app2-http.middlewares=secure-headers@file,rate-limit@file"
       - "traefik.http.services.app2.loadbalancer.server.port=8001"
@@ -230,6 +239,30 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # ---------------------------------------------------------------------------
+  # OSRM — Self-hosted routing engine for PQ drive-time estimates
+  # Run setup-osrm.sh once to download + preprocess OSM data before starting.
+  # ---------------------------------------------------------------------------
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    container_name: osrm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 16g
+    volumes:
+      - osrm_data:/data
+    command: osrm-routed --algorithm mld --max-table-size 500 /data/merged.osrm
+    networks:
+      - routing
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   # ===========================================================================
   # METRICS STACK
