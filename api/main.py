@@ -4492,22 +4492,36 @@ def add_sealed_pool_card(payload: dict):
 
 
 # ---------------------------------------------------------------------------
-# OSRM proxy — keeps routing engine off the public internet
+# Valhalla proxy — keeps routing engine off the public internet.
+# Accepts OSRM-format coordinates so the frontend needs no changes.
 # ---------------------------------------------------------------------------
 @app.get("/api/osrm/table")
 async def osrm_table(coordinates: str = Query(...)):
-    """Proxy to internal OSRM Table API.
+    """Proxy to internal Valhalla matrix API.
     Expects coordinates in OSRM format: lon,lat;lon,lat;...
-    sources=0 means only compute durations from the first coordinate.
+    First coordinate is the source; all coordinates are targets.
+    Returns OSRM-compatible {durations: [[...]]} response.
     """
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(
-                f"http://osrm:5000/table/v1/driving/{coordinates}",
-                params={"sources": "0", "annotations": "duration"},
-            )
+        pairs = [p.split(",") for p in coordinates.split(";")]
+        coords = [{"lon": float(lon), "lat": float(lat)} for lon, lat in pairs]
+        body = {
+            "sources": [coords[0]],
+            "targets": coords,
+            "costing": "auto",
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post("http://valhalla:8002/sources_to_targets", json=body)
             r.raise_for_status()
-            return r.json()
+            data = r.json()
+        rows = data.get("sources_to_targets", [[]])
+        durations = [
+            [item["time"] if item else None for item in row]
+            for row in rows
+        ]
+        return {"durations": durations, "code": "Ok"}
+    except (ValueError, KeyError, IndexError):
+        raise HTTPException(status_code=400, detail="Invalid coordinates format")
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Routing service unavailable")
     except httpx.TimeoutException:

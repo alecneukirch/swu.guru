@@ -42,7 +42,6 @@ networks:
 
   routing:
     driver: bridge
-    internal: true
     ipam:
       config:
         - subnet: 172.20.3.0/24
@@ -56,7 +55,7 @@ volumes:
   grafana_data:
   loki_data:
   filedrops_data:
-  osrm_data:
+  valhalla_data:
 
 # =============================================================================
 # Services
@@ -241,28 +240,33 @@ services:
       retries: 3
 
   # ---------------------------------------------------------------------------
-  # OSRM — Self-hosted routing engine for PQ drive-time estimates
-  # Run setup-osrm.sh once to download + preprocess OSM data before starting.
+  # VALHALLA — Self-hosted routing engine for PQ drive-time estimates.
+  # On first start, downloads US OSM data and builds tiles (~2-4 hrs).
+  # Subsequent starts are fast (tiles cached in valhalla_data volume).
   # ---------------------------------------------------------------------------
-  osrm:
-    image: ghcr.io/project-osrm/osrm-backend:latest
-    container_name: osrm
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    container_name: valhalla
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL]
-    mem_limit: 16g
     volumes:
-      - osrm_data:/data
-    command: osrm-routed --algorithm mld --max-table-size 500 /data/merged.osrm
+      - valhalla_data:/custom_files
+    environment:
+      - tile_urls=https://download.geofabrik.de/north-america/us-latest.osm.pbf
+      - build_elevation=False
+      - build_admins=True
+      - build_time_zones=True
+      - serve_tiles=True
+      - server_threads=4
     networks:
       - routing
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/status || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 14400s
 
   # ===========================================================================
   # METRICS STACK
