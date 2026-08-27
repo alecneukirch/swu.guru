@@ -2316,7 +2316,8 @@ select option { background: var(--surface2); }
 .pq-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .pq-store { font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.2; }
 .pq-card-top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-.pq-dist { font-family: var(--mono); font-size: 16px; color: var(--gold); white-space: nowrap; }
+.pq-dist { font-family: var(--mono); font-size: 16px; color: var(--gold); white-space: nowrap; text-align: right; }
+.pq-drive { font-size: 12px; color: var(--text3); font-family: var(--mono); }
 .pq-event-name { font-size: 14px; color: var(--text3); }
 .pq-divider { border: none; border-top: 1px solid var(--border); margin: 0; margin-top: auto; }
 .pq-meta { display: flex; gap: 28px; flex-wrap: wrap; }
@@ -5784,6 +5785,18 @@ function pqFormatDist(distKm, useMiles) {
   return (distKm < 10 ? distKm.toFixed(1) : Math.round(distKm)) + ' km';
 }
 
+function pqEstimateDrive(distKm) {
+  // Roads aren't straight — apply ~1.3× tortuosity, then tier average speeds
+  const roadKm = distKm * 1.3;
+  const speedKmh = distKm < 50 ? 50 : distKm < 200 ? 80 : 105;
+  const totalHours = roadKm / speedKmh;
+  const h = Math.floor(totalHours);
+  const m = Math.round((totalHours - h) * 60);
+  if (h === 0) return `~${m}m`;
+  if (m < 5)   return `~${h}h`;
+  return `~${h}h ${m}m`;
+}
+
 async function geocodeAddress(address) {
   const isZip = /^\d{5}(-\d{4})?$/.test(address.trim());
   const query = isZip ? address.trim() + ', USA' : address;
@@ -5984,11 +5997,12 @@ function renderPQResults(results, useMiles = true) {
     const fmtBadge = ev.format
       ? `<span class="pq-format-badge ${fmtCls}">${ev.format}</span>`
       : '';
+    const driveStr = pqEstimateDrive(ev.distKm);
     return `<div class="pq-card">
   <div class="pq-card-top">
     <div class="pq-store">${ev.storeName || '—'}</div>
     <div class="pq-card-top-right">
-      <div class="pq-dist">${distStr}</div>
+      <div class="pq-dist">${distStr} <span class="pq-drive">${driveStr} drive</span></div>
       ${fmtBadge}
     </div>
   </div>
