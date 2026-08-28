@@ -1797,7 +1797,7 @@ def warm_leader_image_cache():
 def metas_dropdown(format: str = Query("premiere")):
     """Formatted for the frontend set/meta filter dropdowns."""
     rows = db.fetchall(
-        "SELECT id, name, is_current FROM metas WHERE format = %s ORDER BY start_date DESC NULLS LAST",
+        "SELECT id, name, (start_date <= CURRENT_DATE AND (end_date IS NULL OR end_date > CURRENT_DATE)) AS is_current FROM metas WHERE format = %s ORDER BY start_date DESC NULLS LAST",
         (format,)
     )
     return {"options": rows}
