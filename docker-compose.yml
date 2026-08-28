@@ -40,11 +40,6 @@ networks:
       config:
         - subnet: 172.20.2.0/24
 
-  routing:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.3.0/24
 
 # ---------------------------------------------------------------------------
 # Volumes
@@ -55,7 +50,6 @@ volumes:
   grafana_data:
   loki_data:
   filedrops_data:
-  valhalla_data:
 
 # =============================================================================
 # Services
@@ -142,8 +136,7 @@ services:
     tmpfs:
       - /tmp:size=64m,mode=1777
     networks:
-      - dmz          # outbound access needed to reach external Postgres
-      - routing      # reach osrm for drive-time proxy
+      - dmz
     env_file:
       - .env
     labels:
@@ -238,35 +231,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-  # ---------------------------------------------------------------------------
-  # VALHALLA — Self-hosted routing engine for PQ drive-time estimates.
-  # On first start, downloads US OSM data and builds tiles (~2-4 hrs).
-  # Subsequent starts are fast (tiles cached in valhalla_data volume).
-  # ---------------------------------------------------------------------------
-  valhalla:
-    image: ghcr.io/valhalla/valhalla-scripted:latest
-    container_name: valhalla
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    volumes:
-      - valhalla_data:/custom_files
-    environment:
-      - tile_urls=https://download.openstreetmap.fr/extracts/north-america/us-northeast-latest.osm.pbf https://download.openstreetmap.fr/extracts/north-america/us-midwest-latest.osm.pbf https://download.openstreetmap.fr/extracts/north-america/us-south-latest.osm.pbf https://download.openstreetmap.fr/extracts/north-america/us-west-latest.osm.pbf
-      - build_elevation=False
-      - build_admins=True
-      - build_time_zones=True
-      - serve_tiles=True
-      - server_threads=4
-    networks:
-      - routing
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/status || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 14400s
 
   # ===========================================================================
   # METRICS STACK
