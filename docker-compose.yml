@@ -253,7 +253,7 @@ services:
     volumes:
       - valhalla_data:/custom_files
     environment:
-      - tile_urls=https://download.geofabrik.de/north-america/us-latest.osm.pbf
+      - tile_urls=https://download.openstreetmap.fr/extracts/north-america/us-northeast-latest.osm.pbf https://download.openstreetmap.fr/extracts/north-america/us-midwest-latest.osm.pbf https://download.openstreetmap.fr/extracts/north-america/us-south-latest.osm.pbf https://download.openstreetmap.fr/extracts/north-america/us-west-latest.osm.pbf
       - build_elevation=False
       - build_admins=True
       - build_time_zones=True
