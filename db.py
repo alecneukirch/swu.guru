@@ -2,6 +2,7 @@
 db.py — Postgres connection pool
 """
 import os
+import urllib.parse
 import psycopg2
 from psycopg2 import pool
 from dotenv import load_dotenv
@@ -14,15 +15,29 @@ _pool: pool.ThreadedConnectionPool | None = None
 def get_pool() -> pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        _pool = pool.ThreadedConnectionPool(
-            minconn=1,
-            maxconn=25,
-            host=os.getenv("DB_HOST", "192.168.1.200"),
-            port=int(os.getenv("DB_PORT", 5432)),
-            dbname=os.getenv("DB_NAME", "swu_cards"),
-            user=os.getenv("DB_USER", "swu_user"),
-            password=os.getenv("DB_PASS", "changeme"),
-        )
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            r = urllib.parse.urlparse(database_url)
+            _pool = pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=25,
+                host=r.hostname,
+                port=r.port or 5432,
+                dbname=r.path.lstrip("/"),
+                user=r.username,
+                password=r.password,
+                sslmode="require",
+            )
+        else:
+            _pool = pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=25,
+                host=os.getenv("DB_HOST", "192.168.1.200"),
+                port=int(os.getenv("DB_PORT", 5432)),
+                dbname=os.getenv("DB_NAME", "swu_cards"),
+                user=os.getenv("DB_USER", "swu_user"),
+                password=os.getenv("DB_PASS", "changeme"),
+            )
     return _pool
 
 

@@ -1,0 +1,35 @@
+name: swuguru
+region: nyc
+
+services:
+  - name: app
+    github:
+      repo: alecneukirch/swu.guru
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 8000
+    instance_count: 1
+    instance_size_slug: basic-xs
+    health_check:
+      http_path: /api/summary
+      initial_delay_seconds: 20
+      period_seconds: 30
+      timeout_seconds: 10
+    routes:
+      - path: /
+    envs:
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+        type: SECRET
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    size: db-s-1vcpu-1gb
+    num_nodes: 1
+
+domains:
+  - domain: swu.guru
+    type: PRIMARY
