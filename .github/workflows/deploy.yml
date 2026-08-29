@@ -1,0 +1,27 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Build and push image
+        run: |
+          docker build -t registry.digitalocean.com/aces-ombi/swuguru:latest .
+          docker push registry.digitalocean.com/aces-ombi/swuguru:latest
+
+      - name: Trigger App Platform deployment
+        run: doctl apps create-deployment f4512f80-f0a7-4606-bd0d-4e5090c7c30b
