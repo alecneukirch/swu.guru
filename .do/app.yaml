@@ -20,15 +20,16 @@ services:
       - path: /
     envs:
       - key: DATABASE_URL
-        value: ${db.DATABASE_URL}
+        value: ${swuguru-db.DATABASE_URL}
         type: SECRET
 
 databases:
-  - name: db
+  - cluster_name: swuguru-db
+    db_name: swu_cards
+    db_user: doadmin
     engine: PG
-    version: "16"
-    size: db-s-1vcpu-1gb
-    num_nodes: 1
+    name: swuguru-db
+    production: true
 
 domains:
   - domain: swu.guru
