@@ -3727,6 +3727,9 @@ select.sl-input { cursor: pointer; }
     <div class="mb-stat"><div class="mb-val" id="mb-matches">—</div><div class="mb-label">Matches</div></div>
     <div class="mb-stat"><div class="mb-val" id="mb-leaders">—</div><div class="mb-label">Leaders</div></div>
   </div>
+  <div id="eternal-notice" style="display:none;font-family:var(--mono);font-size:12px;color:var(--text3);text-align:center;padding:8px 0 4px">
+    No Eternal events yet — showing Premier data
+  </div>
   <div class="controls">
     <div class="sort-btn-wrap">
       <div class="sep"></div>
@@ -4635,15 +4638,27 @@ function setFormat(fmt) {
 
 async function loadHome() {
   const gen = ++_homeGen;
-  const fmt = currentFormat;
-  const qs  = '&format=' + fmt + metaParam();
+  let fmt = currentFormat;
+  const qs  = () => '&format=' + fmt + metaParam();
+  const notice = document.getElementById('eternal-notice');
   try {
     const deckFilter = 'min_decks=1';
-    const [comboData, summary] = await Promise.all([
-      api('/api/leaders/by-base?' + deckFilter + qs),
+    let [comboData, summary] = await Promise.all([
+      api('/api/leaders/by-base?' + deckFilter + qs()),
       api('/api/summary?format=' + fmt + metaParam()),
     ]);
     if (gen !== _homeGen) return;
+    if (fmt === 'eternal' && !summary.total_events) {
+      fmt = 'standard';
+      [comboData, summary] = await Promise.all([
+        api('/api/leaders/by-base?' + deckFilter + qs()),
+        api('/api/summary?format=' + fmt + metaParam()),
+      ]);
+      if (gen !== _homeGen) return;
+      notice.style.display = '';
+    } else {
+      notice.style.display = 'none';
+    }
     homeComboData = comboData;
     const uniqueLeaders = new Set(comboData.map(r => r.leader)).size;
     document.getElementById('mb-events').textContent  = summary.total_events != null ? summary.total_events.toLocaleString() : '—';
