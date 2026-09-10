@@ -5839,43 +5839,19 @@ async function reverseGeocodeCountry(lat, lon) {
 }
 
 async function fetchAllPQs() {
-  const nowMs = Date.now();
-  const pageSize = 100;
-  let page = 1, allEvents = [];
-  while (true) {
-    const url = `https://admin.starwarsunlimited.com/api/event-search?locale=en&populate[0]=*` +
-      `&pagination[pageSize]=${pageSize}&pagination[page]=${page}` +
-      `&filters[$and][0][type][id][$eq]=4` +
-      `&filters[startDate][$gte]=${nowMs}` +
-      `&sort[0]=startDate%3Aasc`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const events = (data.data || []).map(normalizePQ);
-    allEvents = allEvents.concat(events);
-    const meta = data.meta?.pagination;
-    if (!meta || page >= meta.pageCount) break;
-    page++;
-  }
-  return allEvents;
-}
-
-function normalizePQ(ev) {
-  const a = ev.attributes || {};
-  const locData = ev.location?.data || a.location?.data || {};
-  const locAttrs = locData.attributes || locData || {};
-  const addr = locAttrs.address || {};
-  const format = a.format?.data?.attributes?.name || ev.format?.data?.attributes?.name || '';
-  return {
-    name:      a.name      || ev.name      || '',
-    startDate: a.startDate || ev.startDate || null,
-    cost:      a.cost      || ev.cost      || '',
-    url:       a.url       || ev.url       || '',
-    format,
-    storeName: locAttrs.name || '',
-    address:   addr,
-    lat:       addr.latitude  ?? null,
-    lon:       addr.longitude ?? null,
-  };
+  const res  = await fetch('/api/pq-finder');
+  const data = await res.json();
+  return (data.events || []).map(e => ({
+    name:      e.name      || e.storeName || '',
+    startDate: e.startDate || null,
+    cost:      e.cost      || '',
+    url:       e.url       || '',
+    format:    e.format    || '',
+    storeName: e.storeName || '',
+    address:   e.address   || {},
+    lat:       e.lat       ?? null,
+    lon:       e.lon       ?? null,
+  }));
 }
 
 function pqDistanceResults(events, userLat, userLon) {

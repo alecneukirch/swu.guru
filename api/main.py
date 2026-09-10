@@ -10,6 +10,11 @@ Run with:
 from __future__ import annotations
 
 
+import asyncio
+import json
+import re
+import time as _time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -4498,4 +4503,193 @@ def add_sealed_pool_card(payload: dict):
         (pool_id, section, card_number, card_name, pool_count, played_count),
     )
     return {"id": row["id"], "ok": True}
+
+
+# =============================================================================
+#  PQ FINDER  — merges SWU calendar HTML tables + event-search API
+# =============================================================================
+# The official calendar embeds PQ tables as static CMS HTML for all upcoming
+# sets. The event-search API only has events once stores register individually.
+# We serve both merged: API entry wins when both exist (it has reg URL + cost).
+# Results are cached 4 h; store coordinates are cached for the process lifetime.
+
+_PQ_CACHE: dict = {"ts": 0.0, "data": None}
+_PQ_LOC_CACHE: dict = {}  # store_id -> {lat, lon, name, address, country}
+_PQ_CACHE_TTL = 4 * 3600
+
+_SWU_CALENDAR   = "https://starwarsunlimited.com/organized-play-calendar"
+_SWU_EVENTS_API = "https://admin.starwarsunlimited.com/api/event-search"
+_SWU_LOC_API    = "https://admin.starwarsunlimited.com/api/locations"
+
+
+def _parse_pq_date(text: str) -> str | None:
+    """'Saturday, November 7, 2026' -> '2026-11-07'"""
+    if "," in text:
+        _, text = text.split(",", 1)
+    try:
+        return datetime.strptime(text.strip(), "%B %d, %Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+async def _calendar_events(client: httpx.AsyncClient) -> list[dict]:
+    resp = await client.get(_SWU_CALENDAR, timeout=20, follow_redirects=True)
+    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', resp.text, re.DOTALL)
+    if not m:
+        return []
+    page_data = json.loads(m.group(1))
+    content   = page_data["props"]["pageProps"]["content"]
+    pq_block  = next((c for c in content if c.get("heading") == "Planetary Qualifiers"), None)
+    if not pq_block:
+        return []
+
+    events = []
+    for block in re.findall(r"<details>(.*?)</details>", pq_block["body"], re.DOTALL):
+        for row in re.findall(r"<tr>(.*?)</tr>", block, re.DOTALL):
+            cells = re.findall(r"<td[^>]*>(.*?)</td>", row, re.DOTALL)
+            if len(cells) < 4:
+                continue
+            store_m  = re.search(r"/search\?store=(\d+)", cells[1])
+            store_id = store_m.group(1) if store_m else None
+            clean    = [re.sub(r"<[^>]+>", "", c).strip().replace("\xa0", "") for c in cells]
+            date     = _parse_pq_date(clean[0])
+            if not date or clean[0].lower() == "date":
+                continue
+            events.append({
+                "store_id":   store_id,
+                "date":       date,
+                "store_name": clean[1] if len(clean) > 1 else "",
+                "format":     clean[2] if len(clean) > 2 else "",
+                "city":       clean[3] if len(clean) > 3 else "",
+                "country":    clean[5] if len(clean) > 5 else "",
+            })
+    return events
+
+
+async def _api_events(client: httpx.AsyncClient) -> list[dict]:
+    now_ms, page, events = int(_time.time() * 1000), 1, []
+    while True:
+        resp = await client.get(_SWU_EVENTS_API, params={
+            "locale": "en", "populate[0]": "*",
+            "pagination[pageSize]": 100, "pagination[page]": page,
+            "filters[$and][0][type][id][$eq]": 4,
+            "filters[startDate][$gte]": now_ms,
+            "sort[0]": "startDate:asc",
+        }, timeout=15)
+        data  = resp.json()
+        for item in data.get("data", []):
+            a        = item["attributes"]
+            loc_data = (a.get("location") or {}).get("data") or {}
+            loc_id   = str(loc_data.get("id", ""))
+            loc_a    = loc_data.get("attributes", {})
+            addr     = loc_a.get("address", {})
+            fmt_name = (((a.get("format") or {}).get("data") or {}).get("attributes") or {}).get("name", "")
+            events.append({
+                "store_id":   loc_id,
+                "date":       a.get("startDate", "")[:10],
+                "name":       a.get("name", ""),
+                "cost":       a.get("cost", ""),
+                "url":        a.get("url", ""),
+                "format":     fmt_name,
+                "store_name": loc_a.get("name", ""),
+                "lat":        addr.get("latitude"),
+                "lon":        addr.get("longitude"),
+                "address":    addr,
+                "country":    addr.get("country", ""),
+            })
+        pg = data.get("meta", {}).get("pagination", {})
+        if page >= pg.get("pageCount", 1):
+            break
+        page += 1
+    return events
+
+
+async def _resolve_location(client: httpx.AsyncClient, store_id: str) -> None:
+    if store_id in _PQ_LOC_CACHE:
+        return
+    try:
+        resp  = await client.get(f"{_SWU_LOC_API}/{store_id}?populate=address", timeout=10)
+        attrs = (resp.json().get("data") or {}).get("attributes", {})
+        addr  = attrs.get("address", {})
+        _PQ_LOC_CACHE[store_id] = {
+            "lat":     addr.get("latitude"),
+            "lon":     addr.get("longitude"),
+            "name":    attrs.get("name", ""),
+            "address": addr,
+            "country": addr.get("country", ""),
+        }
+    except Exception:
+        _PQ_LOC_CACHE[store_id] = {"lat": None, "lon": None, "name": "", "address": {}, "country": ""}
+
+
+@app.get("/api/pq-finder")
+async def pq_finder():
+    now = _time.time()
+    if _PQ_CACHE["data"] is not None and now < _PQ_CACHE["ts"] + _PQ_CACHE_TTL:
+        return _PQ_CACHE["data"]
+
+    async with httpx.AsyncClient() as client:
+        cal, api = await asyncio.gather(
+            _calendar_events(client),
+            _api_events(client),
+        )
+
+    # API events keyed by (store_id, date) for deduplication
+    api_keys = {(e["store_id"], e["date"]) for e in api if e["store_id"]}
+
+    # Resolve coordinates for calendar-only stores in parallel batches of 20
+    uncached = list({
+        e["store_id"] for e in cal
+        if e.get("store_id")
+        and (e["store_id"], e["date"]) not in api_keys
+        and e["store_id"] not in _PQ_LOC_CACHE
+    })
+    if uncached:
+        async with httpx.AsyncClient() as client:
+            for i in range(0, len(uncached), 20):
+                await asyncio.gather(*[_resolve_location(client, sid) for sid in uncached[i:i+20]])
+
+    # Build merged result — API entries first (richer data), then calendar-only
+    seen, result = set(), []
+
+    for e in api:
+        key = (e["store_id"], e["date"])
+        seen.add(key)
+        result.append({
+            "storeName": e["store_name"],
+            "name":      e["name"],
+            "startDate": e["date"],
+            "cost":      e["cost"],
+            "url":       e["url"],
+            "format":    e["format"],
+            "lat":       e["lat"],
+            "lon":       e["lon"],
+            "address":   e["address"],
+            "country":   e["country"],
+        })
+
+    for e in cal:
+        key = (e.get("store_id", ""), e["date"])
+        if key in seen:
+            continue
+        seen.add(key)
+        loc  = _PQ_LOC_CACHE.get(e["store_id"], {}) if e.get("store_id") else {}
+        addr = loc.get("address") or {"city": e.get("city", ""), "country": e.get("country", "")}
+        result.append({
+            "storeName": loc.get("name") or e["store_name"],
+            "name":      e["store_name"],
+            "startDate": e["date"],
+            "cost":      "",
+            "url":       "",
+            "format":    e["format"],
+            "lat":       loc.get("lat"),
+            "lon":       loc.get("lon"),
+            "address":   addr,
+            "country":   e.get("country", ""),
+        })
+
+    result.sort(key=lambda x: x["startDate"])
+    out = {"events": result, "total": len(result)}
+    _PQ_CACHE.update({"ts": now, "data": out})
+    return out
 
