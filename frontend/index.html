@@ -3980,6 +3980,10 @@ select.sl-input { cursor: pointer; }
     <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
     <label class="pq-date-label">From <input type="date" id="pq-date-from" onclick="this.showPicker()"></label>
     <label class="pq-date-label">To   <input type="date" id="pq-date-to"   onclick="this.showPicker()"></label>
+    <div style="display:flex;gap:4px;align-items:center">
+      <button class="btn active" id="pq-sort-dist" onclick="setPQSort('dist')">Distance</button>
+      <button class="btn"        id="pq-sort-date" onclick="setPQSort('date')">Date</button>
+    </div>
     <button class="btn" onclick="findPQs()">Search</button>
   </div>
   <div class="pq-results">
@@ -5901,16 +5905,28 @@ function formatPQCost(rawCost, country) {
 
 let _pqAutoGeoFired = false;
 
+let _pqSort = 'dist'; // 'dist' | 'date'
+
+function setPQSort(mode) {
+  _pqSort = mode;
+  document.getElementById('pq-sort-dist').classList.toggle('active', mode === 'dist');
+  document.getElementById('pq-sort-date').classList.toggle('active', mode === 'date');
+  // Re-render last results if any
+  if (_lastPQResults) renderPQResults(_lastPQResults.events, _lastPQResults.useMiles);
+}
+
+let _lastPQResults = null;
+
 function initPQFinder() {
-  // Set date defaults once (today → +3 months)
+  // Set date defaults once (today → +1 year)
   const fromEl = document.getElementById('pq-date-from');
   const toEl   = document.getElementById('pq-date-to');
   if (!fromEl.value) {
     const today = new Date();
-    const plus3m = new Date(today);
-    plus3m.setMonth(plus3m.getMonth() + 3);
+    const plus1y = new Date(today);
+    plus1y.setFullYear(plus1y.getFullYear() + 1);
     fromEl.value = today.toISOString().slice(0, 10);
-    toEl.value   = plus3m.toISOString().slice(0, 10);
+    toEl.value   = plus1y.toISOString().slice(0, 10);
   }
   if (!_pqAutoGeoFired) {
     _pqAutoGeoFired = true;
@@ -5959,6 +5975,7 @@ async function findPQs() {
     const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within ${useMiles ? '700 mi' : '1,100 km'}`;
     status.textContent = summary;
     document.getElementById('pq-page-sub').textContent = summary;
+    _lastPQResults = { events: results, useMiles };
     renderPQResults(results, useMiles);
   } catch(e) {
     status.textContent = `Error: ${e.message}`;
@@ -5966,6 +5983,9 @@ async function findPQs() {
 }
 
 function renderPQResults(results, useMiles = true) {
+  if (_pqSort === 'date') {
+    results = [...results].sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
+  }
   const grid = document.getElementById('pq-grid');
   grid.innerHTML = results.map((ev, i) => {
     const addr = ev.address;
@@ -6050,6 +6070,7 @@ async function pqUseGeolocation(silent = false) {
       const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within ${useMiles ? '700 mi' : '1,100 km'}`;
       status.textContent = summary;
       document.getElementById('pq-page-sub').textContent = summary;
+      _lastPQResults = { events: results, useMiles };
       renderPQResults(results, useMiles);
     } catch(e) {
       status.textContent = `Error: ${e.message}`;
