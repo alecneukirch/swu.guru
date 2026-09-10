@@ -5852,6 +5852,7 @@ async function fetchAllPQs() {
     url:       e.url       || '',
     format:    e.format    || '',
     storeName: e.storeName || '',
+    storeId:   e.storeId   || '',
     address:   e.address   || {},
     lat:       e.lat       ?? null,
     lon:       e.lon       ?? null,
@@ -6020,7 +6021,9 @@ function renderPQResults(results, useMiles = true) {
     const driveStr = pqEstimateDrive(ev.distKm);
     return `<div class="pq-card">
   <div class="pq-card-top">
-    <div class="pq-store">${ev.storeName || '—'}</div>
+    <div class="pq-store">${ev.storeId
+      ? `<a href="https://starwarsunlimited.com/search?store=${ev.storeId}" target="_blank" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${ev.storeName || '—'}</a>`
+      : (ev.storeName || '—')}</div>
     <div class="pq-card-top-right">
       <div class="pq-dist">${distStr} <span class="pq-drive">${driveStr} drive</span></div>
       ${fmtBadge}

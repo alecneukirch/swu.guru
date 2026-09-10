@@ -4657,6 +4657,7 @@ async def pq_finder():
         seen.add(key)
         result.append({
             "storeName": e["store_name"],
+            "storeId":   e["store_id"],
             "name":      e["name"],
             "startDate": e["date"],
             "cost":      e["cost"],
@@ -4677,6 +4678,7 @@ async def pq_finder():
         addr = loc.get("address") or {"city": e.get("city", ""), "country": e.get("country", "")}
         result.append({
             "storeName": loc.get("name") or e["store_name"],
+            "storeId":   e.get("store_id", ""),
             "name":      e["store_name"],
             "startDate": e["date"],
             "cost":      "",
