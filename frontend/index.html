@@ -5947,7 +5947,7 @@ function applyDateFilter(results) {
   const { from, to } = pqDateRange();
   return results.filter(ev => {
     if (!ev.startDate) return true;
-    const d = new Date(ev.startDate);
+    const d = new Date(ev.startDate.length === 10 ? ev.startDate + 'T12:00:00' : ev.startDate);
     if (from && d < from) return false;
     if (to   && d > to)   return false;
     return true;
@@ -5993,11 +5993,14 @@ function renderPQResults(results, useMiles = true) {
       .replace('United States of America', 'USA')
       .replace('United Kingdom of Great Britain and Northern Ireland', 'UK');
     const city = [addr.city, addr.state || countryShort].filter(Boolean).join(', ');
-    const dateStr = ev.startDate
-      ? new Date(ev.startDate).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
+    const _evDate = ev.startDate
+      ? new Date(ev.startDate.length === 10 ? ev.startDate + 'T12:00:00' : ev.startDate)
+      : null;
+    const dateStr = _evDate
+      ? _evDate.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' })
       : '—';
-    const daysUntil = ev.startDate
-      ? Math.ceil((new Date(ev.startDate) - new Date().setHours(0,0,0,0)) / 86400000)
+    const daysUntil = _evDate
+      ? Math.ceil((_evDate - new Date().setHours(0,0,0,0)) / 86400000)
       : null;
     const daysLabel = daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : daysUntil != null ? `${daysUntil}d` : '';
     const daysUrgent = daysUntil != null && daysUntil <= 7;
