@@ -4549,7 +4549,7 @@ async def _calendar_events(client: httpx.AsyncClient) -> list[dict]:
             cells = re.findall(r"<td[^>]*>(.*?)</td>", row, re.DOTALL)
             if len(cells) < 4:
                 continue
-            store_m  = re.search(r"/search\?store=(\d+)", cells[1])
+            store_m  = re.search(r"/search\?&?store=(\d+)", cells[1])
             store_id = store_m.group(1) if store_m else None
             clean    = [re.sub(r"<[^>]+>", "", c).strip().replace("\xa0", "") for c in cells]
             date     = _parse_pq_date(clean[0])
