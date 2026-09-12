@@ -815,7 +815,7 @@ def swu_api_event_list(
     import urllib.parse
 
     if event_type_ids is None:
-        event_type_ids = [SWU_TYPE_PQ]
+        event_type_ids = [SWU_TYPE_PQ, SWU_TYPE_SQ, SWU_TYPE_GC]
 
     sess = _get_session()
     all_events = []
@@ -930,7 +930,7 @@ def sync_from_swu(
     from datetime import date as _date, timedelta
 
     if event_type_ids is None:
-        event_type_ids = [SWU_TYPE_PQ]
+        event_type_ids = [SWU_TYPE_PQ, SWU_TYPE_SQ, SWU_TYPE_GC]
 
     since_ms = 0
     if since_days > 0:
@@ -1631,7 +1631,7 @@ if __name__ == "__main__":
             db.execute_autocommit("SELECT refresh_all_views()")
     elif args.swu:
         sync_from_swu(
-            event_type_ids = args.swu_types or [SWU_TYPE_PQ],
+            event_type_ids = args.swu_types or [SWU_TYPE_PQ, SWU_TYPE_SQ, SWU_TYPE_GC],
             fetch_cards    = args.cards,
             since_days     = args.days,
             eternal        = args.eternal,
