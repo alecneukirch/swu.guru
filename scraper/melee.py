@@ -154,7 +154,7 @@ def _table_names(eternal: bool = False) -> dict:
 
 # ── Hub: event list ────────────────────────────────────────────────────────
 
-def hub_event_list(set_code: str = "LAW", limit: int = 0,
+def hub_event_list(set_code: str = "ASH", limit: int = 0,
                    eternal: bool = False) -> list[dict]:
     """
     Scrape the hub tournament results page.
@@ -1045,7 +1045,7 @@ def sync_from_swu(
 # ── Sync from hub ──────────────────────────────────────────────────────────
 
 def sync_from_hub(
-    set_code:    str  = "LAW",
+    set_code:    str  = "ASH",
     limit:       int  = 0,
     fetch_cards: bool = False,
     since_days:  int  = 0,   # 0 = no limit
@@ -1596,7 +1596,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Scrape SWU tournament data via melee.gg"
     )
-    parser.add_argument("--set",          default="LAW",   help="Set code (default: LAW)")
+    parser.add_argument("--set",          default="ASH",   help="Set code (default: ASH)")
     parser.add_argument("--limit",        type=int, default=0, help="Max events (0=all)")
     parser.add_argument("--days",         type=int, default=5, help="Only scrape events from the last N days (0=all)")
     parser.add_argument("--melee-id",     default=None,    help="Import single tournament by melee ID")
