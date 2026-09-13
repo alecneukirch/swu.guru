@@ -1449,15 +1449,16 @@ def card_copy_matrix(
                 COALESCE(br.label, s.base)     AS base_group,
                 s.placement,
                 e.player_count,
-                md.quantity AS md_copies,
+                COALESCE(md.quantity, 0) AS md_copies,
                 COALESCE(sb.quantity, 0) AS sb_copies
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             LEFT JOIN base_reference br ON br.name = s.base
-            JOIN {t['decklist_cards']} md ON md.standing_id = s.id AND md.is_sideboard = false AND md.card_name = %s
+            LEFT JOIN {t['decklist_cards']} md ON md.standing_id = s.id AND md.is_sideboard = false AND md.card_name = %s
             LEFT JOIN {t['decklist_cards']} sb ON sb.standing_id = s.id AND sb.is_sideboard = true AND sb.card_name = %s
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL AND e.player_count IS NOT NULL
+              AND (md.card_name IS NOT NULL OR sb.card_name IS NOT NULL)
               {date_sql}
         )
         SELECT
