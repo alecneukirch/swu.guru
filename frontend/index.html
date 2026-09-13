@@ -6347,7 +6347,7 @@ function setModalTab(tab) {
 async function loadModalData() {
   document.getElementById('modal-body').innerHTML = '<div class="loading">loading…</div>';
   try {
-    const qs = `format=${currentFormat}`;
+    const qs = `format=${currentFormat}` + metaParam();
     const [byLeader, matrix] = await Promise.all([
       api(`/api/card/${encodeURIComponent(modalCard)}/by-leader?${qs}`),
       api(`/api/card/${encodeURIComponent(modalCard)}/copy-matrix?${qs}`),
