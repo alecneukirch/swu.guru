@@ -1478,7 +1478,9 @@ def card_copy_matrix(
                     WHERE dc.placement <= GREATEST(CEIL(dc.player_count::numeric * 0.08)::INT, 1)
                 )::numeric / NULLIF(COUNT(*), 0)
                 / NULLIF(lb.total_t8s::numeric / NULLIF(lb.total_decks, 0), 0),
-            4) AS conversion
+            4) AS conversion,
+            lb.total_decks,
+            lb.total_t8s
         FROM deck_config dc
         JOIN leader_baselines lb ON lb.leader = dc.leader AND lb.base_key = dc.base_key
         WHERE dc.leader != ''
@@ -1493,6 +1495,7 @@ def card_copy_matrix(
     # Pivot into { "leader|||base_group": { "md_X_sb_Y": { deck_count, conversion, ... } } }
     by_leader: dict = {}
     best_config: dict = {}
+    combo_totals: dict = {}
 
     for r in rows:
         combo = f"{r['leader']}|||{r['base_group'] or ''}"
@@ -1506,6 +1509,7 @@ def card_copy_matrix(
             "t8_count":   r["t8_count"],
             "conversion": r["conversion"],
         }
+        combo_totals[combo] = {"total_decks": r["total_decks"], "total_t8s": r["total_t8s"]}
 
         # Track best config per combo (highest conversion, min 5 decks)
         if r["deck_count"] >= 5:
@@ -1517,6 +1521,27 @@ def card_copy_matrix(
                     "conversion": r["conversion"],
                     "deck_count": r["deck_count"],
                 }
+
+    # Compute 0/0 control cell — decks that don't play the card at all
+    for combo, cells in by_leader.items():
+        totals = combo_totals.get(combo, {})
+        total_d  = totals.get("total_decks") or 0
+        total_t8 = totals.get("total_t8s")   or 0
+        playing_d  = sum(c["deck_count"] for c in cells.values())
+        playing_t8 = sum(c["t8_count"]   for c in cells.values())
+        no_card_d  = total_d  - playing_d
+        no_card_t8 = total_t8 - playing_t8
+        if no_card_d > 0 and total_d > 0:
+            baseline_rate  = total_t8 / total_d
+            no_card_t8_rate = no_card_t8 / no_card_d
+            conv = round(no_card_t8_rate / baseline_rate, 4) if baseline_rate > 0 else None
+            cells["0m_0s"] = {
+                "md_copies":  0,
+                "sb_copies":  0,
+                "deck_count": no_card_d,
+                "t8_count":   no_card_t8,
+                "conversion": conv,
+            }
 
     return {
         "card_name":   card_name,

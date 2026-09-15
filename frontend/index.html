@@ -6512,11 +6512,11 @@ function renderMatrixCard(leaderBase, cells, best) {
       if (!cell) {
         rowHtml += `<div class="matrix-cell no-data"><span style="color:var(--border2);font-size:10px">—</span></div>`;
       } else {
-        const cc  = isBase ? 'base' : convClass(cell.conversion);
+        const cc  = convClass(cell.conversion);
         const cls = `matrix-cell${isBest ? ' best-cell' : ''}${isBase ? ' baseline' : ''}`;
         rowHtml += `<div class="${cls}" title="${md}M + ${sb}SB: ${cell.deck_count} decks">
-  <div class="mc-val ${cc}">${isBase ? '⊘' : (convArrow(cell.conversion) + ' ' + fmtConv(cell.conversion))}</div>
-  <div class="mc-count">${isBase ? 'base' : cell.deck_count}</div>
+  <div class="mc-val ${cc}">${convArrow(cell.conversion)} ${fmtConv(cell.conversion)}</div>
+  <div class="mc-count">${isBase ? '<span style="color:var(--text3);font-size:9px">ctrl</span>' : cell.deck_count}</div>
 </div>`;
       }
     }
@@ -6545,7 +6545,7 @@ function renderMatrixCard(leaderBase, cells, best) {
     ${rows}
   </div>
   <div class="matrix-footer">
-    <span>Baseline: <span style="color:var(--purple)">${baseline ? fmtConv(baseline.conversion) : '—'}</span></span>
+    <span>Control (0 copies): <span style="color:var(--purple)">${baseline ? `${fmtConv(baseline.conversion)} · ${baseline.deck_count} decks` : '—'}</span></span>
     ${best ? `<span>Optimal: ${best.md_copies}M + ${best.sb_copies}SB = <span style="color:var(--green)">${fmtConv(best.conversion)}</span></span>` : ''}
   </div>
 </div>`;
