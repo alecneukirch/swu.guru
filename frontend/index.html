@@ -6494,18 +6494,19 @@ function renderMatrixCard(leaderBase, cells, best) {
   maxSb = Math.min(maxSb, 3);
 
   const totalDecks = Object.values(cells).reduce((s, c) => s + c.deck_count, 0);
-  const bestBadge  = best ? `<span class="best-badge">${best.md_copies === 0 && best.sb_copies === 0 ? 'Best: 0 copies' : `Best: ${best.md_copies}M+${best.sb_copies}S`}</span>` : '';
 
   // Baseline = (0 md, 0 sb) cell — decks that don't play the card
   const baselineKey = '0m_0s';
   const baseline    = cells[baselineKey];
 
-  // Include 0/0 in best-config comparison (min 5 decks)
+  // Include 0/0 in best-config comparison (min 5 decks) before building badge
   if (baseline && baseline.deck_count >= 5) {
     if (!best || (baseline.conversion ?? 0) > (best.conversion ?? 0)) {
       best = { md_copies: 0, sb_copies: 0, conversion: baseline.conversion, deck_count: baseline.deck_count };
     }
   }
+
+  const bestBadge  = best ? `<span class="best-badge">${best.md_copies === 0 && best.sb_copies === 0 ? 'Best: 0 copies' : `Best: ${best.md_copies}M+${best.sb_copies}S`}</span>` : '';
 
   let rows = '';
   for (let sb = 0; sb <= maxSb; sb++) {
