@@ -6494,11 +6494,18 @@ function renderMatrixCard(leaderBase, cells, best) {
   maxSb = Math.min(maxSb, 3);
 
   const totalDecks = Object.values(cells).reduce((s, c) => s + c.deck_count, 0);
-  const bestBadge  = best ? `<span class="best-badge">Best: ${best.md_copies}M+${best.sb_copies}S</span>` : '';
+  const bestBadge  = best ? `<span class="best-badge">${best.md_copies === 0 && best.sb_copies === 0 ? 'Best: 0 copies' : `Best: ${best.md_copies}M+${best.sb_copies}S`}</span>` : '';
 
-  // Baseline = (0 md, 0 sb) cell
+  // Baseline = (0 md, 0 sb) cell — decks that don't play the card
   const baselineKey = '0m_0s';
   const baseline    = cells[baselineKey];
+
+  // Include 0/0 in best-config comparison (min 5 decks)
+  if (baseline && baseline.deck_count >= 5) {
+    if (!best || (baseline.conversion ?? 0) > (best.conversion ?? 0)) {
+      best = { md_copies: 0, sb_copies: 0, conversion: baseline.conversion, deck_count: baseline.deck_count };
+    }
+  }
 
   let rows = '';
   for (let sb = 0; sb <= maxSb; sb++) {
@@ -6516,7 +6523,7 @@ function renderMatrixCard(leaderBase, cells, best) {
         const cls = `matrix-cell${isBest ? ' best-cell' : ''}${isBase ? ' baseline' : ''}`;
         rowHtml += `<div class="${cls}" title="${md}M + ${sb}SB: ${cell.deck_count} decks">
   <div class="mc-val ${cc}">${convArrow(cell.conversion)} ${fmtConv(cell.conversion)}</div>
-  <div class="mc-count">${isBase ? '<span style="color:var(--text3);font-size:9px">ctrl</span>' : cell.deck_count}</div>
+  <div class="mc-count">${cell.deck_count}${isBase ? '<span style="color:var(--text3);font-size:9px"> ctrl</span>' : ''}</div>
 </div>`;
       }
     }
@@ -6546,7 +6553,7 @@ function renderMatrixCard(leaderBase, cells, best) {
   </div>
   <div class="matrix-footer">
     <span>Control (0 copies): <span style="color:var(--purple)">${baseline ? `${fmtConv(baseline.conversion)} · ${baseline.deck_count} decks` : '—'}</span></span>
-    ${best ? `<span>Optimal: ${best.md_copies}M + ${best.sb_copies}SB = <span style="color:var(--green)">${fmtConv(best.conversion)}</span></span>` : ''}
+    ${best ? `<span>Optimal: ${best.md_copies === 0 && best.sb_copies === 0 ? '0 copies' : `${best.md_copies}M + ${best.sb_copies}SB`} = <span style="color:var(--green)">${fmtConv(best.conversion)}</span></span>` : ''}
   </div>
 </div>`;
 }
