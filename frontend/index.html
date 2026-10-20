@@ -3695,16 +3695,16 @@ select.sl-input { cursor: pointer; }
 /* pack earner row: gold highlight */
 #page-leagueHMW tr.hmw-pack-row td { background: rgba(212,175,55,0.10) !important; }
 #page-leagueHMW tr.hmw-pack-row .sl-player-name { color: var(--gold); font-weight: 700; }
-/* bigger fonts for HMW session tables */
-#page-leagueHMW .sl-table td { font-size: 15px; padding: 8px 12px; }
-#page-leagueHMW .sl-table-compact td, #page-leagueHMW .sl-table-compact th { padding: 7px 11px; }
-#page-leagueHMW .sl-table th { font-size: 12px; }
+/* bigger fonts for HMW — !important overrides inline styles and class-level rules */
+#page-leagueHMW .sl-table td  { font-size: 16px !important; padding: 10px 14px; }
+#page-leagueHMW .sl-table th  { font-size: 13px !important; padding: 8px 14px; }
+#page-leagueHMW .sl-table-compact td, #page-leagueHMW .sl-table-compact th { padding: 8px 12px; }
 #page-leagueHMW .sl-session-num { font-size: 17px; }
 #page-leagueHMW .sl-session-date { font-size: 13px; }
 #page-leagueHMW .sl-match-line { font-size: 15px; padding: 5px 0; }
-#page-leagueHMW .sl-player-name { font-size: 15px; }
-#page-leagueHMW .sl-record { font-size: 15px; }
-#page-leagueHMW .sl-pts { font-size: 15px; }
+#page-leagueHMW .sl-player-name { font-size: 16px; }
+#page-leagueHMW .sl-record { font-size: 16px; }
+#page-leagueHMW .sl-pts { font-size: 16px; }
 .hmw-bounty-tag {
   display: inline-block; font-size: 13px; line-height: 1;
   margin-left: 5px; vertical-align: middle; opacity: 0.85;
@@ -8190,7 +8190,7 @@ function renderHmwLeagueStandings(summary) {
     const bc = p.bounties_claimed || 0;
     const bd = p.bounties_denied  || 0;
     return `<tr class="sl-clickable-row${isInactive ? ' sl-inactive-row' : ''}" onclick="showHmwLeaguePlayerModal(${p.id})">
-      <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
+      <td style="color:var(--text3);font-family:var(--mono);width:32px">${i+1}</td>
       <td class="sl-player-name">${p.name}${bountyHtml}${gear}</td>
       <td class="sl-pts">${total}</td>
       <td class="sl-pts" style="color:var(--text2)">${norm}</td>
