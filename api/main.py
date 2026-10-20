@@ -4147,6 +4147,432 @@ def import_sealed_league_melee(body: dict):
     }
 
 
+# ── HMW League ────────────────────────────────────────────────────────────────
+# Scoring: 1 pt for attending a session + 3 pts per match win + 1 pt per match loss + 0 for draw.
+# Tables: hmw_league_players, hmw_league_sessions (with melee_url), hmw_league_matches, hmw_league_match_rounds
+
+def _ensure_hmw_tables():
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS hmw_league_players (
+            id        SERIAL PRIMARY KEY,
+            name      TEXT NOT NULL UNIQUE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS hmw_league_sessions (
+            id             SERIAL PRIMARY KEY,
+            session_number INT  NOT NULL UNIQUE,
+            session_date   DATE NOT NULL,
+            notes          TEXT,
+            melee_url      TEXT
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS hmw_league_matches (
+            id                SERIAL PRIMARY KEY,
+            session_id        INT NOT NULL REFERENCES hmw_league_sessions(id) ON DELETE CASCADE,
+            player1_id        INT NOT NULL REFERENCES hmw_league_players(id),
+            player2_id        INT NOT NULL REFERENCES hmw_league_players(id),
+            player1_game_wins INT NOT NULL DEFAULT 0,
+            player2_game_wins INT NOT NULL DEFAULT 0,
+            game_draws        INT NOT NULL DEFAULT 0
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS hmw_league_match_rounds (
+            id           SERIAL PRIMARY KEY,
+            match_id     INT NOT NULL REFERENCES hmw_league_matches(id) ON DELETE CASCADE,
+            round_number INT NOT NULL,
+            UNIQUE(match_id, round_number)
+        )
+    """)
+
+try:
+    _ensure_hmw_tables()
+except Exception as _e:
+    print(f"[startup] HMW league table ensure failed: {_e}")
+
+
+@app.get("/api/hmw-league/summary")
+def hmw_league_summary():
+    sess_row = db.fetchone(
+        "SELECT COUNT(*)::INT AS cnt, MAX(session_date) AS last_date FROM hmw_league_sessions"
+    )
+    session_count = sess_row["cnt"] if sess_row else 0
+
+    players = db.fetchall("""
+        WITH sessions_attended AS (
+            SELECT p.id AS player_id, COUNT(DISTINCT m.session_id)::INT AS sessions
+            FROM hmw_league_players p
+            LEFT JOIN hmw_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            GROUP BY p.id
+        ),
+        last_played AS (
+            SELECT p.id AS player_id, MAX(s.session_date) AS last_played
+            FROM hmw_league_players p
+            JOIN hmw_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            JOIN hmw_league_sessions s ON s.id = m.session_id
+            GROUP BY p.id
+        ),
+        pm AS (
+            SELECT
+                p.id, p.name, p.is_active,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id AND m.player1_game_wins > m.player2_game_wins THEN 1
+                    WHEN m.player2_id = p.id AND m.player2_game_wins > m.player1_game_wins THEN 1
+                    ELSE 0 END)::INT, 0) AS match_wins,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_game_wins = m.player2_game_wins THEN 1
+                    ELSE 0 END)::INT, 0) AS match_draws,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id AND m.player1_game_wins < m.player2_game_wins THEN 1
+                    WHEN m.player2_id = p.id AND m.player2_game_wins < m.player1_game_wins THEN 1
+                    ELSE 0 END)::INT, 0) AS match_losses,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id THEN m.player1_game_wins
+                    WHEN m.player2_id = p.id THEN m.player2_game_wins
+                    ELSE 0 END)::INT, 0) AS game_wins,
+                COALESCE(SUM(m.game_draws)::INT, 0)
+                  + COALESCE(SUM(CASE WHEN m.player1_game_wins = m.player2_game_wins THEN 1 ELSE 0 END)::INT, 0)
+                  AS game_draws,
+                COALESCE(SUM(CASE
+                    WHEN m.player1_id = p.id THEN m.player2_game_wins
+                    WHEN m.player2_id = p.id THEN m.player1_game_wins
+                    ELSE 0 END)::INT, 0) AS game_losses
+            FROM hmw_league_players p
+            LEFT JOIN hmw_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            GROUP BY p.id, p.name
+        )
+        SELECT pm.id, pm.name, pm.is_active, pm.match_wins, pm.match_draws, pm.match_losses,
+               pm.game_wins, pm.game_draws, pm.game_losses,
+               sa.sessions AS sessions_attended,
+               (COALESCE(sa.sessions, 0) + pm.match_wins * 3 + pm.match_losses)::NUMERIC AS total_points,
+               ROUND((COALESCE(sa.sessions, 0) + pm.match_wins * 3.0 + pm.match_losses)
+                   / NULLIF(sa.sessions, 0), 2) AS norm_points,
+               lp.last_played
+        FROM pm
+        JOIN sessions_attended sa ON sa.player_id = pm.id
+        LEFT JOIN last_played lp ON lp.player_id = pm.id
+        WHERE pm.name != 'BYE'
+        ORDER BY total_points DESC NULLS LAST, norm_points DESC NULLS LAST
+    """)
+
+    return {
+        "players": [{**dict(r), "last_played": str(r["last_played"]) if r["last_played"] else None} for r in players],
+        "sessions_completed": session_count,
+        "last_session_date": str(sess_row["last_date"]) if sess_row and sess_row["last_date"] else None,
+    }
+
+
+@app.get("/api/hmw-league/sessions")
+def hmw_league_sessions_detail():
+    sessions = db.fetchall(
+        "SELECT id, session_number, session_date, notes, melee_url FROM hmw_league_sessions ORDER BY session_number"
+    )
+    players = db.fetchall("SELECT id, name FROM hmw_league_players WHERE name != 'BYE' ORDER BY name")
+
+    if not players:
+        return {"sessions": [], "players": []}
+
+    all_matches = db.fetchall("""
+        SELECT m.id, m.session_id, m.player1_id, m.player2_id,
+               m.player1_game_wins, m.player2_game_wins, m.game_draws,
+               r.round_number
+        FROM hmw_league_matches m
+        LEFT JOIN hmw_league_match_rounds r ON r.match_id = m.id
+        ORDER BY m.session_id, COALESCE(r.round_number, 999), m.id
+    """)
+
+    result = []
+    for sess in sessions:
+        sess_matches = [m for m in all_matches if m["session_id"] == sess["id"]]
+        sess_player_ids = {m["player1_id"] for m in sess_matches} | {m["player2_id"] for m in sess_matches}
+
+        player_stats = []
+        for p in players:
+            pid = p["id"]
+            if pid not in sess_player_ids:
+                continue
+            pm = [m for m in sess_matches if m["player1_id"] == pid or m["player2_id"] == pid]
+
+            mw = sum(1 for m in pm if
+                     (m["player1_id"] == pid and m["player1_game_wins"] > m["player2_game_wins"]) or
+                     (m["player2_id"] == pid and m["player2_game_wins"] > m["player1_game_wins"]))
+            md = sum(1 for m in pm if m["player1_game_wins"] == m["player2_game_wins"])
+            ml = sum(1 for m in pm if
+                     (m["player1_id"] == pid and m["player1_game_wins"] < m["player2_game_wins"]) or
+                     (m["player2_id"] == pid and m["player2_game_wins"] > m["player1_game_wins"]))
+            gw = sum(m["player1_game_wins"] if m["player1_id"] == pid else m["player2_game_wins"] for m in pm)
+            gd = sum(m["game_draws"] for m in pm) + md
+            gl = sum(m["player2_game_wins"] if m["player1_id"] == pid else m["player1_game_wins"] for m in pm)
+            sess_pts = 1 + mw * 3 + ml  # attendance + wins + losses
+
+            player_stats.append({
+                "player_id":    pid,
+                "player_name":  p["name"],
+                "match_wins":   mw,
+                "match_draws":  md,
+                "match_losses": ml,
+                "game_wins":    gw,
+                "game_draws":   gd,
+                "game_losses":  gl,
+                "session_pts":  sess_pts,
+            })
+
+        match_details = []
+        for m in sess_matches:
+            p1name = next((p["name"] for p in players if p["id"] == m["player1_id"]), "?")
+            p2name = next((p["name"] for p in players if p["id"] == m["player2_id"]), "?")
+            gd = m["game_draws"] or 0
+            score = f"{m['player1_game_wins']}-{gd}-{m['player2_game_wins']}" if gd else f"{m['player1_game_wins']}-{m['player2_game_wins']}"
+            match_details.append({
+                "id":           m["id"],
+                "player1":      p1name,
+                "player2":      p2name,
+                "score":        score,
+                "round_number": m.get("round_number"),
+            })
+
+        result.append({
+            "id":             sess["id"],
+            "session_number": sess["session_number"],
+            "session_date":   str(sess["session_date"]),
+            "notes":          sess.get("notes"),
+            "melee_url":      sess.get("melee_url"),
+            "players":        player_stats,
+            "matches":        match_details,
+        })
+
+    return {
+        "sessions": result,
+        "players":  [{"id": p["id"], "name": p["name"]} for p in players],
+    }
+
+
+@app.get("/api/hmw-league/players")
+def get_hmw_league_players():
+    return db.fetchall("SELECT id, name, is_active FROM hmw_league_players ORDER BY name")
+
+
+@app.patch("/api/hmw-league/players/{player_id}")
+def patch_hmw_league_player(player_id: int, body: dict):
+    is_active = body.get("is_active")
+    if is_active is None:
+        raise HTTPException(400, "is_active required")
+    db.execute(
+        "UPDATE hmw_league_players SET is_active = %s WHERE id = %s",
+        [bool(is_active), player_id]
+    )
+    return {"ok": True}
+
+
+@app.get("/api/hmw-league/players/{player_id}/matchups")
+def hmw_league_player_matchups(player_id: int):
+    rows = db.fetchall("""
+        WITH player_matches AS (
+            SELECT
+                m.*,
+                CASE WHEN m.player1_id = %(pid)s THEN m.player2_id ELSE m.player1_id END AS opp_id,
+                CASE WHEN m.player1_id = %(pid)s AND m.player1_game_wins > m.player2_game_wins THEN 1
+                     WHEN m.player2_id = %(pid)s AND m.player2_game_wins > m.player1_game_wins THEN 1
+                     ELSE 0 END AS is_win,
+                CASE WHEN m.player1_game_wins = m.player2_game_wins THEN 1 ELSE 0 END AS is_draw,
+                CASE WHEN m.player1_id = %(pid)s AND m.player1_game_wins < m.player2_game_wins THEN 1
+                     WHEN m.player2_id = %(pid)s AND m.player2_game_wins < m.player1_game_wins THEN 1
+                     ELSE 0 END AS is_loss,
+                CASE WHEN m.player1_id = %(pid)s THEN m.player1_game_wins ELSE m.player2_game_wins END AS my_gw,
+                CASE WHEN m.player1_id = %(pid)s THEN m.player2_game_wins ELSE m.player1_game_wins END AS opp_gw
+            FROM hmw_league_matches m
+            WHERE m.player1_id = %(pid)s OR m.player2_id = %(pid)s
+        )
+        SELECT
+            opp.id   AS opponent_id,
+            opp.name AS opponent_name,
+            COUNT(*)::INT          AS total_matches,
+            SUM(pm.is_win)::INT    AS match_wins,
+            SUM(pm.is_draw)::INT   AS match_draws,
+            SUM(pm.is_loss)::INT   AS match_losses,
+            SUM(pm.my_gw)::INT     AS game_wins,
+            SUM(pm.game_draws)::INT AS game_draws,
+            SUM(pm.opp_gw)::INT    AS game_losses
+        FROM player_matches pm
+        JOIN hmw_league_players opp ON opp.id = pm.opp_id
+        WHERE opp.name != 'BYE'
+        GROUP BY opp.id, opp.name
+        ORDER BY total_matches DESC, match_wins DESC
+    """, {"pid": player_id})
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/hmw-league/players")
+def add_hmw_league_player(body: dict):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+    db.execute(
+        "INSERT INTO hmw_league_players (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+        [name]
+    )
+    row = db.fetchone("SELECT id FROM hmw_league_players WHERE name = %s", [name])
+    return {"ok": True, "id": row["id"] if row else None}
+
+
+@app.post("/api/hmw-league/sessions")
+def add_hmw_league_session(body: dict):
+    session_number = body.get("session_number")
+    session_date   = body.get("session_date")
+    notes          = body.get("notes")
+    melee_url      = body.get("melee_url")
+    if not session_number or not session_date:
+        raise HTTPException(400, "session_number and session_date required")
+    db.execute(
+        "INSERT INTO hmw_league_sessions (session_number, session_date, notes, melee_url) VALUES (%s, %s, %s, %s)",
+        [session_number, session_date, notes, melee_url]
+    )
+    return {"ok": True}
+
+
+@app.patch("/api/hmw-league/sessions/{session_id}")
+def patch_hmw_league_session(session_id: int, body: dict):
+    melee_url = body.get("melee_url")
+    db.execute(
+        "UPDATE hmw_league_sessions SET melee_url = %s WHERE id = %s",
+        [melee_url, session_id]
+    )
+    return {"ok": True}
+
+
+@app.post("/api/hmw-league/matches")
+def add_hmw_league_match(body: dict):
+    session_id = body.get("session_id")
+    p1_id      = body.get("player1_id")
+    p2_id      = body.get("player2_id")
+    p1gw       = int(body.get("player1_game_wins", 0))
+    p2gw       = int(body.get("player2_game_wins", 0))
+    gdraw      = int(body.get("game_draws", 0))
+    if not all([session_id, p1_id, p2_id]):
+        raise HTTPException(400, "session_id, player1_id, player2_id required")
+    if p1_id == p2_id:
+        raise HTTPException(400, "players must be different")
+    db.execute(
+        """INSERT INTO hmw_league_matches
+           (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws)
+           VALUES (%s, %s, %s, %s, %s, %s)""",
+        [session_id, p1_id, p2_id, p1gw, p2gw, gdraw]
+    )
+    return {"ok": True}
+
+
+@app.delete("/api/hmw-league/matches/{match_id}")
+def delete_hmw_league_match(match_id: int):
+    db.execute("DELETE FROM hmw_league_matches WHERE id = %s", [match_id])
+    return {"ok": True}
+
+
+@app.post("/api/hmw-league/import-melee")
+def import_hmw_league_melee(body: dict):
+    """
+    Pull match results from a melee.gg tournament and insert them into the HMW league.
+    body: { melee_id, session_id (optional), session_date (optional) }
+    """
+    from scraper.melee import melee_tournament_rounds, melee_round_matches
+    import datetime as _dt
+
+    melee_id     = str(body.get("melee_id", "")).strip()
+    session_id   = body.get("session_id")
+    session_date = body.get("session_date")
+
+    if not melee_id:
+        raise HTTPException(400, "melee_id required")
+
+    try:
+        rounds_data = melee_tournament_rounds(melee_id)
+    except Exception as e:
+        raise HTTPException(502, f"Failed to fetch tournament from melee.gg: {e}")
+
+    pairings_rounds = rounds_data.get("pairings_rounds", [])
+    if not pairings_rounds:
+        raise HTTPException(404, "No pairings rounds found for this tournament ID")
+
+    melee_url = f"https://melee.gg/Tournament/View/{melee_id}"
+
+    if not session_id:
+        existing = db.fetchall("SELECT session_number FROM hmw_league_sessions ORDER BY session_number")
+        next_num = (max(s["session_number"] for s in existing) + 1) if existing else 1
+        date_val = rounds_data.get("meta", {}).get("date") or session_date or str(_dt.date.today())
+        db.execute(
+            "INSERT INTO hmw_league_sessions (session_number, session_date, notes, melee_url) VALUES (%s, %s, %s, %s)",
+            [next_num, date_val, f"melee.gg #{melee_id}", melee_url]
+        )
+        session_id = db.fetchone(
+            "SELECT id FROM hmw_league_sessions WHERE session_number = %s", [next_num]
+        )["id"]
+    else:
+        db.execute("UPDATE hmw_league_sessions SET melee_url = %s WHERE id = %s", [melee_url, session_id])
+
+    all_matches = []
+    for round_num, r in enumerate(pairings_rounds, start=1):
+        round_matches = melee_round_matches(r["id"], include_byes=True)
+        for m in round_matches:
+            m["round_number"] = round_num
+        all_matches.extend(round_matches)
+
+    if not all_matches:
+        raise HTTPException(404, "No match results found in completed rounds")
+
+    def _get_or_create_player(name: str) -> Optional[int]:
+        name = name.strip()
+        if not name:
+            return None
+        db.execute(
+            "INSERT INTO hmw_league_players (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+            [name]
+        )
+        row = db.fetchone("SELECT id FROM hmw_league_players WHERE name = %s", [name])
+        return row["id"] if row else None
+
+    imported, skipped = 0, 0
+    seen_players: set[int] = set()
+    players_touched: list[str] = []
+
+    for m in all_matches:
+        p1_id = _get_or_create_player(m["p1_name"])
+        p2_id = _get_or_create_player(m["p2_name"])
+        if not p1_id or not p2_id:
+            skipped += 1
+            continue
+        for pid, name in [(p1_id, m["p1_name"]), (p2_id, m["p2_name"])]:
+            if pid not in seen_players:
+                seen_players.add(pid)
+                players_touched.append(name)
+        try:
+            db.execute(
+                """INSERT INTO hmw_league_matches
+                   (session_id, player1_id, player2_id, player1_game_wins, player2_game_wins, game_draws)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                [session_id, p1_id, p2_id, m["p1_game_wins"], m["p2_game_wins"], m.get("game_draws") or 0]
+            )
+            if m.get("round_number"):
+                new_id = db.fetchone("SELECT id FROM hmw_league_matches ORDER BY id DESC LIMIT 1")["id"]
+                db.execute(
+                    "INSERT INTO hmw_league_match_rounds (match_id, round_number) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    [new_id, m["round_number"]]
+                )
+            imported += 1
+        except Exception:
+            skipped += 1
+
+    return {
+        "ok":         True,
+        "session_id": session_id,
+        "rounds":     len(pairings_rounds),
+        "imported":   imported,
+        "skipped":    skipped,
+        "players":    players_touched,
+    }
+
+
 # ── Karabast (swustats.net matchup data) ─────────────────────────────────────
 
 @app.get("/api/karabast/leaders")

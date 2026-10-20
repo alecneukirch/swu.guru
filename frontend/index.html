@@ -3672,6 +3672,27 @@ select.sl-input { cursor: pointer; }
 .sl-flippable:hover { border-color:rgba(255,255,255,0.25); }
 .sl-flippable:hover .sl-stat-label::after { content:' ↺'; opacity:0.45; }
 
+/* ── HMW League extras ───────────────────────────────────────── */
+.hmw-bounty {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:20px; height:20px; border-radius:50%;
+  background:color-mix(in srgb,var(--red2) 18%,transparent);
+  border:1px solid var(--red2); color:var(--red2);
+  font-size:11px; line-height:1; margin-left:6px;
+  vertical-align:middle; flex-shrink:0;
+  title: 'Bounty target';
+}
+.hmw-melee-link {
+  font-family:var(--mono); font-size:11px; color:var(--gold);
+  text-decoration:none;
+}
+.hmw-melee-link:hover { text-decoration:underline; }
+.hmw-pts-badge {
+  font-family:var(--mono); font-size:11px; color:var(--text3);
+  background:var(--surface2); border-radius:4px;
+  padding:2px 6px; white-space:nowrap;
+}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
@@ -4135,8 +4156,8 @@ select.sl-input { cursor: pointer; }
 
 
 
-<!-- ══ SEALED LEAGUE PAGE (hidden — access via #league) ══ -->
-<div class="page" id="page-league">
+<!-- ══ SEALED LEAGUE LAW PAGE (hidden — access via #leagueLAW) ══ -->
+<div class="page" id="page-leagueLAW">
   <div class="page-header">
     <div>
       <div class="page-title">SEALED LEAGUE</div>
@@ -4220,6 +4241,89 @@ select.sl-input { cursor: pointer; }
     <div id="league-standings"><div class="loading" style="padding:24px">loading…</div></div>
     <div class="sl-section-hdr" style="margin-top:32px">SESSION HISTORY</div>
     <div id="league-sessions"><div class="loading" style="padding:24px">loading…</div></div>
+  </div>
+</div>
+
+<!-- ══ HMW LEAGUE PAGE (hidden — access via #leagueHMW) ══ -->
+<div class="page" id="page-leagueHMW">
+  <div class="page-header">
+    <div>
+      <div class="page-title">HMW LEAGUE</div>
+      <div class="page-sub" id="hmw-league-sub">weekly league tracker</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+      <button class="btn" onclick="loadHmwLeague()">↺ Refresh</button>
+      <button class="btn" id="hmw-league-admin-btn" onclick="toggleHmwLeagueAdmin()">Manage</button>
+    </div>
+  </div>
+
+  <!-- Admin panel -->
+  <div id="hmw-league-admin" style="display:none">
+    <div class="sl-admin-grid">
+      <!-- Add Player -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Add Player</div>
+        <input type="text" id="hmw-new-player" class="sl-input" placeholder="Player name">
+        <button class="btn" onclick="hmwLeagueAddPlayer()">Add Player</button>
+      </div>
+      <!-- Add Session -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Add Session</div>
+        <input type="date" id="hmw-new-session-date" class="sl-input">
+        <input type="text" id="hmw-new-session-notes" class="sl-input" placeholder="Notes (optional)">
+        <button class="btn" onclick="hmwLeagueAddSession()">Add Session</button>
+      </div>
+      <!-- Add Match -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Add Match Result</div>
+        <select id="hmw-match-session" class="sl-input"></select>
+        <div class="sl-score-row">
+          <select id="hmw-match-p1" class="sl-input"></select>
+          <input type="number" id="hmw-match-p1gw" class="sl-input" min="0" max="2" value="2" title="Game wins">
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--text3)">
+          <span style="flex:1;text-align:center">Game draws</span>
+          <input type="number" id="hmw-match-gdraw" class="sl-input" style="width:52px" min="0" max="3" value="0" title="Game draws">
+        </div>
+        <div class="sl-score-row">
+          <select id="hmw-match-p2" class="sl-input"></select>
+          <input type="number" id="hmw-match-p2gw" class="sl-input" min="0" max="2" value="0" title="Game wins">
+        </div>
+        <button class="btn" onclick="hmwLeagueAddMatch()">Record Match</button>
+      </div>
+      <!-- Import from Melee -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Import from Melee.gg</div>
+        <input type="text" id="hmw-import-id" class="sl-input" placeholder="Tournament ID or URL">
+        <select id="hmw-import-session" class="sl-input">
+          <option value="">Auto-create new session</option>
+        </select>
+        <input type="date" id="hmw-import-date" class="sl-input" title="Session date (only used when creating a new session)">
+        <button class="btn" id="hmw-import-btn" onclick="hmwLeagueImportMelee()">Import Matches</button>
+        <div id="hmw-import-status" style="font-size:12px;min-height:18px"></div>
+      </div>
+      <!-- Set Melee Link -->
+      <div class="sl-admin-card">
+        <div class="sl-admin-title">Set Session Melee Link</div>
+        <select id="hmw-link-session" class="sl-input"></select>
+        <input type="text" id="hmw-link-url" class="sl-input" placeholder="melee.gg URL or tournament ID">
+        <button class="btn" onclick="hmwLeagueSetMeleeLink()">Save Link</button>
+        <div id="hmw-link-status" style="font-size:12px;min-height:18px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div style="padding:0 24px 32px">
+    <div class="sl-section-hdr" style="display:flex;align-items:center;gap:10px">
+      STANDINGS
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">
+        1pt attend · 3pt win · 1pt loss · 0pt draw
+      </span>
+    </div>
+    <div id="hmw-league-standings"><div class="loading" style="padding:24px">loading…</div></div>
+    <div class="sl-section-hdr" style="margin-top:32px">SESSION HISTORY</div>
+    <div id="hmw-league-sessions"><div class="loading" style="padding:24px">loading…</div></div>
   </div>
 </div>
 
@@ -4543,7 +4647,8 @@ function showPage(name) {
   if (name === 'players')   loadPlayers();
   if (name === 'picks')     loadPicks();
   if (name === 'cards')     loadCardsPage();
-  if (name === 'league')    loadLeague();
+  if (name === 'leagueLAW') loadLeague();
+  if (name === 'leagueHMW') loadHmwLeague();
   if (name === 'karabast') loadKarabast();
   if (name === 'confirm')  loadConfirm();
   if (name === 'correct')  loadCorrect();
@@ -7891,6 +7996,408 @@ async function leagueDeleteMatch(matchId) {
   try {
     await api('/api/sealed-league/matches/' + matchId, { method: 'DELETE' });
     await loadLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ══ HMW LEAGUE ══════════════════════════════════════════════════════════════
+
+let _hmwData          = null;
+let _hmwAdminOpen     = false;
+let _hmwSort          = { col: 'total_points', dir: -1 };
+
+async function toggleHmwLeaguePlayer(id, currentlyActive) {
+  await api(`/api/hmw-league/players/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: !currentlyActive }),
+  });
+  await loadHmwLeague();
+}
+
+async function showHmwLeaguePlayerModal(id) {
+  const player = _hmwData && _hmwData.summary.players.find(p => p.id === id);
+  const name = player ? player.name : `Player ${id}`;
+  const existing = document.getElementById('hmw-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'hmw-modal-overlay';
+  overlay.className = 'sl-modal-overlay';
+  overlay.innerHTML = `<div class="sl-modal"><p class="sl-modal-title">${name}</p>
+    <button class="sl-modal-close" onclick="document.getElementById('hmw-modal-overlay').remove()">✕</button>
+    <div id="hmw-modal-body"><div class="loading" style="padding:16px">loading…</div></div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  try {
+    const rows = await api(`/api/hmw-league/players/${id}/matchups`);
+    const anyDraw = rows.some(r => (r.match_draws || 0) > 0);
+    const thead = anyDraw
+      ? '<tr><th>Opponent</th><th>M W-D-L</th><th>G W-D-L</th><th>Matches</th></tr>'
+      : '<tr><th>Opponent</th><th>Match W-L</th><th>Game W-L</th><th>Matches</th></tr>';
+    const tbody = rows.length ? rows.map(r => {
+      const mw = r.match_wins||0, md = r.match_draws||0, ml = r.match_losses||0;
+      const gw = r.game_wins||0,  gd = r.game_draws||0,  gl = r.game_losses||0;
+      const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+      const mRec = anyDraw ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
+      const gRec = anyDraw ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
+      return `<tr><td class="sl-player-name">${r.opponent_name}</td>
+        <td class="sl-record ${rc}">${mRec}</td>
+        <td class="sl-games">${gRec}</td>
+        <td style="font-family:var(--mono);font-size:13px;color:var(--text3)">${r.total_matches}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" style="color:var(--text3);padding:12px">// no matches recorded</td></tr>';
+    document.getElementById('hmw-modal-body').innerHTML =
+      `<div class="table-wrap"><table class="sl-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  } catch(e) {
+    document.getElementById('hmw-modal-body').innerHTML =
+      `<div class="empty-state" style="padding:12px">// ${e.message}</div>`;
+  }
+}
+
+function sortHmwLeagueBy(col) {
+  if (_hmwSort.col === col) _hmwSort.dir *= -1;
+  else { _hmwSort.col = col; _hmwSort.dir = -1; }
+  if (_hmwData) renderHmwLeagueStandings(_hmwData.summary);
+}
+
+async function loadHmwLeague() {
+  const standEl = document.getElementById('hmw-league-standings');
+  const sessEl  = document.getElementById('hmw-league-sessions');
+  if (!standEl) return;
+  standEl.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
+  sessEl.innerHTML  = '<div class="loading" style="padding:24px">loading…</div>';
+  try {
+    const [summary, sessData] = await Promise.all([
+      api('/api/hmw-league/summary'),
+      api('/api/hmw-league/sessions'),
+    ]);
+    _hmwData = { summary, sessData };
+    const sc = summary.sessions_completed || 0;
+    document.getElementById('hmw-league-sub').textContent =
+      sc + ' session' + (sc !== 1 ? 's' : '') + ' completed' +
+      (summary.last_session_date ? ' · last ' + summary.last_session_date : '');
+    renderHmwLeagueStandings(summary);
+    renderHmwLeagueSessions(sessData);
+    if (_hmwAdminOpen) _populateHmwLeagueAdmin(sessData);
+  } catch(e) {
+    standEl.innerHTML = `<div class="empty-state" style="padding:24px">// ${e.message}</div>`;
+    sessEl.innerHTML  = '';
+  }
+}
+
+function _hmwBountyCount(activeSorted) {
+  const pts = activeSorted.map(p => Number(p.total_points) || 0);
+  if (pts.length < 2) return 0;
+  if (pts.length === 2) return 2;
+  // distinct 3rd = 3rd place has more pts than 4th (or no 4th)
+  const hasDistinct3rd = pts.length === 3 || pts[2] > pts[3];
+  return hasDistinct3rd ? 3 : 2;
+}
+
+function renderHmwLeagueStandings(summary) {
+  const el = document.getElementById('hmw-league-standings');
+  const players = summary.players || [];
+  if (!players.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:16px">// no players yet — use Manage to add players</div>';
+    return;
+  }
+
+  const sortVal = p => {
+    const v = p[_hmwSort.col];
+    return typeof v === 'string' ? v : (Number(v) || 0);
+  };
+  const cmp = (a, b) => {
+    const av = sortVal(a), bv = sortVal(b);
+    return _hmwSort.dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
+  };
+  const active   = players.filter(p =>  p.is_active !== false).sort(cmp);
+  const inactive = players.filter(p =>  p.is_active === false).sort(cmp);
+  const sorted   = [...active, ...inactive];
+
+  // Bounty: only applies when sorting by points (default)
+  const isByPts = _hmwSort.col === 'total_points';
+  const activeSortedByPts = isByPts
+    ? active
+    : [...active].sort((a, b) => (Number(b.total_points) || 0) - (Number(a.total_points) || 0));
+  const bountyCount = _hmwBountyCount(activeSortedByPts);
+  const bountySet = new Set(activeSortedByPts.slice(0, bountyCount).map(p => p.id));
+
+  const arr = col => {
+    if (_hmwSort.col !== col) return '';
+    return `<span class="sl-sort-arr">${_hmwSort.dir > 0 ? '↑' : '↓'}</span>`;
+  };
+  const th = (col, label, title = '') =>
+    `<th class="sl-sortable${_hmwSort.col === col ? ' sl-sort-active' : ''}"
+         ${title ? `title="${title}"` : ''}
+         onclick="sortHmwLeagueBy('${col}')">${label}${arr(col)}</th>`;
+
+  const anyMatchDraws = players.some(p => (p.match_draws || 0) > 0);
+  const anyGameDraws  = players.some(p => (p.game_draws  || 0) > 0);
+
+  const rows = sorted.map((p, i) => {
+    const isInactive = p.is_active === false;
+    const mw = p.match_wins  || 0, md = p.match_draws || 0, ml = p.match_losses || 0;
+    const gw = p.game_wins   || 0, gd = p.game_draws  || 0, gl = p.game_losses  || 0;
+    const rc    = !isInactive && mw > ml ? 'sl-win' : !isInactive && mw < ml ? 'sl-loss' : '';
+    const mRec  = anyMatchDraws ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
+    const gRec  = anyGameDraws  ? `${gw}-${gd}-${gl}` : `${gw}-${gl}`;
+    const total = p.total_points != null ? Number(p.total_points) : '—';
+    const norm  = p.norm_points  != null ? Number(p.norm_points).toFixed(2) : '—';
+    const lastPlayed = p.last_played ? p.last_played.slice(0, 10) : '—';
+    const hasBounty = !isInactive && bountySet.has(p.id);
+    const bountyHtml = hasBounty ? `<span class="hmw-bounty" title="Bounty target">🎯</span>` : '';
+    const gear  = `<button class="sl-gear-btn${isInactive ? ' sl-gear-active' : ''}"
+                     onclick="event.stopPropagation();toggleHmwLeaguePlayer(${p.id}, ${p.is_active !== false})" title="${isInactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
+    return `<tr class="sl-clickable-row${isInactive ? ' sl-inactive-row' : ''}" onclick="showHmwLeaguePlayerModal(${p.id})">
+      <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
+      <td class="sl-player-name">${p.name}${bountyHtml}${gear}</td>
+      <td class="sl-pts">${total}</td>
+      <td class="sl-pts" style="color:var(--text2)">${norm}</td>
+      <td class="sl-record ${rc}">${mRec}</td>
+      <td class="sl-games">${gRec}</td>
+      <td class="sl-last-played">${lastPlayed}</td>
+    </tr>`;
+  }).join('');
+
+  const mHdr = anyMatchDraws ? 'Match W-D-L' : 'Match W-L';
+  const gHdr = anyGameDraws  ? 'Game W-D-L'  : 'Game W-L';
+  el.innerHTML = `<div class="table-wrap"><table class="sl-table">
+    <thead><tr>
+      <th style="width:32px">#</th>
+      <th>Player</th>
+      ${th('total_points', 'Pts',      '1pt attend + 3pt win + 1pt loss')}
+      ${th('norm_points',  'Pts/Sess', 'total points ÷ sessions attended')}
+      ${th('match_wins',   mHdr)}
+      ${th('game_wins',    gHdr)}
+      ${th('last_played',  'Last Played')}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderHmwLeagueSessions(data) {
+  const el = document.getElementById('hmw-league-sessions');
+  const sessions = (data.sessions || []).slice().reverse();
+  if (!sessions.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:16px">// no sessions yet — use Manage to add sessions</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(sess => {
+    const sessPlayers = (sess.players || []).slice().sort((a, b) =>
+      (b.session_pts - a.session_pts) || (b.match_wins - a.match_wins)
+    );
+    const sMD = sessPlayers.some(p => (p.match_draws || 0) > 0);
+    const playerRows = sessPlayers.map(p => {
+      const mw = p.match_wins || 0, md = p.match_draws || 0, ml = p.match_losses || 0;
+      const gw = p.game_wins  || 0, gd = p.game_draws  || 0, gl = p.game_losses  || 0;
+      const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
+      const mRec = sMD ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
+      return `<tr>
+        <td class="sl-player-name">${p.player_name}</td>
+        <td class="sl-record ${rc}">${mRec}</td>
+        <td class="sl-games">${gw}</td>
+        <td class="sl-games" style="color:var(--text3)">${gd}</td>
+        <td class="sl-games">${gl}</td>
+        <td class="sl-pts" style="font-size:13px">${p.session_pts}</td>
+      </tr>`;
+    }).join('');
+
+    const matches = sess.matches || [];
+    const hasRounds = matches.some(m => m.round_number != null);
+    const mkMatchLine = m => {
+      const isBye = m.player2 === 'BYE';
+      const [s1, s2] = (m.score || '0-0').split('-').map(Number);
+      const p2Display = isBye
+        ? `<span style="color:var(--text3);font-style:italic">BYE</span>`
+        : `<span class="${s2 > s1 ? 'sl-win' : ''}">${m.player2}</span>`;
+      return `<div class="sl-match-line">
+        <span class="${isBye || s1 > s2 ? 'sl-win' : ''}">${m.player1}</span>
+        ${isBye ? '' : `<span class="sl-score">${m.score}</span>`}
+        ${p2Display}
+        <button class="sl-del-btn" onclick="hmwLeagueDeleteMatch(${m.id})" title="Remove match">✕</button>
+      </div>`;
+    };
+    let matchLines = '';
+    if (hasRounds) {
+      const byRound = {};
+      matches.forEach(m => { const rn = m.round_number ?? 0; (byRound[rn] = byRound[rn] || []).push(m); });
+      matchLines = Object.keys(byRound).sort((a,b) => +a - +b).map(rn => {
+        const label = +rn > 0 ? `<div class="sl-round-label">Round ${rn}</div>` : '';
+        return label + byRound[rn].map(mkMatchLine).join('');
+      }).join('');
+    } else {
+      matchLines = matches.map(mkMatchLine).join('');
+    }
+
+    const meleeLink = sess.melee_url
+      ? `<a href="${sess.melee_url.startsWith('http') ? sess.melee_url : 'https://melee.gg/Tournament/View/' + sess.melee_url}"
+           target="_blank" class="hmw-melee-link" onclick="event.stopPropagation()">melee.gg ↗</a>`
+      : '';
+
+    return `<div class="sl-session-card">
+      <div class="sl-session-hdr">
+        <span class="sl-session-num">WEEK ${sess.session_number}</span>
+        <span class="sl-session-date">${sess.session_date}</span>
+        ${sess.notes ? `<span class="sl-session-notes">${sess.notes}</span>` : ''}
+        ${meleeLink}
+      </div>
+      <div class="sl-session-body">
+        <div class="sl-session-table">
+          <table class="sl-table sl-table-compact">
+            <thead><tr><th>Player</th><th>Match</th><th>GW</th><th>GD</th><th>GL</th><th>Pts</th></tr></thead>
+            <tbody>${playerRows}</tbody>
+          </table>
+        </div>
+        ${matchLines ? `<div class="sl-session-matches">
+          <div class="sl-matches-title">Matches</div>
+          ${matchLines}
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleHmwLeagueAdmin() {
+  _hmwAdminOpen = !_hmwAdminOpen;
+  document.getElementById('hmw-league-admin').style.display = _hmwAdminOpen ? '' : 'none';
+  document.getElementById('hmw-league-admin-btn').classList.toggle('active', _hmwAdminOpen);
+  if (_hmwAdminOpen && _hmwData) _populateHmwLeagueAdmin(_hmwData.sessData);
+}
+
+function _populateHmwLeagueAdmin(sessData) {
+  const players  = sessData?.players  || [];
+  const sessions = sessData?.sessions || [];
+  const pOpts = players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  document.getElementById('hmw-match-p1').innerHTML = pOpts || '<option>—</option>';
+  document.getElementById('hmw-match-p2').innerHTML = pOpts || '<option>—</option>';
+  const sOpts = sessions.length
+    ? sessions.map(s => `<option value="${s.id}">Week ${s.session_number} (${s.session_date})</option>`).join('')
+    : '<option value="">No sessions yet</option>';
+  document.getElementById('hmw-match-session').innerHTML = sOpts;
+  if (sessions.length) document.getElementById('hmw-match-session').value = sessions[sessions.length - 1].id;
+  document.getElementById('hmw-import-session').innerHTML =
+    '<option value="">Auto-create new session</option>' +
+    sessions.map(s => `<option value="${s.id}">Week ${s.session_number} (${s.session_date})</option>`).join('');
+  document.getElementById('hmw-link-session').innerHTML = sOpts;
+  if (sessions.length) {
+    document.getElementById('hmw-link-session').value = sessions[sessions.length - 1].id;
+    const lastSess = sessions[sessions.length - 1];
+    if (lastSess.melee_url) document.getElementById('hmw-link-url').value = lastSess.melee_url;
+  }
+}
+
+async function hmwLeagueImportMelee() {
+  let meleeIdRaw = (document.getElementById('hmw-import-id')?.value || '').trim();
+  // Accept full URLs like https://melee.gg/Tournament/View/428296
+  const urlMatch = meleeIdRaw.match(/\/(\d+)\s*$/);
+  const meleeId = urlMatch ? urlMatch[1] : meleeIdRaw;
+  const sessionId = document.getElementById('hmw-import-session')?.value;
+  const dateVal   = document.getElementById('hmw-import-date')?.value;
+  const statusEl  = document.getElementById('hmw-import-status');
+  const btn       = document.getElementById('hmw-import-btn');
+  if (!meleeId) { alert('Enter a Melee tournament ID or URL'); return; }
+  statusEl.textContent = 'Fetching from melee.gg…';
+  statusEl.style.color = 'var(--text2)';
+  btn.disabled = true;
+  try {
+    const body = { melee_id: meleeId };
+    if (sessionId) body.session_id = parseInt(sessionId);
+    else if (dateVal) body.session_date = dateVal;
+    const res = await api('/api/hmw-league/import-melee', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    statusEl.textContent = `Imported ${res.imported} match${res.imported !== 1 ? 'es' : ''} across ${res.rounds} round${res.rounds !== 1 ? 's' : ''}` +
+      (res.skipped ? ` (${res.skipped} skipped)` : '');
+    statusEl.style.color = 'var(--green2)';
+    document.getElementById('hmw-import-id').value = '';
+    await loadHmwLeague();
+  } catch(e) {
+    statusEl.textContent = e.message;
+    statusEl.style.color = 'var(--red2)';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function hmwLeagueSetMeleeLink() {
+  const sessionId = document.getElementById('hmw-link-session')?.value;
+  let url = (document.getElementById('hmw-link-url')?.value || '').trim();
+  const statusEl = document.getElementById('hmw-link-status');
+  if (!sessionId) { alert('Select a session'); return; }
+  // Accept bare tournament IDs
+  if (url && !url.startsWith('http') && /^\d+$/.test(url)) {
+    url = `https://melee.gg/Tournament/View/${url}`;
+  }
+  try {
+    await api(`/api/hmw-league/sessions/${sessionId}`, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ melee_url: url || null }),
+    });
+    statusEl.textContent = 'Saved';
+    statusEl.style.color = 'var(--green2)';
+    await loadHmwLeague();
+  } catch(e) {
+    statusEl.textContent = e.message;
+    statusEl.style.color = 'var(--red2)';
+  }
+}
+
+async function hmwLeagueAddPlayer() {
+  const inp = document.getElementById('hmw-new-player');
+  const name = (inp?.value || '').trim();
+  if (!name) return;
+  try {
+    await api('/api/hmw-league/players', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name }),
+    });
+    inp.value = '';
+    await loadHmwLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function hmwLeagueAddSession() {
+  const dateVal  = (document.getElementById('hmw-new-session-date')?.value || '').trim();
+  const notesVal = (document.getElementById('hmw-new-session-notes')?.value || '').trim();
+  if (!dateVal) { alert('Please select a session date'); return; }
+  const existing = _hmwData?.sessData?.sessions || [];
+  const nextNum  = existing.length ? Math.max(...existing.map(s => s.session_number)) + 1 : 1;
+  try {
+    await api('/api/hmw-league/sessions', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ session_number: nextNum, session_date: dateVal, notes: notesVal || null }),
+    });
+    document.getElementById('hmw-new-session-date').value  = '';
+    document.getElementById('hmw-new-session-notes').value = '';
+    await loadHmwLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function hmwLeagueAddMatch() {
+  const sessionId = parseInt(document.getElementById('hmw-match-session')?.value);
+  const p1Id      = parseInt(document.getElementById('hmw-match-p1')?.value);
+  const p2Id      = parseInt(document.getElementById('hmw-match-p2')?.value);
+  const p1gw      = parseInt(document.getElementById('hmw-match-p1gw')?.value || '0');
+  const p2gw      = parseInt(document.getElementById('hmw-match-p2gw')?.value || '0');
+  const gdraw     = parseInt(document.getElementById('hmw-match-gdraw')?.value || '0');
+  if (!sessionId || !p1Id || !p2Id) { alert('Select session and both players'); return; }
+  if (p1Id === p2Id) { alert('Players must be different'); return; }
+  try {
+    await api('/api/hmw-league/matches', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ session_id: sessionId, player1_id: p1Id, player2_id: p2Id,
+                             player1_game_wins: p1gw, player2_game_wins: p2gw, game_draws: gdraw }),
+    });
+    await loadHmwLeague();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function hmwLeagueDeleteMatch(matchId) {
+  if (!confirm('Remove this match result?')) return;
+  try {
+    await api('/api/hmw-league/matches/' + matchId, { method: 'DELETE' });
+    await loadHmwLeague();
   } catch(e) { alert('Error: ' + e.message); }
 }
 
