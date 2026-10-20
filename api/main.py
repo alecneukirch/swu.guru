@@ -4302,7 +4302,7 @@ def hmw_league_sessions_detail():
             md = sum(1 for m in pm if m["player1_game_wins"] == m["player2_game_wins"])
             ml = sum(1 for m in pm if
                      (m["player1_id"] == pid and m["player1_game_wins"] < m["player2_game_wins"]) or
-                     (m["player2_id"] == pid and m["player2_game_wins"] > m["player1_game_wins"]))
+                     (m["player2_id"] == pid and m["player2_game_wins"] < m["player1_game_wins"]))
             gw = sum(m["player1_game_wins"] if m["player1_id"] == pid else m["player2_game_wins"] for m in pm)
             gd = sum(m["game_draws"] for m in pm) + md
             gl = sum(m["player2_game_wins"] if m["player1_id"] == pid else m["player1_game_wins"] for m in pm)
