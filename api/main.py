@@ -4427,33 +4427,16 @@ def _hmw_bounty_map(players_list):
                 c = cum[pid]
                 c['pts'] = c['sessions'] + c['mw'] * 3 + c['ml']
 
-        # ── Determine next session's bounty holders (full tiebreaker chain) ──
-        def _mwp(pid):
-            c = cum[pid]; t = c['mw'] + c['md'] + c['ml']
-            return max(c['mw'] / t if t else 0, 1/3)
-
-        def _gwp(pid):
-            c = cum[pid]; t = c['gw'] + c['gl']
-            return max(c['gw'] / t if t else 0, 1/3)
-
-        def _omwp(pid):
-            vs = cum[pid]['opps'] & set(cum)
-            return sum(_mwp(o) for o in vs) / len(vs) if vs else 1/3
-
-        def _ogwp(pid):
-            vs = cum[pid]['opps'] & set(cum)
-            return sum(_gwp(o) for o in vs) / len(vs) if vs else 1/3
-
-        def _key(p):
-            pid = p['id']; c = cum[pid]
-            return (c['pts'], c['mw'], _omwp(pid), _gwp(pid), _ogwp(pid))
-
+        # ── Determine next session's bounty holders (points only for boundary) ──
         active = [p for p in players_list
                   if p['name'] != 'BYE' and cum[p['id']]['sessions'] > 0]
-        ranked = sorted(active, key=_key, reverse=True)
+        ranked = sorted(active, key=lambda p: cum[p['id']]['pts'], reverse=True)
 
         if len(ranked) >= 3:
-            n = 3 if (len(ranked) == 3 or _key(ranked[2]) != _key(ranked[3])) else 2
+            # distinct 3rd = 3rd place has strictly more points than 4th
+            distinct3 = (len(ranked) == 3
+                         or cum[ranked[2]['id']]['pts'] > cum[ranked[3]['id']]['pts'])
+            n = 3 if distinct3 else 2
         else:
             n = len(ranked)
 

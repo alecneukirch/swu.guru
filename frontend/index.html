@@ -8127,9 +8127,10 @@ function _hmwStandingsCmp(a, b) {
 function _hmwBountyCount(activeSortedByStandings) {
   if (activeSortedByStandings.length < 2) return 0;
   if (activeSortedByStandings.length === 2) return 2;
-  // distinct 3rd = 3rd place resolves differently from 4th (any tiebreaker level)
+  // distinct 3rd = 3rd place has strictly more points than 4th
+  const pts = p => Number(p.total_points) || 0;
   const hasDistinct3rd = activeSortedByStandings.length === 3
-    || _hmwStandingsCmp(activeSortedByStandings[2], activeSortedByStandings[3]) !== 0;
+    || pts(activeSortedByStandings[2]) > pts(activeSortedByStandings[3]);
   return hasDistinct3rd ? 3 : 2;
 }
 
