@@ -9,7 +9,6 @@ __pycache__
 *.xml
 *.zip
 logs/
-scraper/
 exam/
 swu_card_images_108/
 .git
