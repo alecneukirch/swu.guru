@@ -8126,8 +8126,7 @@ function renderHmwLeagueStandings(summary) {
     const av = sortVal(a), bv = sortVal(b);
     const primary = _hmwSort.dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
     if (primary !== 0) return primary;
-    // Apply full tiebreaker chain when primary column is a standings column
-    if (_hmwSort.col === 'total_points') return _hmwSort.dir * _hmwStandingsCmp(a, b);
+    if (_hmwSort.col === 'total_points') return _hmwStandingsCmp(a, b);
     return 0;
   };
   const active   = players.filter(p =>  p.is_active !== false).sort(cmp);
