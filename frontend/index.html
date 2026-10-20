@@ -3692,6 +3692,29 @@ select.sl-input { cursor: pointer; }
   background:var(--surface2); border-radius:4px;
   padding:2px 6px; white-space:nowrap;
 }
+/* pack earner row: gold highlight */
+#page-leagueHMW tr.hmw-pack-row td { background: rgba(212,175,55,0.10) !important; }
+#page-leagueHMW tr.hmw-pack-row .sl-player-name { color: var(--gold); font-weight: 700; }
+/* bigger fonts for HMW session tables */
+#page-leagueHMW .sl-table td { font-size: 15px; padding: 8px 12px; }
+#page-leagueHMW .sl-table-compact td, #page-leagueHMW .sl-table-compact th { padding: 7px 11px; }
+#page-leagueHMW .sl-table th { font-size: 12px; }
+#page-leagueHMW .sl-session-num { font-size: 17px; }
+#page-leagueHMW .sl-session-date { font-size: 13px; }
+#page-leagueHMW .sl-match-line { font-size: 15px; padding: 5px 0; }
+#page-leagueHMW .sl-player-name { font-size: 15px; }
+#page-leagueHMW .sl-record { font-size: 15px; }
+#page-leagueHMW .sl-pts { font-size: 15px; }
+.hmw-bounty-tag {
+  display: inline-block; font-size: 13px; line-height: 1;
+  margin-left: 5px; vertical-align: middle; opacity: 0.85;
+  cursor: default;
+}
+.hmw-pack-tag {
+  display: inline-block; font-size: 13px; line-height: 1;
+  margin-left: 5px; vertical-align: middle;
+  cursor: default;
+}
 
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -8211,6 +8234,8 @@ function renderHmwLeagueSessions(data) {
     return;
   }
   el.innerHTML = sessions.map(sess => {
+    const bountyNames = new Set(sess.bounty_player_names || []);
+    const packNames   = new Set(sess.pack_player_names   || []);
     const sessPlayers = (sess.players || []).slice().sort((a, b) =>
       (b.session_pts - a.session_pts) || (b.match_wins - a.match_wins)
     );
@@ -8220,13 +8245,18 @@ function renderHmwLeagueSessions(data) {
       const gw = p.game_wins  || 0, gd = p.game_draws  || 0, gl = p.game_losses  || 0;
       const rc = mw > ml ? 'sl-win' : mw < ml ? 'sl-loss' : '';
       const mRec = sMD ? `${mw}-${md}-${ml}` : `${mw}-${ml}`;
-      return `<tr>
-        <td class="sl-player-name">${p.player_name}</td>
+      const bountyTag = bountyNames.has(p.player_name)
+        ? `<span class="hmw-bounty-tag" title="Bounty target">🎯</span>` : '';
+      const packTag = packNames.has(p.player_name)
+        ? `<span class="hmw-pack-tag" title="Earned a pack — went undefeated as bounty target!">🎒</span>` : '';
+      const packRowCls = packNames.has(p.player_name) ? ' hmw-pack-row' : '';
+      return `<tr class="${packRowCls}">
+        <td class="sl-player-name">${p.player_name}${bountyTag}${packTag}</td>
         <td class="sl-record ${rc}">${mRec}</td>
         <td class="sl-games">${gw}</td>
         <td class="sl-games" style="color:var(--text3)">${gd}</td>
         <td class="sl-games">${gl}</td>
-        <td class="sl-pts" style="font-size:13px">${p.session_pts}</td>
+        <td class="sl-pts">${p.session_pts}</td>
       </tr>`;
     }).join('');
 
@@ -8235,11 +8265,13 @@ function renderHmwLeagueSessions(data) {
     const mkMatchLine = m => {
       const isBye = m.player2 === 'BYE';
       const [s1, s2] = (m.score || '0-0').split('-').map(Number);
+      const b1 = bountyNames.has(m.player1) ? `<span class="hmw-bounty-tag" title="Bounty target">🎯</span>` : '';
+      const b2 = !isBye && bountyNames.has(m.player2) ? `<span class="hmw-bounty-tag" title="Bounty target">🎯</span>` : '';
       const p2Display = isBye
         ? `<span style="color:var(--text3);font-style:italic">BYE</span>`
-        : `<span class="${s2 > s1 ? 'sl-win' : ''}">${m.player2}</span>`;
+        : `<span class="${s2 > s1 ? 'sl-win' : ''}">${m.player2}${b2}</span>`;
       return `<div class="sl-match-line">
-        <span class="${isBye || s1 > s2 ? 'sl-win' : ''}">${m.player1}</span>
+        <span class="${isBye || s1 > s2 ? 'sl-win' : ''}">${m.player1}${b1}</span>
         ${isBye ? '' : `<span class="sl-score">${m.score}</span>`}
         ${p2Display}
         <button class="sl-del-btn" onclick="hmwLeagueDeleteMatch(${m.id})" title="Remove match">✕</button>
@@ -8262,10 +8294,15 @@ function renderHmwLeagueSessions(data) {
            target="_blank" class="hmw-melee-link" onclick="event.stopPropagation()">melee.gg ↗</a>`
       : '';
 
+    const bountyLine = bountyNames.size
+      ? `<span class="sl-session-notes" style="color:var(--red2)">🎯 ${[...bountyNames].join(', ')}</span>`
+      : '';
+
     return `<div class="sl-session-card">
       <div class="sl-session-hdr">
         <span class="sl-session-num">WEEK ${sess.session_number}</span>
         <span class="sl-session-date">${sess.session_date}</span>
+        ${bountyLine}
         ${sess.notes ? `<span class="sl-session-notes">${sess.notes}</span>` : ''}
         ${meleeLink}
       </div>

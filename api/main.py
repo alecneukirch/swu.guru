@@ -4312,7 +4312,7 @@ def hmw_league_summary():
                  COALESCE(ogw.ogw_rate, 0) DESC
     """)
 
-    claimed, denied = _hmw_bounty_stats(players)
+    claimed, denied, _packs, _si = _hmw_bounty_map(players)
     player_data = []
     for r in players:
         d = {**dict(r), "last_played": str(r["last_played"]) if r["last_played"] else None}
@@ -4327,13 +4327,18 @@ def hmw_league_summary():
     }
 
 
-def _hmw_bounty_stats(players_list):
+def _hmw_bounty_map(players_list):
     """
-    Iterates sessions in order, tracking who held the bounty each week and
-    whether bounty holders went undefeated (denied) or were beaten (claimed).
+    Iterates sessions in order, tracking who held the bounty each week.
 
-    Week 1 bounty holders: Alec Neukirch, DarthSpyro (hardcoded – prior league winners).
-    Week 1 special rule: undefeated bounty holders do NOT earn a denied pack.
+    Returns (claimed, denied, packs, session_info) where:
+    - claimed[pid]:  # times that player beat a bounty holder
+    - denied[pid]:   # match wins recorded while holding a bounty
+    - packs[pid]:    # packs earned (undefeated bounty holder, week 2+)
+    - session_info[sid] = {'bounty_ids': set, 'pack_ids': set}
+
+    Week 1 bounty holders: Alec Neukirch, DarthSpyro (hardcoded).
+    Week 1 rule: denials still count per win, but no pack for going undefeated.
     """
     WEEK1_BOUNTY = {'Alec Neukirch', 'DarthSpyro'}
 
@@ -4349,11 +4354,13 @@ def _hmw_bounty_stats(players_list):
         "FROM hmw_league_matches ORDER BY session_id, id"
     )
 
-    claimed = {p['id']: 0 for p in players_list}
-    denied  = {p['id']: 0 for p in players_list}
-    cum     = {p['id']: {'pts': 0, 'mw': 0, 'md': 0, 'ml': 0,
-                         'gw': 0, 'gl': 0, 'sessions': 0, 'opps': set()}
-               for p in players_list}
+    claimed      = {p['id']: 0 for p in players_list}
+    denied       = {p['id']: 0 for p in players_list}
+    packs        = {p['id']: 0 for p in players_list}
+    cum          = {p['id']: {'pts': 0, 'mw': 0, 'md': 0, 'ml': 0,
+                              'gw': 0, 'gl': 0, 'sessions': 0, 'opps': set()}
+                   for p in players_list}
+    session_info = {}
 
     current_bounty = {by_name[n] for n in WEEK1_BOUNTY if n in by_name}
 
@@ -4363,6 +4370,8 @@ def _hmw_bounty_stats(players_list):
         bye_set = {bye_id} if bye_id else set()
         played = ({m['player1_id'] for m in ms} | {m['player2_id'] for m in ms}) - bye_set
 
+        pack_ids = set()
+
         # ── Bounty events ────────────────────────────────────────────────────
         for hid in current_bounty:
             if hid not in played:
@@ -4371,18 +4380,30 @@ def _hmw_bounty_stats(players_list):
             lost = False
             for m in h_ms:
                 g1, g2 = m['player1_game_wins'], m['player2_game_wins']
-                if m['player1_id'] == hid and g2 > g1:
-                    lost = True
-                    w = m['player2_id']
-                    if w != bye_id and w in claimed:
-                        claimed[w] += 1
-                elif m['player2_id'] == hid and g1 > g2:
-                    lost = True
-                    w = m['player1_id']
-                    if w != bye_id and w in claimed:
-                        claimed[w] += 1
+                if m['player1_id'] == hid:
+                    if g1 > g2:
+                        denied[hid] += 1         # bounty holder won this match
+                    elif g2 > g1:
+                        lost = True
+                        w = m['player2_id']
+                        if w not in bye_set and w in claimed:
+                            claimed[w] += 1
+                else:  # player2_id == hid
+                    if g2 > g1:
+                        denied[hid] += 1         # bounty holder won this match
+                    elif g1 > g2:
+                        lost = True
+                        w = m['player1_id']
+                        if w not in bye_set and w in claimed:
+                            claimed[w] += 1
             if not lost and not is_week1:
-                denied[hid] += 1
+                packs[hid] += 1
+                pack_ids.add(hid)
+
+        session_info[sess['id']] = {
+            'bounty_ids': set(current_bounty),
+            'pack_ids':   pack_ids,
+        }
 
         # ── Update cumulative stats ──────────────────────────────────────────
         for m in ms:
@@ -4438,7 +4459,7 @@ def _hmw_bounty_stats(players_list):
 
         current_bounty = {p['id'] for p in ranked[:n]}
 
-    return claimed, denied
+    return claimed, denied, packs, session_info
 
 
 @app.get("/api/hmw-league/sessions")
@@ -4450,6 +4471,9 @@ def hmw_league_sessions_detail():
 
     if not players:
         return {"sessions": [], "players": []}
+
+    _cl, _dn, _pk, session_info = _hmw_bounty_map(players)
+    id_to_name = {p["id"]: p["name"] for p in players}
 
     all_matches = db.fetchall("""
         SELECT m.id, m.session_id, m.player1_id, m.player2_id,
@@ -4464,6 +4488,9 @@ def hmw_league_sessions_detail():
     for sess in sessions:
         sess_matches = [m for m in all_matches if m["session_id"] == sess["id"]]
         sess_player_ids = {m["player1_id"] for m in sess_matches} | {m["player2_id"] for m in sess_matches}
+        si = session_info.get(sess["id"], {'bounty_ids': set(), 'pack_ids': set()})
+        bounty_ids = si['bounty_ids']
+        pack_ids   = si['pack_ids']
 
         player_stats = []
         for p in players:
@@ -4494,12 +4521,14 @@ def hmw_league_sessions_detail():
                 "game_draws":   gd,
                 "game_losses":  gl,
                 "session_pts":  sess_pts,
+                "had_bounty":   pid in bounty_ids,
+                "earned_pack":  pid in pack_ids,
             })
 
         match_details = []
         for m in sess_matches:
-            p1name = next((p["name"] for p in players if p["id"] == m["player1_id"]), "?")
-            p2name = next((p["name"] for p in players if p["id"] == m["player2_id"]), "?")
+            p1name = id_to_name.get(m["player1_id"], "?")
+            p2name = id_to_name.get(m["player2_id"], "?")
             gd = m["game_draws"] or 0
             score = f"{m['player1_game_wins']}-{gd}-{m['player2_game_wins']}" if gd else f"{m['player1_game_wins']}-{m['player2_game_wins']}"
             match_details.append({
@@ -4511,13 +4540,15 @@ def hmw_league_sessions_detail():
             })
 
         result.append({
-            "id":             sess["id"],
-            "session_number": sess["session_number"],
-            "session_date":   str(sess["session_date"]),
-            "notes":          sess.get("notes"),
-            "melee_url":      sess.get("melee_url"),
-            "players":        player_stats,
-            "matches":        match_details,
+            "id":                  sess["id"],
+            "session_number":      sess["session_number"],
+            "session_date":        str(sess["session_date"]),
+            "notes":               sess.get("notes"),
+            "melee_url":           sess.get("melee_url"),
+            "players":             player_stats,
+            "matches":             match_details,
+            "bounty_player_names": [id_to_name[pid] for pid in bounty_ids if pid in id_to_name],
+            "pack_player_names":   [id_to_name[pid] for pid in pack_ids   if pid in id_to_name],
         })
 
     return {
