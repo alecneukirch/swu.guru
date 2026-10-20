@@ -8164,6 +8164,8 @@ function renderHmwLeagueStandings(summary) {
     const bountyHtml = hasBounty ? `<span class="hmw-bounty" title="Bounty target">🎯</span>` : '';
     const gear  = `<button class="sl-gear-btn${isInactive ? ' sl-gear-active' : ''}"
                      onclick="event.stopPropagation();toggleHmwLeaguePlayer(${p.id}, ${p.is_active !== false})" title="${isInactive ? 'Reactivate' : 'Mark inactive'}">⚙</button>`;
+    const bc = p.bounties_claimed || 0;
+    const bd = p.bounties_denied  || 0;
     return `<tr class="sl-clickable-row${isInactive ? ' sl-inactive-row' : ''}" onclick="showHmwLeaguePlayerModal(${p.id})">
       <td style="color:var(--text3);font-family:var(--mono);font-size:13px;width:32px">${i+1}</td>
       <td class="sl-player-name">${p.name}${bountyHtml}${gear}</td>
@@ -8174,6 +8176,8 @@ function renderHmwLeagueStandings(summary) {
       <td class="sl-games" style="color:var(--text3)">${pct(p.omw_rate)}</td>
       <td class="sl-games" style="color:var(--text3)">${pct(p.gw_pct)}</td>
       <td class="sl-games" style="color:var(--text3)">${pct(p.ogw_rate)}</td>
+      <td class="sl-pts" style="color:var(--gold)">${bc || '—'}</td>
+      <td class="sl-pts" style="color:#34d399">${bd || '—'}</td>
       <td class="sl-last-played">${lastPlayed}</td>
     </tr>`;
   }).join('');
@@ -8190,8 +8194,10 @@ function renderHmwLeagueStandings(summary) {
       ${th('game_wins',    gHdr)}
       ${th('omw_rate',     'OMW%',     'opponents\' match-win % (tiebreaker 2)')}
       ${th('gw_pct',       'GW%',      'your game-win % (tiebreaker 3)')}
-      ${th('ogw_rate',     'OGW%',     'opponents\' game-win % (tiebreaker 4)')}
-      ${th('last_played',  'Last Played')}
+      ${th('ogw_rate',        'OGW%',     'opponents\' game-win % (tiebreaker 4)')}
+      ${th('bounties_claimed','Claimed',  'packs earned by defeating a bounty target')}
+      ${th('bounties_denied', 'Denied',   'packs earned as a bounty holder (went undefeated)')}
+      ${th('last_played',     'Last Played')}
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
