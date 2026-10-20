@@ -4243,7 +4243,7 @@ def hmw_league_summary():
             FROM hmw_league_players p
             LEFT JOIN hmw_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
             GROUP BY p.id, p.name
-        )
+        ),
         -- Match-win % per player (floored at 1/3 per DCI rules)
         mwp AS (
             SELECT pm.id AS player_id,
