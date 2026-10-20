@@ -4244,18 +4244,72 @@ def hmw_league_summary():
             LEFT JOIN hmw_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
             GROUP BY p.id, p.name
         )
+        -- Match-win % per player (floored at 1/3 per DCI rules)
+        mwp AS (
+            SELECT pm.id AS player_id,
+                   GREATEST(
+                       COALESCE(pm.match_wins::FLOAT / NULLIF(pm.match_wins + pm.match_draws + pm.match_losses, 0), 0),
+                       1.0/3
+                   ) AS mw_pct
+            FROM pm WHERE pm.name != 'BYE'
+        ),
+        -- Game-win % per player (floored at 1/3)
+        gwp AS (
+            SELECT pm.id AS player_id,
+                   GREATEST(
+                       COALESCE(pm.game_wins::FLOAT / NULLIF(pm.game_wins + pm.game_draws + pm.game_losses, 0), 0),
+                       1.0/3
+                   ) AS gw_pct
+            FROM pm WHERE pm.name != 'BYE'
+        ),
+        -- Unique opponent pairs (excluding BYE opponents)
+        player_opponents AS (
+            SELECT DISTINCT
+                p.id AS player_id,
+                CASE WHEN m.player1_id = p.id THEN m.player2_id ELSE m.player1_id END AS opp_id
+            FROM hmw_league_players p
+            JOIN hmw_league_matches m ON m.player1_id = p.id OR m.player2_id = p.id
+            JOIN hmw_league_players opp ON opp.id = (CASE WHEN m.player1_id = p.id THEN m.player2_id ELSE m.player1_id END)
+            WHERE p.name != 'BYE' AND opp.name != 'BYE'
+        ),
+        -- Opponents' match-win %
+        omw AS (
+            SELECT po.player_id,
+                   ROUND(AVG(mwp.mw_pct)::NUMERIC, 4) AS omw_rate
+            FROM player_opponents po
+            JOIN mwp ON mwp.player_id = po.opp_id
+            GROUP BY po.player_id
+        ),
+        -- Opponents' game-win %
+        ogw AS (
+            SELECT po.player_id,
+                   ROUND(AVG(gwp.gw_pct)::NUMERIC, 4) AS ogw_rate
+            FROM player_opponents po
+            JOIN gwp ON gwp.player_id = po.opp_id
+            GROUP BY po.player_id
+        )
         SELECT pm.id, pm.name, pm.is_active, pm.match_wins, pm.match_draws, pm.match_losses,
                pm.game_wins, pm.game_draws, pm.game_losses,
                sa.sessions AS sessions_attended,
                (COALESCE(sa.sessions, 0) + pm.match_wins * 3 + pm.match_losses)::NUMERIC AS total_points,
                ROUND((COALESCE(sa.sessions, 0) + pm.match_wins * 3.0 + pm.match_losses)
                    / NULLIF(sa.sessions, 0), 2) AS norm_points,
+               ROUND(gwp.gw_pct::NUMERIC, 4)            AS gw_pct,
+               COALESCE(omw.omw_rate, 0)                AS omw_rate,
+               COALESCE(ogw.ogw_rate, 0)                AS ogw_rate,
                lp.last_played
         FROM pm
         JOIN sessions_attended sa ON sa.player_id = pm.id
-        LEFT JOIN last_played lp ON lp.player_id = pm.id
+        LEFT JOIN last_played lp  ON lp.player_id  = pm.id
+        LEFT JOIN gwp             ON gwp.player_id  = pm.id
+        LEFT JOIN omw             ON omw.player_id  = pm.id
+        LEFT JOIN ogw             ON ogw.player_id  = pm.id
         WHERE pm.name != 'BYE'
-        ORDER BY total_points DESC NULLS LAST, norm_points DESC NULLS LAST
+        ORDER BY total_points DESC NULLS LAST,
+                 pm.match_wins DESC NULLS LAST,
+                 COALESCE(omw.omw_rate, 0) DESC,
+                 COALESCE(gwp.gw_pct, 0) DESC,
+                 COALESCE(ogw.ogw_rate, 0) DESC
     """)
 
     return {

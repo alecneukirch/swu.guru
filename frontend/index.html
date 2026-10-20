@@ -8086,12 +8086,25 @@ async function loadHmwLeague() {
   }
 }
 
-function _hmwBountyCount(activeSorted) {
-  const pts = activeSorted.map(p => Number(p.total_points) || 0);
-  if (pts.length < 2) return 0;
-  if (pts.length === 2) return 2;
-  // distinct 3rd = 3rd place has more pts than 4th (or no 4th)
-  const hasDistinct3rd = pts.length === 3 || pts[2] > pts[3];
+// Full tiebreaker comparator: pts → match wins → OMW% → GW% → OGW%
+function _hmwStandingsCmp(a, b) {
+  const ptsDiff = (Number(b.total_points) || 0) - (Number(a.total_points) || 0);
+  if (ptsDiff !== 0) return ptsDiff;
+  const mwDiff  = (Number(b.match_wins)   || 0) - (Number(a.match_wins)   || 0);
+  if (mwDiff  !== 0) return mwDiff;
+  const omwDiff = (Number(b.omw_rate)     || 0) - (Number(a.omw_rate)     || 0);
+  if (omwDiff !== 0) return omwDiff;
+  const gwDiff  = (Number(b.gw_pct)       || 0) - (Number(a.gw_pct)       || 0);
+  if (gwDiff  !== 0) return gwDiff;
+  return           (Number(b.ogw_rate)    || 0) - (Number(a.ogw_rate)     || 0);
+}
+
+function _hmwBountyCount(activeSortedByStandings) {
+  if (activeSortedByStandings.length < 2) return 0;
+  if (activeSortedByStandings.length === 2) return 2;
+  // distinct 3rd = 3rd place resolves differently from 4th (any tiebreaker level)
+  const hasDistinct3rd = activeSortedByStandings.length === 3
+    || _hmwStandingsCmp(activeSortedByStandings[2], activeSortedByStandings[3]) !== 0;
   return hasDistinct3rd ? 3 : 2;
 }
 
@@ -8103,25 +8116,28 @@ function renderHmwLeagueStandings(summary) {
     return;
   }
 
+  const pct = v => v != null ? (Number(v) * 100).toFixed(1) + '%' : '—';
+
   const sortVal = p => {
     const v = p[_hmwSort.col];
     return typeof v === 'string' ? v : (Number(v) || 0);
   };
   const cmp = (a, b) => {
     const av = sortVal(a), bv = sortVal(b);
-    return _hmwSort.dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
+    const primary = _hmwSort.dir * (typeof av === 'string' ? av.localeCompare(bv) : av - bv);
+    if (primary !== 0) return primary;
+    // Apply full tiebreaker chain when primary column is a standings column
+    if (_hmwSort.col === 'total_points') return _hmwSort.dir * _hmwStandingsCmp(a, b);
+    return 0;
   };
   const active   = players.filter(p =>  p.is_active !== false).sort(cmp);
   const inactive = players.filter(p =>  p.is_active === false).sort(cmp);
   const sorted   = [...active, ...inactive];
 
-  // Bounty: only applies when sorting by points (default)
-  const isByPts = _hmwSort.col === 'total_points';
-  const activeSortedByPts = isByPts
-    ? active
-    : [...active].sort((a, b) => (Number(b.total_points) || 0) - (Number(a.total_points) || 0));
-  const bountyCount = _hmwBountyCount(activeSortedByPts);
-  const bountySet = new Set(activeSortedByPts.slice(0, bountyCount).map(p => p.id));
+  // Bounty always uses full tiebreaker order regardless of display sort
+  const activeSortedByStandings = [...active].sort(_hmwStandingsCmp);
+  const bountyCount = _hmwBountyCount(activeSortedByStandings);
+  const bountySet = new Set(activeSortedByStandings.slice(0, bountyCount).map(p => p.id));
 
   const arr = col => {
     if (_hmwSort.col !== col) return '';
@@ -8156,6 +8172,9 @@ function renderHmwLeagueStandings(summary) {
       <td class="sl-pts" style="color:var(--text2)">${norm}</td>
       <td class="sl-record ${rc}">${mRec}</td>
       <td class="sl-games">${gRec}</td>
+      <td class="sl-games" style="color:var(--text3)">${pct(p.omw_rate)}</td>
+      <td class="sl-games" style="color:var(--text3)">${pct(p.gw_pct)}</td>
+      <td class="sl-games" style="color:var(--text3)">${pct(p.ogw_rate)}</td>
       <td class="sl-last-played">${lastPlayed}</td>
     </tr>`;
   }).join('');
@@ -8168,8 +8187,11 @@ function renderHmwLeagueStandings(summary) {
       <th>Player</th>
       ${th('total_points', 'Pts',      '1pt attend + 3pt win + 1pt loss')}
       ${th('norm_points',  'Pts/Sess', 'total points ÷ sessions attended')}
-      ${th('match_wins',   mHdr)}
+      ${th('match_wins',   mHdr,       'tiebreaker 1')}
       ${th('game_wins',    gHdr)}
+      ${th('omw_rate',     'OMW%',     'opponents\' match-win % (tiebreaker 2)')}
+      ${th('gw_pct',       'GW%',      'your game-win % (tiebreaker 3)')}
+      ${th('ogw_rate',     'OGW%',     'opponents\' game-win % (tiebreaker 4)')}
       ${th('last_played',  'Last Played')}
     </tr></thead>
     <tbody>${rows}</tbody>
