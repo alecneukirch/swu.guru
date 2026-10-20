@@ -3704,7 +3704,9 @@ select.sl-input { cursor: pointer; }
 #page-leagueHMW .sl-match-line { font-size: 15px; padding: 5px 0; }
 #page-leagueHMW .sl-player-name { font-size: 16px; }
 #page-leagueHMW .sl-record { font-size: 16px; }
-#page-leagueHMW .sl-pts { font-size: 16px; }
+#page-leagueHMW .sl-pts { font-size: 16px; color: var(--text); }
+#page-leagueHMW .sl-games { color: var(--text); }
+#page-leagueHMW .sl-last-played { color: var(--text); }
 .hmw-bounty-tag {
   display: inline-block; font-size: 13px; line-height: 1;
   margin-left: 5px; vertical-align: middle; opacity: 0.85;
@@ -8190,15 +8192,15 @@ function renderHmwLeagueStandings(summary) {
     const bc = p.bounties_claimed || 0;
     const bd = p.bounties_denied  || 0;
     return `<tr class="sl-clickable-row${isInactive ? ' sl-inactive-row' : ''}" onclick="showHmwLeaguePlayerModal(${p.id})">
-      <td style="color:var(--text3);font-family:var(--mono);width:32px">${i+1}</td>
+      <td style="font-family:var(--mono);width:32px">${i+1}</td>
       <td class="sl-player-name">${p.name}${bountyHtml}${gear}</td>
       <td class="sl-pts">${total}</td>
-      <td class="sl-pts" style="color:var(--text2)">${norm}</td>
+      <td class="sl-pts">${norm}</td>
       <td class="sl-record ${rc}">${mRec}</td>
       <td class="sl-games">${gRec}</td>
-      <td class="sl-games" style="color:var(--text3)">${pct(p.omw_rate)}</td>
-      <td class="sl-games" style="color:var(--text3)">${pct(p.gw_pct)}</td>
-      <td class="sl-games" style="color:var(--text3)">${pct(p.ogw_rate)}</td>
+      <td class="sl-games">${pct(p.omw_rate)}</td>
+      <td class="sl-games">${pct(p.gw_pct)}</td>
+      <td class="sl-games">${pct(p.ogw_rate)}</td>
       <td class="sl-pts" style="color:var(--gold)">${bc || '—'}</td>
       <td class="sl-pts" style="color:#34d399">${bd || '—'}</td>
       <td class="sl-last-played">${lastPlayed}</td>
