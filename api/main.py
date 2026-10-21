@@ -4312,7 +4312,7 @@ def hmw_league_summary():
                  COALESCE(ogw.ogw_rate, 0) DESC
     """)
 
-    claimed, denied, _packs, _si = _hmw_bounty_map(players)
+    claimed, denied, _packs, _si, next_bounty = _hmw_bounty_map(players)
     player_data = []
     for r in players:
         d = {**dict(r), "last_played": str(r["last_played"]) if r["last_played"] else None}
@@ -4320,10 +4320,13 @@ def hmw_league_summary():
         d["bounties_denied"]  = denied.get(r["id"], 0)
         player_data.append(d)
 
+    id_to_name = {p["id"]: p["name"] for p in players}
     return {
         "players": player_data,
         "sessions_completed": session_count,
         "last_session_date": str(sess_row["last_date"]) if sess_row and sess_row["last_date"] else None,
+        "current_bounty_ids":   list(next_bounty),
+        "current_bounty_names": [id_to_name[pid] for pid in next_bounty if pid in id_to_name],
     }
 
 
@@ -4427,22 +4430,27 @@ def _hmw_bounty_map(players_list):
                 c = cum[pid]
                 c['pts'] = c['sessions'] + c['mw'] * 3 + c['ml']
 
-        # ── Determine next session's bounty holders (points only for boundary) ──
-        active = [p for p in players_list
-                  if p['name'] != 'BYE' and cum[p['id']]['sessions'] > 0]
-        ranked = sorted(active, key=lambda p: cum[p['id']]['pts'], reverse=True)
+        # ── Next week's bounty = players who went undefeated this session ──
+        undefeated = set()
+        for p in players_list:
+            pid = p['id']
+            if p['name'] == 'BYE' or pid not in played:
+                continue
+            real_ms = [m for m in ms
+                       if (m['player1_id'] == pid or m['player2_id'] == pid)
+                       and m['player1_id'] != bye_id and m['player2_id'] != bye_id]
+            if not real_ms:
+                continue
+            lost_any = any(
+                (m['player1_id'] == pid and m['player2_game_wins'] > m['player1_game_wins']) or
+                (m['player2_id'] == pid and m['player1_game_wins'] > m['player2_game_wins'])
+                for m in real_ms
+            )
+            if not lost_any:
+                undefeated.add(pid)
+        current_bounty = undefeated
 
-        if len(ranked) >= 3:
-            # distinct 3rd = 3rd place has strictly more points than 4th
-            distinct3 = (len(ranked) == 3
-                         or cum[ranked[2]['id']]['pts'] > cum[ranked[3]['id']]['pts'])
-            n = 3 if distinct3 else 2
-        else:
-            n = len(ranked)
-
-        current_bounty = {p['id'] for p in ranked[:n]}
-
-    return claimed, denied, packs, session_info
+    return claimed, denied, packs, session_info, current_bounty
 
 
 @app.get("/api/hmw-league/sessions")
@@ -4455,7 +4463,7 @@ def hmw_league_sessions_detail():
     if not players:
         return {"sessions": [], "players": []}
 
-    _cl, _dn, _pk, session_info = _hmw_bounty_map(players)
+    _cl, _dn, _pk, session_info, _nb = _hmw_bounty_map(players)
     id_to_name = {p["id"]: p["name"] for p in players}
 
     all_matches = db.fetchall("""

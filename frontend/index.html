@@ -8124,15 +8124,6 @@ function _hmwStandingsCmp(a, b) {
   return           (Number(b.ogw_rate)    || 0) - (Number(a.ogw_rate)     || 0);
 }
 
-function _hmwBountyCount(activeSortedByStandings) {
-  if (activeSortedByStandings.length < 2) return 0;
-  if (activeSortedByStandings.length === 2) return 2;
-  // distinct 3rd = 3rd place has strictly more points than 4th
-  const pts = p => Number(p.total_points) || 0;
-  const hasDistinct3rd = activeSortedByStandings.length === 3
-    || pts(activeSortedByStandings[2]) > pts(activeSortedByStandings[3]);
-  return hasDistinct3rd ? 3 : 2;
-}
 
 function renderHmwLeagueStandings(summary) {
   const el = document.getElementById('hmw-league-standings');
@@ -8159,10 +8150,7 @@ function renderHmwLeagueStandings(summary) {
   const inactive = players.filter(p =>  p.is_active === false).sort(cmp);
   const sorted   = [...active, ...inactive];
 
-  // Bounty always uses full tiebreaker order regardless of display sort
-  const activeSortedByStandings = [...active].sort(_hmwStandingsCmp);
-  const bountyCount = _hmwBountyCount(activeSortedByStandings);
-  const bountySet = new Set(activeSortedByStandings.slice(0, bountyCount).map(p => p.id));
+  const bountySet = new Set(summary.current_bounty_ids || []);
 
   const arr = col => {
     if (_hmwSort.col !== col) return '';
