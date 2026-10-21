@@ -3582,6 +3582,9 @@ tr:hover .sl-gear-btn { opacity: 1; }
 tr.sl-inactive-row td { opacity: 0.3; }
 tr.sl-inactive-row td:first-child ~ td:first-of-type { opacity: 1; }
 tr.sl-inactive-row .sl-gear-btn { opacity: 1 !important; }
+/* hide gear buttons unless manage panel is open */
+#page-leagueHMW .sl-gear-btn { display: none; }
+#page-leagueHMW.hmw-manage-open .sl-gear-btn { display: inline; }
 tr.sl-clickable-row { cursor: pointer; }
 tr.sl-clickable-row:hover td { background: rgba(255,255,255,0.03); }
 .sl-modal-overlay {
@@ -8317,6 +8320,7 @@ function toggleHmwLeagueAdmin() {
   _hmwAdminOpen = !_hmwAdminOpen;
   document.getElementById('hmw-league-admin').style.display = _hmwAdminOpen ? '' : 'none';
   document.getElementById('hmw-league-admin-btn').classList.toggle('active', _hmwAdminOpen);
+  document.getElementById('page-leagueHMW').classList.toggle('hmw-manage-open', _hmwAdminOpen);
   if (_hmwAdminOpen && _hmwData) _populateHmwLeagueAdmin(_hmwData.sessData);
 }
 
