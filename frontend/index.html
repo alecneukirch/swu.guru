@@ -2234,6 +2234,13 @@ select option { background: var(--surface2); }
 }
 
 /* ── PQ Finder ────────────────────────────────────────────── */
+.pq-format-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 24px 12px;
+  flex-wrap: wrap;
+}
 .pq-search-bar {
   display: flex;
   gap: 8px;
@@ -4040,10 +4047,16 @@ select.sl-input { cursor: pointer; }
     <label class="pq-date-label">From <input type="date" id="pq-date-from" onclick="this.showPicker()"></label>
     <label class="pq-date-label">To   <input type="date" id="pq-date-to"   onclick="this.showPicker()"></label>
     <div style="display:flex;gap:4px;align-items:center">
-      <button class="btn active" id="pq-sort-dist" onclick="setPQSort('dist')">Distance</button>
-      <button class="btn"        id="pq-sort-date" onclick="setPQSort('date')">Date</button>
+      <button class="btn active" id="pq-sort-date" onclick="setPQSort('date')">Date</button>
+      <button class="btn"        id="pq-sort-dist" onclick="setPQSort('dist')">Distance</button>
     </div>
     <button class="btn" onclick="findPQs()">Search</button>
+  </div>
+  <div class="pq-format-bar">
+    <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">Format:</span>
+    <button class="btn active" id="pq-fmt-premier" onclick="togglePQFormat('premier')">Premier</button>
+    <button class="btn active" id="pq-fmt-limited" onclick="togglePQFormat('limited')">Limited</button>
+    <button class="btn active" id="pq-fmt-eternal" onclick="togglePQFormat('eternal')">Eternal</button>
   </div>
   <div class="pq-results">
     <div class="pq-status" id="pq-status"></div>
@@ -6058,13 +6071,20 @@ function formatPQCost(rawCost, country) {
 
 let _pqAutoGeoFired = false;
 
-let _pqSort = 'dist'; // 'dist' | 'date'
+let _pqSort = 'date'; // 'dist' | 'date'
+const _pqFormats = new Set(['premier', 'limited', 'eternal']);
 
 function setPQSort(mode) {
   _pqSort = mode;
-  document.getElementById('pq-sort-dist').classList.toggle('active', mode === 'dist');
   document.getElementById('pq-sort-date').classList.toggle('active', mode === 'date');
-  // Re-render last results if any
+  document.getElementById('pq-sort-dist').classList.toggle('active', mode === 'dist');
+  if (_lastPQResults) renderPQResults(_lastPQResults.events, _lastPQResults.useMiles);
+}
+
+function togglePQFormat(fmt) {
+  if (_pqFormats.has(fmt)) _pqFormats.delete(fmt);
+  else _pqFormats.add(fmt);
+  document.getElementById(`pq-fmt-${fmt}`).classList.toggle('active', _pqFormats.has(fmt));
   if (_lastPQResults) renderPQResults(_lastPQResults.events, _lastPQResults.useMiles);
 }
 
@@ -6136,6 +6156,11 @@ async function findPQs() {
 }
 
 function renderPQResults(results, useMiles = true) {
+  results = results.filter(ev => {
+    const fmt = (ev.format || '').toLowerCase();
+    const bucket = ['premier','limited','eternal'].includes(fmt) ? fmt : 'premier';
+    return _pqFormats.has(bucket);
+  });
   if (_pqSort === 'date') {
     results = [...results].sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
   }
