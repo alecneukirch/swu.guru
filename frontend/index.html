@@ -4034,7 +4034,7 @@ select.sl-input { cursor: pointer; }
     <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
       onkeydown="if(event.key==='Enter')findPQs()">
     <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
-    <select id="pq-range" class="pq-radius-select">
+    <select id="pq-range" class="pq-radius-select" onchange="reapplyPQFilters()">
       <option value="100">100 mi</option>
       <option value="200" selected>200 mi</option>
       <option value="300">300 mi</option>
@@ -4044,13 +4044,12 @@ select.sl-input { cursor: pointer; }
       <option value="700">700 mi</option>
       <option value="800">800 mi</option>
     </select>
-    <label class="pq-date-label">From <input type="date" id="pq-date-from" onclick="this.showPicker()"></label>
-    <label class="pq-date-label">To   <input type="date" id="pq-date-to"   onclick="this.showPicker()"></label>
+    <label class="pq-date-label">From <input type="date" id="pq-date-from" onclick="this.showPicker()" onchange="reapplyPQFilters()"></label>
+    <label class="pq-date-label">To   <input type="date" id="pq-date-to"   onclick="this.showPicker()" onchange="reapplyPQFilters()"></label>
     <div style="display:flex;gap:4px;align-items:center">
       <button class="btn active" id="pq-sort-date" onclick="setPQSort('date')">Date</button>
       <button class="btn"        id="pq-sort-dist" onclick="setPQSort('dist')">Distance</button>
     </div>
-    <button class="btn" onclick="findPQs()">Search</button>
   </div>
   <div class="pq-format-bar">
     <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">Format:</span>
@@ -6088,7 +6087,28 @@ function togglePQFormat(fmt) {
   if (_lastPQResults) renderPQResults(_lastPQResults.events, _lastPQResults.useMiles);
 }
 
-let _lastPQResults = null;
+let _lastPQResults  = null;
+let _pqAllEvents    = null;
+let _pqUserLat      = null;
+let _pqUserLon      = null;
+let _pqUseMiles     = true;
+
+function reapplyPQFilters() {
+  if (!_pqAllEvents || _pqUserLat == null) return;
+  const results = applyDateFilter(pqDistanceResults(_pqAllEvents, _pqUserLat, _pqUserLon));
+  const status  = document.getElementById('pq-status');
+  if (!results.length) {
+    status.textContent = `No upcoming PQs within ${pqRangeLabel(_pqUseMiles)} in that date range.`;
+    _lastPQResults = { events: [], useMiles: _pqUseMiles };
+    document.getElementById('pq-grid').innerHTML = '';
+    return;
+  }
+  const summary = `${results.length} upcoming PQ${results.length !== 1 ? 's' : ''} within ${pqRangeLabel(_pqUseMiles)}`;
+  status.textContent = summary;
+  document.getElementById('pq-page-sub').textContent = summary;
+  _lastPQResults = { events: results, useMiles: _pqUseMiles };
+  renderPQResults(results, _pqUseMiles);
+}
 
 function initPQFinder() {
   // Set date defaults once (today → +1 year)
@@ -6140,6 +6160,7 @@ async function findPQs() {
     const useMiles = pqUseMiles(countryCode);
     status.textContent = `Found: ${display.split(',').slice(0,3).join(',')} — fetching PQs…`;
     const events = await fetchAllPQs();
+    _pqAllEvents = events; _pqUserLat = lat; _pqUserLon = lon; _pqUseMiles = useMiles;
     const results = applyDateFilter(pqDistanceResults(events, lat, lon));
     if (!results.length) {
       status.textContent = `No upcoming PQs within ${pqRangeLabel(useMiles)} in that date range.`;
@@ -6245,6 +6266,7 @@ async function pqUseGeolocation(silent = false) {
         reverseGeocodeCountry(latitude, longitude),
       ]);
       const useMiles = pqUseMiles(countryCode);
+      _pqAllEvents = events; _pqUserLat = latitude; _pqUserLon = longitude; _pqUseMiles = useMiles;
       const results = applyDateFilter(pqDistanceResults(events, latitude, longitude));
       if (!results.length) {
         status.textContent = `No upcoming PQs within ${pqRangeLabel(useMiles)} in that date range.`;
