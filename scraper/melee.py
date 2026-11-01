@@ -203,9 +203,10 @@ def hub_event_list(set_code: str = "ASH", limit: int = 0,
 
         players_txt = cells[5].get_text(strip=True)
         level_txt   = cells[4].get_text(strip=True) if len(cells) > 4 else ""
+        raw_date = cells[0].get_text(strip=True)
         events.append({
             "name":         a.get_text(strip=True),
-            "date":         cells[0].get_text(strip=True),
+            "date":         raw_date.replace("/", "-"),
             "hub_url":      a["href"],
             "country":      cells[3].get_text(strip=True),
             "player_count": int(players_txt) if players_txt.isdigit() else None,
@@ -1636,7 +1637,7 @@ if __name__ == "__main__":
             db.execute_autocommit("SELECT refresh_all_views()")
     elif args.swu:
         sync_from_swu(
-            event_type_ids = args.swu_types or [SWU_TYPE_PQ, SWU_TYPE_SQ, SWU_TYPE_GC],
+            event_type_ids = args.swu_types or [SWU_TYPE_PQ, SWU_TYPE_SQ],
             fetch_cards    = args.cards,
             since_days     = args.days,
             eternal        = args.eternal,
