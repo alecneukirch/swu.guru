@@ -663,7 +663,7 @@ def leaders_by_base(
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               {date_sql} {ban_s}
-            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world
+            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
         """, date_params + [min_decks])
     elif decay or ban:
@@ -695,7 +695,7 @@ def leaders_by_base(
               AND e.date <= CURRENT_DATE
               {tier_sql}
               {ban_s}
-            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world
+            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
             HAVING SUM({w}) >= %s {t8_having_decay}
         """, tier_params + [min_decks])
         # Match win rates by leader+base — separate query
@@ -1114,7 +1114,7 @@ def leader_bases(
             WHERE s.leader = %s AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               {date_sql}
-            GROUP BY s.base, br.label, br.group_key, br.aspect, swt.world
+            GROUP BY s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
         """, [leader] + date_params)
     else:
         rows = db.fetchall(f"""
@@ -2957,7 +2957,7 @@ def meta_call(
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
           AND e.date <= CURRENT_DATE {date_sql} {ban_s}
-        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world
+        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
         LIMIT %s
