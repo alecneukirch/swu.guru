@@ -3703,12 +3703,28 @@ select.sl-input { cursor: pointer; }
 /* pack earner row: gold highlight */
 #page-leagueHMW tr.hmw-pack-row td { background: rgba(212,175,55,0.10) !important; }
 #page-leagueHMW tr.hmw-pack-row .sl-player-name { color: var(--gold); font-weight: 700; }
+/*
+ * HMW text-size reference (add new text here so it doesn't get too small):
+ *   Week label (.sl-session-num)  — 17px display/700/gold  ← match this for hero info
+ *   Date (.sl-session-date)       — 13px mono/text3
+ *   Match lines (.sl-match-line)  — 15px
+ *   Player names (.sl-player-name)— 16px
+ *   Points/record (.sl-pts/.sl-record) — 16px
+ *   Notes (.sl-session-notes)     — 12px italic  ← do NOT use for names/scores
+ */
 /* bigger fonts for HMW — !important overrides inline styles and class-level rules */
 #page-leagueHMW .sl-table td  { font-size: 16px !important; padding: 10px 14px; }
 #page-leagueHMW .sl-table th  { font-size: 13px !important; padding: 8px 14px; }
 #page-leagueHMW .sl-table-compact td, #page-leagueHMW .sl-table-compact th { padding: 8px 12px; }
 #page-leagueHMW .sl-session-num { font-size: 17px; }
 #page-leagueHMW .sl-session-date { font-size: 13px; }
+/* Bounty claim summary — full-width centered row in the week header */
+.hmw-claimed-line {
+  flex-basis: 100%; text-align: center;
+  font-family: var(--display); font-size: 17px; font-weight: 700;
+  letter-spacing: 0.05em; color: var(--gold);
+  padding-top: 4px;
+}
 #page-leagueHMW .sl-match-line { font-size: 15px; padding: 5px 0; }
 #page-leagueHMW .sl-player-name { font-size: 16px; }
 #page-leagueHMW .sl-record { font-size: 16px; }
@@ -8352,12 +8368,12 @@ function renderHmwLeagueSessions(data) {
            target="_blank" class="hmw-melee-link" onclick="event.stopPropagation()">melee.gg ↗</a>`
       : '';
 
-    const claimedNames = sess.claimed_player_names || [];
+    const claimedList = sess.bounties_claimed || [];
     const bountyLine = bountyNames.size
       ? `<span class="sl-session-notes" style="color:var(--red2)">🎯 ${[...bountyNames].join(', ')}</span>`
       : '';
-    const claimedLine = claimedNames.length
-      ? `<span class="sl-session-notes" style="color:var(--gold);margin-left:auto">🏆 ${claimedNames.join(', ')} claimed</span>`
+    const claimedLine = claimedList.length
+      ? `<span class="hmw-claimed-line">🏆 ${claimedList.map(c => `${c.name} ×${c.count}`).join(' · ')}</span>`
       : '';
 
     return `<div class="sl-session-card">
