@@ -293,6 +293,34 @@ def leaders(
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
             ORDER BY COUNT(DISTINCT s.id) DESC
         """, date_params + [min_decks])
+        mw_rows = db.fetchall(f"""
+            SELECT leader,
+                SUM(mw)::FLOAT / NULLIF(SUM(mg), 0) AS match_win_rate,
+                SUM(mg)::INT                          AS match_games
+            FROM (
+                SELECT event_id, p1_leader AS leader,
+                    COUNT(*) FILTER (WHERE winner='p1')              AS mw,
+                    COUNT(*) FILTER (WHERE winner IN ('p1','p2'))    AS mg
+                FROM {t['matches']} WHERE p1_leader IS NOT NULL AND winner IN ('p1','p2')
+                GROUP BY event_id, p1_leader
+                UNION ALL
+                SELECT event_id, p2_leader,
+                    COUNT(*) FILTER (WHERE winner='p2'),
+                    COUNT(*) FILTER (WHERE winner IN ('p1','p2'))
+                FROM {t['matches']} WHERE p2_leader IS NOT NULL AND winner IN ('p1','p2')
+                GROUP BY event_id, p2_leader
+            ) ml
+            JOIN {t['events']} e ON e.id = ml.event_id
+            WHERE 1=1 {date_sql}
+            GROUP BY leader
+        """, date_params)
+        mw_by_leader = {r['leader']: r for r in mw_rows}
+        rows = [
+            {**r,
+             'match_win_rate': mw_by_leader.get(r['leader'], {}).get('match_win_rate'),
+             'match_games':    mw_by_leader.get(r['leader'], {}).get('match_games', 0)}
+            for r in rows
+        ]
     elif decay:
         # Full dataset with exponential time-decay (half-life 30 days)
         w = decay_weight()

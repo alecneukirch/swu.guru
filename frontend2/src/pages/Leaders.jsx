@@ -45,10 +45,23 @@ function tierGrade(conv, entries) {
   return 'F'
 }
 
+function tierGradeByMWR(mwr, entries) {
+  if (mwr == null) return 'C'
+  const w = Number(mwr)
+  const reliable = (entries ?? 0) >= 20
+  if (w >= 0.56 && reliable) return 'S'
+  if (w >= 0.53 && reliable) return 'A'
+  if (w >= 0.51) return 'B'
+  if (w >= 0.49) return 'C'
+  if (w >= 0.46) return 'D'
+  return 'F'
+}
+
 export default function Leaders({ filters }) {
-  const [sort, setSort]     = useState('entries')
-  const [search, setSearch] = useState('')
+  const [sort, setSort]         = useState('entries')
+  const [search, setSearch]     = useState('')
   const [minEntries, setMinEntries] = useState(10)
+  const [metricMode, setMetricMode] = useState('conversion')
 
   const { data, loading } = useApi(
     () => api.leaders({ ...filters, min_entries: minEntries }),
@@ -70,12 +83,14 @@ export default function Leaders({ filters }) {
 
     const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]))
     main.forEach(r => {
-      const g = tierGrade(r.conversion, r.entries)
+      const g = metricMode === 'mwr'
+        ? tierGradeByMWR(r.match_win_rate, r.total_decks)
+        : tierGrade(r.conversion, r.total_decks)
       byTier[g].push(r)
     })
 
     return { leaders: main, rogues, byTier, total: data.total_entries ?? rows.reduce((s,r)=>s+(r.entries||0),0) }
-  }, [data, sort, search])
+  }, [data, sort, search, metricMode])
 
   const navigate = useNavigate()
 
@@ -107,6 +122,15 @@ export default function Leaders({ filters }) {
             {[5, 10, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
+        <div className="flex rounded overflow-hidden border border-border text-sm">
+          {[['conversion','Conv'],['mwr','MWR']].map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setMetricMode(val)}
+              className={`px-3 py-1.5 transition-colors ${metricMode === val ? 'bg-border2 text-t1' : 'bg-surface text-t3 hover:text-t2'}`}
+            >{label}</button>
+          ))}
+        </div>
         {data && (
           <span className="ml-auto text-t3 text-sm">
             {leaders.length + rogues.length} combos · {total.toLocaleString()} entries
@@ -130,7 +154,7 @@ export default function Leaders({ filters }) {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
               {group.map(r => (
-                <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}${r.base_group ? `?base=${encodeURIComponent(r.base_group)}` : ''}`)} />
+                <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} metricMode={metricMode} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}${r.base_group ? `?base=${encodeURIComponent(r.base_group)}` : ''}`)} />
               ))}
             </div>
           </div>
@@ -147,7 +171,7 @@ export default function Leaders({ filters }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {rogues.map(r => (
-              <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
+              <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} metricMode={metricMode} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
             ))}
           </div>
         </div>
@@ -156,17 +180,24 @@ export default function Leaders({ filters }) {
   )
 }
 
-function LeaderCard({ row, onClick }) {
-  const mwr      = row.win_rate   != null ? Math.round(row.win_rate * 100)    : null
+function LeaderCard({ row, metricMode = 'conversion', onClick }) {
+  const mwrPct   = row.match_win_rate != null ? Math.round(row.match_win_rate * 100) : null
   const meta     = row.meta_share != null ? (row.meta_share * 100).toFixed(1) : null
-  const t8p      = row.top8_rate  != null ? Math.round(row.top8_rate * 100)   : null
+  const t8p      = row.t8_rate   != null ? Math.round(row.t8_rate * 100)
+                 : row.top8_rate != null ? Math.round(row.top8_rate * 100) : null
   const conv     = row.conversion != null ? Number(row.conversion).toFixed(2) : null
-  const mwrColor = mwr >= 55 ? 'text-win' : mwr <= 45 ? 'text-loss' : 'text-gold'
+  const mwrColor = mwrPct >= 55 ? 'text-win' : mwrPct <= 45 ? 'text-loss' : 'text-gold'
   const t8Color  = t8p >= 20 ? 'text-win' : t8p >= 12 ? 'text-gold' : 'text-t2'
-  const tier     = tierGrade(row.conversion, row.entries)
+  const entries  = row.total_decks ?? row.entries ?? 0
+  const tier     = metricMode === 'mwr'
+    ? tierGradeByMWR(row.match_win_rate, entries)
+    : tierGrade(row.conversion, entries)
   const tc       = TIER_COLORS[tier]
   const aspBorder = ASP_BORDER[row.primary_aspect] ?? 'border-t-border2'
   const imgUrl   = `/api/cards/leader-image/${encodeURIComponent(row.leader)}`
+  const badgeVal = metricMode === 'mwr'
+    ? (mwrPct != null ? `${mwrPct}%` : null)
+    : (conv ? `${conv}×` : null)
 
   return (
     <button
@@ -191,7 +222,7 @@ function LeaderCard({ row, onClick }) {
         {/* Tier badge top-left */}
         <div className={`font-display font-bold text-[13px] px-1.5 py-0.5 rounded border bg-black/70 ${tc.text} ${tc.border} leading-none`}>
           {tier}
-          {conv && <span className="font-mono font-normal text-[11px] ml-1 opacity-90">{conv}×</span>}
+          {badgeVal && <span className="font-mono font-normal text-[11px] ml-1 opacity-90">{badgeVal}</span>}
         </div>
         {/* Meta % badge top-right */}
         {meta != null && (
@@ -217,10 +248,10 @@ function LeaderCard({ row, onClick }) {
           )}
         </div>
         <div className="grid grid-cols-4 gap-0.5">
-          <StatCell label="Decks" value={row.entries}                        color="text-t1" />
-          <StatCell label="T8"    value={t8p  != null ? `${t8p}%`  : '—'}   color={t8Color} />
-          <StatCell label="Wins"  value={row.event_wins ?? '—'}              color="text-t2" />
-          <StatCell label="MWR"   value={mwr  != null ? `${mwr}%`  : '—'}   color={mwrColor} />
+          <StatCell label="Decks" value={entries}                                    color="text-t1" />
+          <StatCell label="T8"    value={t8p    != null ? `${t8p}%`    : '—'}       color={t8Color} />
+          <StatCell label="Wins"  value={row.wins ?? row.event_wins ?? '—'}          color="text-t2" />
+          <StatCell label="MWR"   value={mwrPct != null ? `${mwrPct}%` : '—'}       color={mwrColor} />
         </div>
       </div>
     </button>
