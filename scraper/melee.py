@@ -228,6 +228,8 @@ def hub_event_page(hub_url: str) -> dict:
     Returns: melee_id, melee_url, name, venue, country, set_code.
     This is the only thing we need from the hub -- the melee tournament ID.
     """
+    if hub_url.startswith("/"):
+        hub_url = HUB_BASE + hub_url
     log.info(f"  Hub page: {hub_url}")
     soup = get(hub_url)
     text = soup.get_text(" ", strip=True)
