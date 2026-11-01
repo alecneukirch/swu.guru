@@ -1133,6 +1133,7 @@ def sync_from_hub(
                 "set_code":    None if eternal else (stub.get("set_code") or hub_data.get("set_code")),
                 "venue":       hub_data.get("venue"),
                 "country":     stub.get("country") or hub_data.get("country"),
+                "event_level": stub.get("event_level"),
             }
 
             result = import_tournament(melee_id, event_meta, fetch_cards, eternal=eternal)
