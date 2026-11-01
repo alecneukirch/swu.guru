@@ -141,13 +141,17 @@ def _tnames(format: str, ban: bool = False) -> dict:
 # ── World-aware base group helpers ─────────────────────────────────────────────
 # HMW world-specific bases have group_key like 'vigilance__naboo'.
 # Only label them with the world name when the deck actually runs indicator cards.
-# The LIKE pattern uses %% so psycopg2 renders it as a single %.
-
-_BG  = ("CASE WHEN br.group_key LIKE '%%__%%' AND {w} IS NULL"
+_BG  = ("CASE WHEN br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$' AND {w} IS NULL"
         " THEN COALESCE(br.aspect, {b})"
         " ELSE COALESCE(br.label, br.group_key, {b}) END")
-_BK  = ("CASE WHEN br.group_key LIKE '%%__%%' AND {w} IS NULL"
-        " THEN COALESCE(br.aspect, {b})"
+# __plain bases AND un-tagged world bases both key to the aspect so they merge into one group.
+# Tagged world bases keep their specific group_key. Force/splash/rare keep their own key.
+_BK  = ("CASE"
+        " WHEN br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$' AND {w} IS NOT NULL"
+        "   THEN br.group_key"
+        " WHEN (br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$' AND {w} IS NULL)"
+        "    OR br.group_key ~ '__plain$'"
+        "   THEN COALESCE(br.aspect, {b})"
         " ELSE COALESCE(br.group_key, {b}) END")
 
 def _bg(w: str, b: str) -> str: return _BG.format(w=w, b=b)

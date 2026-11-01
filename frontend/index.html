@@ -6947,7 +6947,7 @@ async function loadMatrix() {
         const cls = pct >= 55 ? 'mx-good' : pct >= 45 ? 'mx-mid' : 'mx-bad';
         const colC = colCombos[ci];
         return `<td class="mx-cell ${cls}" data-ri="${ri}" data-ci="${ci}"
-          data-row-leader="${esc(rowC.leader)}" data-row-base="${esc(rowC.base_group)}"
+          data-row-leader="${esc(rowC.leader)}" data-row-bases="${esc((rowC.bases||[]).join('|'))}" data-row-base-group="${esc(rowC.base_group)}"
           data-col-leader="${esc(colC.leader)}"
           title="${esc(rowC.leader)}/${esc(rowC.base_group)} vs ${esc(colC.leader)}/${esc(colC.base_group)}: ${pct}% (${cell.matches}m)"
         >${pct}%</td>`;
@@ -7011,7 +7011,7 @@ async function loadMatrix() {
     table.addEventListener('click', e => {
       const cell = e.target.closest('.mx-cell[data-row-leader]');
       if (!cell) return;
-      openLeader(cell.dataset.rowLeader, cell.dataset.rowBase);
+      openLeader(cell.dataset.rowLeader, cell.dataset.rowBases || null, null, cell.dataset.rowBaseGroup || null);
       pendingMatchupOpponent = cell.dataset.colLeader;
       setLeaderTab('matchups');
     });
