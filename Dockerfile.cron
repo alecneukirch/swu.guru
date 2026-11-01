@@ -13,4 +13,4 @@ COPY . .
 
 ENV PYTHONPATH=/app
 
-CMD ["supercronic", "/app/cron/crontab"]
+CMD ["/usr/local/bin/supercronic", "/app/cron/crontab"]

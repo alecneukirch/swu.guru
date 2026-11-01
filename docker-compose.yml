@@ -167,7 +167,6 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    cap_drop: [ALL]
     mem_limit: 512m
     memswap_limit: 512m
     networks:
