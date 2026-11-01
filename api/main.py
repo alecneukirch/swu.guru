@@ -138,6 +138,23 @@ def _tnames(format: str, ban: bool = False) -> dict:
         "mv_card_copy_matrix":  "mv_eternal_card_copy_matrix"  if eternal else "mv_card_copy_matrix",
     }
 
+# ── World-aware base group helpers ─────────────────────────────────────────────
+# HMW world-specific bases have group_key like 'vigilance__naboo'.
+# Only label them with the world name when the deck actually runs indicator cards.
+# The LIKE pattern uses %% so psycopg2 renders it as a single %.
+
+_BG  = ("CASE WHEN br.group_key LIKE '%%__%%' AND {w} IS NULL"
+        " THEN COALESCE(br.aspect, {b})"
+        " ELSE COALESCE(br.label, br.group_key, {b}) END")
+_BK  = ("CASE WHEN br.group_key LIKE '%%__%%' AND {w} IS NULL"
+        " THEN COALESCE(br.aspect, {b})"
+        " ELSE COALESCE(br.group_key, {b}) END")
+
+def _bg(w: str, b: str) -> str: return _BG.format(w=w, b=b)
+def _bk(w: str, b: str) -> str: return _BK.format(w=w, b=b)
+
+SWT_JOIN = "LEFT JOIN standing_world_tag swt ON swt.standing_id = s.id"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -591,8 +608,8 @@ def leaders_by_base(
     if date_sql:
         rows = db.fetchall(f"""
             SELECT s.leader, s.base,
-                   br.label      AS base_group,
-                   br.group_key  AS base_key,
+                   {_bg('swt.world','s.base')} AS base_group,
+                   {_bk('swt.world','s.base')} AS base_key,
                    br.aspect     AS base_aspect,
                    COUNT(DISTINCT s.id)::INT AS total_decks,
                    COUNT(DISTINCT s.id) FILTER (
@@ -604,6 +621,7 @@ def leaders_by_base(
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             LEFT JOIN base_reference br ON br.name = s.base
+            {SWT_JOIN}
             LEFT JOIN (
                 SELECT leader, base,
                        SUM(mw)::INT AS match_wins,
@@ -629,7 +647,7 @@ def leaders_by_base(
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               {date_sql} {ban_s}
-            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
+            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world
             HAVING COUNT(DISTINCT s.id) >= %s {t8_having_raw}
         """, date_params + [min_decks])
     elif decay or ban:
@@ -644,8 +662,8 @@ def leaders_by_base(
             SELECT
                 s.leader,
                 s.base,
-                br.label      AS base_group,
-                br.group_key  AS base_key,
+                {_bg('swt.world','s.base')} AS base_group,
+                {_bk('swt.world','s.base')} AS base_key,
                 br.aspect     AS base_aspect,
                 SUM({w})                                                    AS total_decks,
                 COALESCE(SUM({w}) FILTER (
@@ -655,12 +673,13 @@ def leaders_by_base(
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             LEFT JOIN base_reference br ON br.name = s.base
+            {SWT_JOIN}
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               AND e.date <= CURRENT_DATE
               {tier_sql}
               {ban_s}
-            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
+            GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world
             HAVING SUM({w}) >= %s {t8_having_decay}
         """, tier_params + [min_decks])
         # Match win rates by leader+base — separate query
@@ -700,20 +719,20 @@ def leaders_by_base(
         # Full dataset, no decay — materialized view (fast path)
         rows = db.fetchall(f"""
             SELECT v.leader, v.base,
-                   br.label      AS base_group,
-                   br.group_key  AS base_key,
+                   {_bg('v.world','v.base')} AS base_group,
+                   {_bk('v.world','v.base')} AS base_key,
                    br.aspect     AS base_aspect,
                    v.total_decks, v.top8_count, v.wins,
                    COALESCE(ms.match_wins,  0)::INT AS match_wins,
                    COALESCE(ms.match_games, 0)::INT AS match_games
             FROM (
-                SELECT leader, base,
+                SELECT leader, base, world,
                        SUM(total_decks)::INT AS total_decks,
                        SUM(top8_count)::INT  AS top8_count,
                        SUM(wins)::INT        AS wins
                 FROM {t['mv_leader_stats']}
                 WHERE leader IS NOT NULL AND base IS NOT NULL
-                GROUP BY leader, base
+                GROUP BY leader, base, world
                 HAVING SUM(total_decks) >= %s {t8_having_mv}
             ) v
             LEFT JOIN base_reference br ON br.name = v.base
@@ -1065,8 +1084,8 @@ def leader_bases(
     if date_sql:
         rows = db.fetchall(f"""
             SELECT s.base,
-                   br.label     AS base_group,
-                   br.group_key AS base_key,
+                   {_bg('swt.world','s.base')} AS base_group,
+                   {_bk('swt.world','s.base')} AS base_key,
                    br.aspect    AS base_aspect,
                    COUNT(DISTINCT s.id)::INT AS decks,
                    COUNT(DISTINCT s.id) FILTER (
@@ -1075,23 +1094,24 @@ def leader_bases(
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             LEFT JOIN base_reference br ON br.name = s.base
+            {SWT_JOIN}
             WHERE s.leader = %s AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               {date_sql}
-            GROUP BY s.base, br.label, br.group_key, br.aspect
+            GROUP BY s.base, br.label, br.group_key, br.aspect, swt.world
         """, [leader] + date_params)
     else:
         rows = db.fetchall(f"""
             SELECT v.base,
-                   br.label     AS base_group,
-                   br.group_key AS base_key,
+                   {_bg('v.world','v.base')} AS base_group,
+                   {_bk('v.world','v.base')} AS base_key,
                    br.aspect    AS base_aspect,
                    SUM(v.total_decks)::INT AS decks,
                    SUM(v.top8_count)::INT  AS top8_count
             FROM {t['mv_leader_stats']} v
             LEFT JOIN base_reference br ON br.name = v.base
             WHERE v.leader = %s AND v.base IS NOT NULL
-            GROUP BY v.base, br.label, br.group_key, br.aspect
+            GROUP BY v.base, v.world, br.label, br.group_key, br.aspect
         """, [leader])
 
     if not rows:
@@ -2910,17 +2930,18 @@ def meta_call(
 
     combos_raw = db.fetchall(f"""
         SELECT s.leader, s.base,
-               br.label     AS base_group,
-               br.group_key AS base_key,
+               {_bg('swt.world','s.base')} AS base_group,
+               {_bk('swt.world','s.base')} AS base_key,
                br.aspect    AS base_aspect,
                COUNT(DISTINCT s.id)::INT AS decks
         FROM {t['standings']} s
         JOIN {t['events']} e ON e.id = s.event_id
         LEFT JOIN base_reference br ON br.name = s.base
+        {SWT_JOIN}
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
           AND e.date <= CURRENT_DATE {date_sql} {ban_s}
-        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
+        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
         LIMIT %s

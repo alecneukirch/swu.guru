@@ -668,6 +668,18 @@ def save_decklist(standing_id: int, cards: list[dict], tbl: str = "decklist_card
                VALUES (%s,%s,%s,%s)""",
             (standing_id, c["card_name"], c["quantity"], c["is_sideboard"])
         )
+    # Tag world for premier standings only (standing_world_tag references standings, not eternal_standings)
+    if tbl == "decklist_cards":
+        card_names = [c["card_name"] for c in cards if c.get("quantity", 0) > 0]
+        if card_names:
+            db.execute("""
+                INSERT INTO standing_world_tag (standing_id, world)
+                SELECT %s, wbi.world
+                FROM world_base_indicators wbi
+                WHERE wbi.card_name = ANY(%s::text[])
+                LIMIT 1
+                ON CONFLICT (standing_id) DO NOTHING
+            """, (standing_id, card_names))
 
 
 # ── Full tournament import ─────────────────────────────────────────────────
