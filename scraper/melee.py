@@ -818,7 +818,7 @@ def swu_api_event_list(
     import urllib.parse
 
     if event_type_ids is None:
-        event_type_ids = [SWU_TYPE_PQ, SWU_TYPE_SQ, SWU_TYPE_GC]
+        event_type_ids = [SWU_TYPE_PQ, SWU_TYPE_SQ]
 
     sess = _get_session()
     all_events = []
@@ -933,7 +933,7 @@ def sync_from_swu(
     from datetime import date as _date, timedelta
 
     if event_type_ids is None:
-        event_type_ids = [SWU_TYPE_PQ, SWU_TYPE_SQ, SWU_TYPE_GC]
+        event_type_ids = [SWU_TYPE_PQ, SWU_TYPE_SQ]
 
     since_ms = 0
     if since_days > 0:
