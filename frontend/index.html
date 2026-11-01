@@ -8352,8 +8352,12 @@ function renderHmwLeagueSessions(data) {
            target="_blank" class="hmw-melee-link" onclick="event.stopPropagation()">melee.gg ↗</a>`
       : '';
 
+    const claimedNames = sess.claimed_player_names || [];
     const bountyLine = bountyNames.size
       ? `<span class="sl-session-notes" style="color:var(--red2)">🎯 ${[...bountyNames].join(', ')}</span>`
+      : '';
+    const claimedLine = claimedNames.length
+      ? `<span class="sl-session-notes" style="color:var(--gold);margin-left:auto">🏆 ${claimedNames.join(', ')} claimed</span>`
       : '';
 
     return `<div class="sl-session-card">
@@ -8363,6 +8367,7 @@ function renderHmwLeagueSessions(data) {
         ${bountyLine}
         ${sess.notes ? `<span class="sl-session-notes">${sess.notes}</span>` : ''}
         ${meleeLink}
+        ${claimedLine}
       </div>
       <div class="sl-session-body">
         <div class="sl-session-table">
