@@ -157,6 +157,25 @@ services:
       start_period: 20s
 
   # ---------------------------------------------------------------------------
+  # SCHEDULER — supercronic cron container for scrapers
+  # ---------------------------------------------------------------------------
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: swuguru-scheduler
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    memswap_limit: 512m
+    networks:
+      - dmz
+    env_file:
+      - .env
+
+  # ---------------------------------------------------------------------------
   # APP2 — swu.guru v2 (new schema, React frontend) at v2.swu.guru
   # ---------------------------------------------------------------------------
   app2:
