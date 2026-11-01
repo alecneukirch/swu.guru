@@ -204,7 +204,7 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
     ban_m_alias = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader") if ban else ""
 
     if date_sql:
-        date_sql_ev = date_sql.replace("e.date", "ev.date")
+        date_sql_ev = date_sql.replace("e.date", "ev.date").replace("e.event_level", "ev.event_level")
         row = db.fetchone(f"""
             SELECT
                 (SELECT COUNT(*) FROM {t['events']} ev
