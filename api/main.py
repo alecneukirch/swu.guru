@@ -66,12 +66,30 @@ def decay_weight(event_alias: str = "e") -> str:
     )
 
 
-def meta_date_filter(meta_id: Optional[str], days: Optional[int] = None) -> tuple[str, list]:
+PQ_TIERS = ('Planetary Qualifier', 'Sector Qualifier', 'Regional Championship', 'Galactic Championship')
+
+def tier_filter_sql(event_level: Optional[str] = None) -> tuple[str, list]:
+    """SQL fragment + params to filter events by tier.
+    Default (None/empty): PQ and above. NULL event_level rows are treated as PQ+.
+    """
+    if event_level == "showdown":
+        return "AND e.event_level = %s", ["Store Showdown"]
+    if event_level == "planetary":
+        return "AND e.event_level = %s", ["Planetary Qualifier"]
+    if event_level == "galactic":
+        return "AND e.event_level IN (%s, %s)", ["Galactic Championship", "Regional Championship"]
+    phs = ", ".join(["%s"] * len(PQ_TIERS))
+    return f"AND (e.event_level IS NULL OR e.event_level IN ({phs}))", list(PQ_TIERS)
+
+
+def meta_date_filter(meta_id: Optional[str], days: Optional[int] = None,
+                     event_level: Optional[str] = None) -> tuple[str, list]:
     """
     Returns (sql_fragment, params) for filtering events by meta era and/or
     a rolling window of the last N days.
     Returns ('', []) when neither meta_id nor days is set (callers use
-    materialized views in that case).
+    materialized views / decay path; tier filter is baked into those).
+    When filters are active, always appends a tier filter (PQ+ by default).
     """
     if not meta_id and not days:
         return "", []
@@ -98,6 +116,10 @@ def meta_date_filter(meta_id: Optional[str], days: Optional[int] = None) -> tupl
             if row.get("end_date"):
                 parts.append("e.date < %s")
                 params.append(row["end_date"])
+
+    tsql, tparams = tier_filter_sql(event_level)
+    parts.append(tsql[4:])  # strip leading "AND "
+    params.extend(tparams)
 
     return "AND " + " AND ".join(parts), params
 
@@ -228,9 +250,10 @@ def leaders(
     meta_id:   Optional[str] = Query(None),
     min_decks: int            = Query(5),
     or_has_t8: bool           = Query(False, description="Also include leaders with any top-8 finish regardless of deck count"),
-    format:    str            = Query("standard"),
-    days:      Optional[int]  = Query(None),
-    decay:     bool           = Query(True),
+    format:       str            = Query("standard"),
+    days:         Optional[int]  = Query(None),
+    decay:        bool           = Query(True),
+    event_level:  Optional[str]  = Query(None),
 ):
     """
     Returns aggregated leader stats (summed across all bases).
@@ -239,7 +262,8 @@ def leaders(
     (e.g. 'JTL-post-ban', 'SOR', 'eternal-post-ban').
     """
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id, days)
+    date_sql, date_params = meta_date_filter(meta_id, days, event_level)
+    tier_sql, tier_params = tier_filter_sql(event_level)
 
     t8_having_raw = (
         "OR COUNT(DISTINCT s.id) FILTER "
@@ -289,10 +313,11 @@ def leaders(
             WHERE s.leader IS NOT NULL
               AND s.placement IS NOT NULL
               AND e.date <= CURRENT_DATE
+              {tier_sql}
             GROUP BY s.leader
             HAVING SUM({w}) >= %s {t8_having_decay}
             ORDER BY SUM({w}) DESC
-        """, [min_decks])
+        """, tier_params + [min_decks])
         # Match win rates — separate query to avoid standings×matches cross-join
         mw_rows = db.fetchall(f"""
             SELECT leader,
@@ -313,8 +338,9 @@ def leaders(
             ) ml
             JOIN {t['events']} e ON e.id = ml.event_id
             WHERE e.date <= CURRENT_DATE
+              {tier_sql}
             GROUP BY leader
-        """)
+        """, tier_params)
         mw_by_leader = {r['leader']: r for r in mw_rows}
         rows = [
             {**r,
@@ -845,13 +871,15 @@ def leader_stats(
     leader:     str,
     meta_id:    Optional[str] = Query(None),
     base_group: Optional[str] = Query(None, description="Comma-separated base names to filter by"),
-    format:     str            = Query("standard"),
-    days:       Optional[int]  = Query(None),
-    decay:      bool           = Query(True),
+    format:      str            = Query("standard"),
+    days:        Optional[int]  = Query(None),
+    decay:       bool           = Query(True),
+    event_level: Optional[str]  = Query(None),
 ):
     """Hero stats for the leader page header. Supports base group filtering."""
     t = _tnames(format)
-    date_sql, date_params = meta_date_filter(meta_id, days)
+    date_sql, date_params = meta_date_filter(meta_id, days, event_level)
+    tier_sql, tier_params = tier_filter_sql(event_level)
     base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
 
     if base_names:
@@ -906,9 +934,9 @@ def leader_stats(
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
-              {base_filter}
+              {base_filter} {tier_sql}
             GROUP BY s.leader
-        """, [leader] + base_params)
+        """, [leader] + base_params + tier_params)
 
         meta = db.fetchone(f"""
             SELECT SUM({w}) AS all_decks,
@@ -918,7 +946,8 @@ def leader_stats(
             FROM {t['standings']} s
             JOIN {t['events']} e ON e.id = s.event_id
             WHERE s.leader IS NOT NULL AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
-        """)
+              {tier_sql}
+        """, tier_params)
     else:
         row = db.fetchone(f"""
             SELECT leader,
@@ -1080,6 +1109,7 @@ def leader_cards(
     days:         Optional[int]   = Query(None),
     decay:        bool            = Query(True),
     ban:          bool            = Query(False),
+    event_level:  Optional[str]   = Query(None),
 ):
     """
     Card list for a leader with inclusion %, avg copies, T8 conversion.
@@ -1088,7 +1118,8 @@ def leader_cards(
     top8_only restricts the deck universe to only decks that made top 8.
     """
     t = _tnames(format, ban)
-    date_sql, date_params = meta_date_filter(meta_id, days)
+    date_sql, date_params = meta_date_filter(meta_id, days, event_level)
+    tier_sql, tier_params = tier_filter_sql(event_level)
     base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     sb_filter   = "" if is_sideboard is None else ("AND dc.is_sideboard = true" if is_sideboard else "AND dc.is_sideboard = false")
     base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
@@ -1190,7 +1221,7 @@ def leader_cards(
                     ON dc_any.standing_id = s.id
                 {elo_join}
                 WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
-                  {base_filter} {t8_filter} {elo_filter}
+                  {base_filter} {t8_filter} {elo_filter} {tier_sql}
             ),
             card_stats AS (
                 SELECT
@@ -1207,7 +1238,7 @@ def leader_cards(
                 JOIN {t['events']} e ON e.id = s.event_id
                 {elo_join}
                 WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
-                  {base_filter} {sb_filter} {t8_filter} {elo_filter}
+                  {base_filter} {sb_filter} {t8_filter} {elo_filter} {tier_sql}
                 GROUP BY dc.card_name, dc.is_sideboard
                 HAVING COUNT(DISTINCT s.id) >= %s
             )
@@ -1246,7 +1277,7 @@ def leader_cards(
                 )
             WHERE c.type IS NOT NULL
             ORDER BY inclusion_rate DESC, deck_count DESC
-        """, [leader] + base_params + [leader] + base_params + [min_decks])
+        """, [leader] + base_params + tier_params + [leader] + base_params + tier_params + [min_decks])
 
     else:
         # Fast path: serve from materialized view (no decay)

@@ -51,7 +51,8 @@ MELEE    = "https://melee.gg"
 # Event type IDs on starwarsunlimited.com
 SWU_TYPE_PQ = 4   # Planetary Qualifier
 SWU_TYPE_SQ = 5   # Sector Qualifier
-SWU_TYPE_GC = 3   # Galactic Championship
+SWU_TYPE_SS = 3   # Store Showdown (was incorrectly labeled GC)
+SWU_TYPE_GC = 3   # kept for backwards compat — alias of SWU_TYPE_SS
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -522,21 +523,22 @@ def upsert_event(ev: dict, tbl: str = "events") -> int:
         db.execute(
             f"""UPDATE {tbl}
                SET name=%s, date=%s, player_count=%s, set_code=%s,
-                   melee_url=%s, venue=%s, country=%s
+                   melee_url=%s, venue=%s, country=%s, event_level=%s
                WHERE id=%s""",
             (ev.get("name"), ev.get("date"), ev.get("player_count"),
              set_code, ev.get("melee_url"),
-             ev.get("venue"), ev.get("country"), row["id"])
+             ev.get("venue"), ev.get("country"),
+             ev.get("event_level"), row["id"])
         )
         return row["id"]
     else:
         r = db.fetchone(
             f"""INSERT INTO {tbl}
-               (melee_id, name, date, player_count, set_code, melee_url, venue, country)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+               (melee_id, name, date, player_count, set_code, melee_url, venue, country, event_level)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (melee_id, ev.get("name"), ev.get("date"), ev.get("player_count"),
              set_code, ev.get("melee_url"),
-             ev.get("venue"), ev.get("country"))
+             ev.get("venue"), ev.get("country"), ev.get("event_level"))
         )
         return r["id"]
 
@@ -982,6 +984,7 @@ def sync_from_swu(
                 "melee_url":    stub["melee_url"],
                 "venue":        stub.get("venue"),
                 "country":      stub.get("country"),
+                "event_level":  stub.get("event_type"),
             }
 
             # Upcoming event — upsert the stub so it appears in the events table,
