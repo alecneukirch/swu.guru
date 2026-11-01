@@ -8680,7 +8680,7 @@ async function loadPicks() {
   const wrap = document.getElementById('picks-wrap');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
-  const minDecks  = currentFormat === 'eternal' ? 3 : 10;
+  const minDecks  = currentFormat === 'eternal' ? 2 : 2;
   let url = `/api/meta-call?min_decks=${minDecks}&min_matches=2&top_n=30&format=${currentFormat}` + metaParam();
   try {
     const d = await api(url);
