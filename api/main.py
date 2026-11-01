@@ -564,20 +564,22 @@ def leaders(
 
 @app.get("/api/leaders/by-base")
 def leaders_by_base(
-    meta_id:   Optional[str] = Query(None),
-    min_decks: int            = Query(3),
-    or_has_t8: bool           = Query(False),
-    format:    str            = Query("standard"),
-    days:      Optional[int]  = Query(None),
-    decay:     bool           = Query(True),
-    ban:       bool           = Query(False),
+    meta_id:     Optional[str] = Query(None),
+    min_decks:   int            = Query(3),
+    or_has_t8:   bool           = Query(False),
+    format:      str            = Query("standard"),
+    days:        Optional[int]  = Query(None),
+    decay:       bool           = Query(True),
+    ban:         bool           = Query(False),
+    event_level: Optional[str]  = Query(None),
 ):
     """
     Returns stats for each leader+base-group combo.
     Base groups use aspect/ability classification: plain, splash, force, or rare.
     """
     t = _tnames(format, ban)
-    date_sql, date_params = meta_date_filter(meta_id, days)
+    date_sql, date_params = meta_date_filter(meta_id, days, event_level)
+    tier_sql, tier_params = tier_filter_sql(event_level)
     ban_s, ban_m = ban_snippets(ban)
 
     t8_having_raw = (
@@ -656,10 +658,11 @@ def leaders_by_base(
             WHERE s.leader IS NOT NULL AND s.base IS NOT NULL
               AND s.placement IS NOT NULL
               AND e.date <= CURRENT_DATE
+              {tier_sql}
               {ban_s}
             GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect
             HAVING SUM({w}) >= %s {t8_having_decay}
-        """, [min_decks])
+        """, tier_params + [min_decks])
         # Match win rates by leader+base — separate query
         mw_rows = db.fetchall(f"""
             SELECT leader, base,
@@ -682,8 +685,9 @@ def leaders_by_base(
             ) ml
             JOIN {t['events']} e ON e.id = ml.event_id
             WHERE e.date <= CURRENT_DATE
+              {tier_sql}
             GROUP BY leader, base
-        """)
+        """, tier_params)
         mw_by_lb = {(r['leader'], r['base']): r for r in mw_rows}
         rows = [
             {**r,

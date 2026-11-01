@@ -5,11 +5,11 @@ import { useApi } from '../hooks/useApi.js'
 import Spinner from '../components/Spinner.jsx'
 
 const SORT_OPTIONS = [
-  { value: 'entries',    label: 'Entries' },
-  { value: 'win_rate',   label: 'Win Rate' },
-  { value: 'top8_rate',  label: 'Top 8 Rate' },
-  { value: 'event_wins', label: 'Wins' },
-  { value: 'conversion', label: 'Conversion' },
+  { value: 'total_decks',    label: 'Entries' },
+  { value: 'match_win_rate', label: 'Win Rate' },
+  { value: 't8_rate',        label: 'Top 8 Rate' },
+  { value: 'wins',           label: 'Wins' },
+  { value: 'conversion',     label: 'Conversion' },
 ]
 
 const TIER_ORDER  = ['S','A','B','C','D','F']
@@ -78,8 +78,8 @@ export default function Leaders({ filters }) {
 
     const sorted = [...rows].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0))
 
-    const main   = sorted.filter(r => (r.meta_share ?? 0) >= 0.003 || (r.event_wins ?? 0) > 1)
-    const rogues = sorted.filter(r => (r.meta_share ?? 0) <  0.003 && (r.event_wins ?? 0) <= 1)
+    const main   = sorted.filter(r => (r.meta_share ?? 0) >= 0.003 || (r.wins ?? 0) > 1)
+    const rogues = sorted.filter(r => (r.meta_share ?? 0) <  0.003 && (r.wins ?? 0) <= 1)
 
     const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]))
     main.forEach(r => {
@@ -89,7 +89,7 @@ export default function Leaders({ filters }) {
       byTier[g].push(r)
     })
 
-    return { leaders: main, rogues, byTier, total: data.total_entries ?? rows.reduce((s,r)=>s+(r.entries||0),0) }
+    return { leaders: main, rogues, byTier, total: data.total_entries ?? rows.reduce((s,r)=>s+(r.total_decks||0),0) }
   }, [data, sort, search, metricMode])
 
   const navigate = useNavigate()
@@ -133,7 +133,7 @@ export default function Leaders({ filters }) {
         </div>
         {data && (
           <span className="ml-auto text-t3 text-sm">
-            {leaders.length + rogues.length} combos · {total.toLocaleString()} entries
+            {leaders.length + rogues.length} combos · {total.toLocaleString()} decks
           </span>
         )}
       </div>
@@ -171,7 +171,7 @@ export default function Leaders({ filters }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {rogues.map(r => (
-              <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} metricMode={metricMode} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}`)} />
+              <LeaderCard key={`${r.leader}|${r.base_group}`} row={r} metricMode={metricMode} onClick={() => navigate(`/leader/${encodeURIComponent(r.leader)}${r.base_group ? `?base=${encodeURIComponent(r.base_group)}` : ''}`)} />
             ))}
           </div>
         </div>
@@ -193,7 +193,7 @@ function LeaderCard({ row, metricMode = 'conversion', onClick }) {
     ? tierGradeByMWR(row.match_win_rate, entries)
     : tierGrade(row.conversion, entries)
   const tc       = TIER_COLORS[tier]
-  const aspBorder = ASP_BORDER[row.primary_aspect] ?? 'border-t-border2'
+  const aspBorder = ASP_BORDER[row.aspect ?? row.primary_aspect] ?? 'border-t-border2'
   const imgUrl   = `/api/cards/leader-image/${encodeURIComponent(row.leader)}`
   const badgeVal = metricMode === 'mwr'
     ? (mwrPct != null ? `${mwrPct}%` : null)

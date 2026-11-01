@@ -10,7 +10,7 @@ async function get(path, params = {}) {
 
 export const api = {
   summary:      (p) => get('/summary', p),
-  leaders:      (p) => get('/leaders', p),
+  leaders:      (p) => get('/leaders/by-base', p),
   leaderStats:  (name, p) => get(`/leader/${encodeURIComponent(name)}/stats`, p),
   leaderCards:  (name, p) => get(`/leader/${encodeURIComponent(name)}/cards`, p),
   leaderMatchups: (name, p) => get(`/leader/${encodeURIComponent(name)}/matchups`, p),
