@@ -38,14 +38,19 @@ HEADERS   = {
     "Accept":     "application/json",
 }
 PAGE_SIZE = 200
-DELAY     = 0.5   # seconds between requests
+DELAY     = 2.0   # seconds between pages
 
 
 # ── HTTP ───────────────────────────────────────────────────────────────────────
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(min=5, max=60))
 def _get(path: str, params: dict = None) -> dict:
     r = httpx.get(f"{API_BASE}{path}", params=params, headers=HEADERS, timeout=15)
+    if r.status_code == 429:
+        retry_after = int(r.headers.get("Retry-After", 30))
+        log.warning(f"  429 rate-limited — sleeping {retry_after}s")
+        time.sleep(retry_after)
+        r.raise_for_status()
     r.raise_for_status()
     return r.json()
 
