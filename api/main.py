@@ -140,22 +140,34 @@ def _tnames(format: str, ban: bool = False) -> dict:
 
 # ── World-aware base group helpers ─────────────────────────────────────────────
 # HMW world-specific bases have group_key like 'vigilance__naboo'.
-# Only label them with the world name when the deck actually runs indicator cards.
-_BG  = ("CASE WHEN br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$' AND {w} IS NULL"
-        " THEN COALESCE(br.aspect, {b})"
+# Only fall back to the generic aspect (e.g. "Vigilance") when we have CONFIRMED
+# that a deck was scanned for indicator cards but none were found.  Old/unscanned
+# decks keep their base_reference label ("Vigilance Endor") so they don't pollute
+# the generic aspect bucket.
+#
+# Detection relies on standing_world_tag (SWT_JOIN):
+#   {sid} IS NOT NULL  →  deck was scanned (row exists; world may be NULL or a name)
+#   {w}   IS NOT NULL  →  deck has a confirmed world indicator
+#   {sid} IS NULL      →  deck never scanned (old data) → keep original label
+#
+# __plain bases always collapse to the aspect key so they merge with scanned
+# non-world decks into one "Vigilance" bucket.
+_BG  = ("CASE"
+        " WHEN br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$'"
+        "   AND {sid} IS NOT NULL AND {w} IS NULL"
+        "   THEN COALESCE(br.aspect, {b})"
         " ELSE COALESCE(br.label, br.group_key, {b}) END")
-# __plain bases AND un-tagged world bases both key to the aspect so they merge into one group.
-# Tagged world bases keep their specific group_key. Force/splash/rare keep their own key.
 _BK  = ("CASE"
         " WHEN br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$' AND {w} IS NOT NULL"
         "   THEN br.group_key"
-        " WHEN (br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$' AND {w} IS NULL)"
+        " WHEN (br.group_key ~ '^[a-z]+__(naboo|endor|kashyyyk|tatooine)$'"
+        "       AND {sid} IS NOT NULL AND {w} IS NULL)"
         "    OR br.group_key ~ '__plain$'"
         "   THEN COALESCE(br.aspect, {b})"
         " ELSE COALESCE(br.group_key, {b}) END")
 
-def _bg(w: str, b: str) -> str: return _BG.format(w=w, b=b)
-def _bk(w: str, b: str) -> str: return _BK.format(w=w, b=b)
+def _bg(w: str, b: str, sid: str = "NULL") -> str: return _BG.format(w=w, b=b, sid=sid)
+def _bk(w: str, b: str, sid: str = "NULL") -> str: return _BK.format(w=w, b=b, sid=sid)
 
 SWT_JOIN = "LEFT JOIN standing_world_tag swt ON swt.standing_id = s.id"
 
@@ -612,8 +624,8 @@ def leaders_by_base(
     if date_sql:
         rows = db.fetchall(f"""
             SELECT s.leader, s.base,
-                   {_bg('swt.world','s.base')} AS base_group,
-                   {_bk('swt.world','s.base')} AS base_key,
+                   {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
+                   {_bk('swt.world','s.base','swt.standing_id')} AS base_key,
                    br.aspect     AS base_aspect,
                    COUNT(DISTINCT s.id)::INT AS total_decks,
                    COUNT(DISTINCT s.id) FILTER (
@@ -666,8 +678,8 @@ def leaders_by_base(
             SELECT
                 s.leader,
                 s.base,
-                {_bg('swt.world','s.base')} AS base_group,
-                {_bk('swt.world','s.base')} AS base_key,
+                {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
+                {_bk('swt.world','s.base','swt.standing_id')} AS base_key,
                 br.aspect     AS base_aspect,
                 SUM({w})                                                    AS total_decks,
                 COALESCE(SUM({w}) FILTER (
@@ -1088,8 +1100,8 @@ def leader_bases(
     if date_sql:
         rows = db.fetchall(f"""
             SELECT s.base,
-                   {_bg('swt.world','s.base')} AS base_group,
-                   {_bk('swt.world','s.base')} AS base_key,
+                   {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
+                   {_bk('swt.world','s.base','swt.standing_id')} AS base_key,
                    br.aspect    AS base_aspect,
                    COUNT(DISTINCT s.id)::INT AS decks,
                    COUNT(DISTINCT s.id) FILTER (
@@ -2934,8 +2946,8 @@ def meta_call(
 
     combos_raw = db.fetchall(f"""
         SELECT s.leader, s.base,
-               {_bg('swt.world','s.base')} AS base_group,
-               {_bk('swt.world','s.base')} AS base_key,
+               {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
+               {_bk('swt.world','s.base','swt.standing_id')} AS base_key,
                br.aspect    AS base_aspect,
                COUNT(DISTINCT s.id)::INT AS decks
         FROM {t['standings']} s

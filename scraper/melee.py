@@ -680,6 +680,13 @@ def save_decklist(standing_id: int, cards: list[dict], tbl: str = "decklist_card
                 LIMIT 1
                 ON CONFLICT (standing_id) DO NOTHING
             """, (standing_id, card_names))
+            # Insert NULL sentinel so we know this deck was scanned (even if no world card found).
+            # This lets the API distinguish "scanned, no indicator" from old un-scanned data.
+            db.execute("""
+                INSERT INTO standing_world_tag (standing_id, world)
+                VALUES (%s, NULL)
+                ON CONFLICT (standing_id) DO NOTHING
+            """, (standing_id,))
 
 
 # ── Full tournament import ─────────────────────────────────────────────────
