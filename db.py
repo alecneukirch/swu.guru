@@ -77,6 +77,12 @@ def execute(sql: str, params=None):
             cur.execute(sql, params)
 
 
+def executemany(sql: str, params_list):
+    with DB() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(sql, params_list)
+
+
 def execute_autocommit(sql: str, params=None):
     """
     Execute a statement outside any transaction block.
