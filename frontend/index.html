@@ -6441,13 +6441,13 @@ function renderEventGrid() {
 // ══ CARD MODAL ═══════════════════════════════════════════════════════════════
 function openModal(cardName) {
   modalCard = cardName;
-  modalTab  = 'overview';
+  modalTab  = 'advanced';
   document.getElementById('modal-card-name').textContent = cardName;
   document.getElementById('modal-card-subtitle').textContent = '';
   document.getElementById('modal-header-art').style.backgroundImage = '';
   document.getElementById('modal-backdrop').classList.add('open');
-  // Reset tabs
-  document.querySelectorAll('.modal-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  // Reset tabs — advanced (index 1) is default
+  document.querySelectorAll('.modal-tab').forEach((t, i) => t.classList.toggle('active', i === 1));
   // Fetch card art in background
   api('/api/cards/by-name/' + encodeURIComponent(cardName)).then(card => {
     if (!card || !card.front_image_url) return;
