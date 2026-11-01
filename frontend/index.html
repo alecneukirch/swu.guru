@@ -3718,12 +3718,17 @@ select.sl-input { cursor: pointer; }
 #page-leagueHMW .sl-table-compact td, #page-leagueHMW .sl-table-compact th { padding: 8px 12px; }
 #page-leagueHMW .sl-session-num { font-size: 17px; }
 #page-leagueHMW .sl-session-date { font-size: 13px; }
-/* Bounty claim summary — full-width centered row in the week header */
+/* 3-column week header: [week meta | claimed bounties | (right spacer)] */
+.hmw-session-hdr {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+}
+.hmw-hdr-left  { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hmw-hdr-center { text-align: center; }
 .hmw-claimed-line {
-  flex-basis: 100%; text-align: center;
   font-family: var(--display); font-size: 17px; font-weight: 700;
   letter-spacing: 0.05em; color: var(--gold);
-  padding-top: 4px;
 }
 #page-leagueHMW .sl-match-line { font-size: 15px; padding: 5px 0; }
 #page-leagueHMW .sl-player-name { font-size: 16px; }
@@ -8377,13 +8382,16 @@ function renderHmwLeagueSessions(data) {
       : '';
 
     return `<div class="sl-session-card">
-      <div class="sl-session-hdr">
-        <span class="sl-session-num">WEEK ${sess.session_number}</span>
-        <span class="sl-session-date">${sess.session_date}</span>
-        ${bountyLine}
-        ${sess.notes ? `<span class="sl-session-notes">${sess.notes}</span>` : ''}
-        ${meleeLink}
-        ${claimedLine}
+      <div class="sl-session-hdr hmw-session-hdr">
+        <div class="hmw-hdr-left">
+          <span class="sl-session-num">WEEK ${sess.session_number}</span>
+          <span class="sl-session-date">${sess.session_date}</span>
+          ${bountyLine}
+          ${sess.notes ? `<span class="sl-session-notes">${sess.notes}</span>` : ''}
+          ${meleeLink}
+        </div>
+        <div class="hmw-hdr-center">${claimedLine}</div>
+        <div class="hmw-hdr-right"></div>
       </div>
       <div class="sl-session-body">
         <div class="sl-session-table">
