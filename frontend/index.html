@@ -1344,22 +1344,17 @@ select option { background: var(--surface2); }
   display: flex;
   gap: 24px;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 .tier-combo-row .tier-block {
-  min-width: 0;
-  flex-shrink: 1;
+  flex: 0 0 auto;  /* size to grid content, don't stretch */
 }
 .tier-combo-row .tier-section-header { margin-top: 28px; }
 .tier-combo-row .tier-section-header:first-child { margin-top: 28px; }
-/* Cards in combo rows must not stretch beyond their natural size */
-.tier-combo-row .tier-section-grid {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 200px));
-  justify-content: start;
-}
 @media (max-width: 900px) {
   .tier-combo-row { flex-direction: column; gap: 0; }
-  .tier-combo-row .tier-block { flex: unset !important; width: 100%; }
-  .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); justify-content: unset; }
+  .tier-combo-row .tier-block { width: 100%; }
+  .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; }
 }
 
 /* ── Tier badge (overlaid on leader card) ───────────────── */
@@ -5098,10 +5093,12 @@ function renderLeaderGrid() {
   const MAX_CO = 2;   // max tiers per shared row
   const MAX_CARDS_CO = 6; // bail out if combined cards would exceed this
 
-  function renderTierBlock(t, group, cls) {
+  function renderTierBlock(t, group, inCombo = false) {
     const tier = tierGrade(group[0]._conv);
     let b = `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div>`;
-    b += `<div class="tier-section-grid">`;
+    // In combo rows pin to exactly N columns so cards don't grow larger than S tier
+    const gridStyle = inCombo ? ` style="grid-template-columns:repeat(${group.length},minmax(180px,200px))"` : '';
+    b += `<div class="tier-section-grid"${gridStyle}>`;
     group.forEach(r => {
       const i = imgIdx++;
       b += mkCard(r, i, r._conv, maxD);
@@ -5131,7 +5128,7 @@ function renderLeaderGrid() {
       if (combo.length > 1) {
         html += `<div class="tier-combo-row">`;
         combo.forEach(b => {
-          html += `<div class="tier-block" style="flex:${b.group.length}">` + renderTierBlock(b.t, b.group) + `</div>`;
+          html += `<div class="tier-block">` + renderTierBlock(b.t, b.group, true) + `</div>`;
         });
         html += `</div>`;
         bi = j;
