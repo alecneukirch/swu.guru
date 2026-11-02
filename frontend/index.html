@@ -1351,9 +1351,15 @@ select option { background: var(--surface2); }
 }
 .tier-combo-row .tier-section-header { margin-top: 28px; }
 .tier-combo-row .tier-section-header:first-child { margin-top: 28px; }
+/* Cards in combo rows must not stretch beyond their natural size */
+.tier-combo-row .tier-section-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 200px));
+  justify-content: start;
+}
 @media (max-width: 900px) {
   .tier-combo-row { flex-direction: column; gap: 0; }
   .tier-combo-row .tier-block { flex: unset !important; width: 100%; }
+  .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); justify-content: unset; }
 }
 
 /* ── Tier badge (overlaid on leader card) ───────────────── */
