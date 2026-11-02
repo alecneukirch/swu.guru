@@ -1610,17 +1610,6 @@ def card_copy_matrix(
         }
         combo_totals[combo] = {"total_decks": r["total_decks"], "total_t8s": r["total_t8s"]}
 
-        # Track best config per combo (highest conversion, min 5 decks)
-        if r["deck_count"] >= 5:
-            cur_best = best_config.get(combo)
-            if cur_best is None or (r["conversion"] or 0) > (cur_best["conversion"] or 0):
-                best_config[combo] = {
-                    "md_copies":  r["md_copies"],
-                    "sb_copies":  r["sb_copies"],
-                    "conversion": r["conversion"],
-                    "deck_count": r["deck_count"],
-                }
-
     # Compute 0/0 control cell — decks that don't play the card at all
     for combo, cells in by_leader.items():
         totals = combo_totals.get(combo, {})
@@ -1641,6 +1630,19 @@ def card_copy_matrix(
                 "t8_count":   no_card_t8,
                 "conversion": conv,
             }
+
+    # Best config: highest conversion across ALL cells (including 0/0), min 3 decks
+    for combo, cells in by_leader.items():
+        for cell in cells.values():
+            if cell["deck_count"] >= 3:
+                cur_best = best_config.get(combo)
+                if cur_best is None or (cell["conversion"] or 0) > (cur_best["conversion"] or 0):
+                    best_config[combo] = {
+                        "md_copies":  cell["md_copies"],
+                        "sb_copies":  cell["sb_copies"],
+                        "conversion": cell["conversion"],
+                        "deck_count": cell["deck_count"],
+                    }
 
     return {
         "card_name":   card_name,
