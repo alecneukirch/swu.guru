@@ -2993,13 +2993,15 @@ def matchup_matrix_by_base(
 
 @app.get("/api/meta-call")
 def meta_call(
-    meta_id:     Optional[str] = Query(None),
-    min_decks:   int            = Query(5),
-    min_matches: int            = Query(5),
-    top_n:       int            = Query(30),
-    format:      str            = Query("standard"),
-    days:        Optional[int]  = Query(None),
-    ban:         bool           = Query(False),
+    meta_id:       Optional[str] = Query(None),
+    min_decks:     int            = Query(5),
+    min_matches:   int            = Query(5),
+    min_opponents: int            = Query(2),
+    qualify_top_n: int            = Query(10),
+    top_n:         int            = Query(30),
+    format:        str            = Query("standard"),
+    days:          Optional[int]  = Query(None),
+    ban:           bool           = Query(False),
 ):
     """
     Ranks leader+base combos by field EV: expected win rate against the current
@@ -3101,10 +3103,22 @@ def meta_call(
         else:
             pair_stats[(p2_key, p1_key)]["wins"] += 1
 
+    # Keys of top-N decks used to qualify entries (by meta share)
+    top_qual_keys = {f"{c['leader']}|||{c['base_key']}" for c in combos[:qualify_top_n]}
+
     result = []
     for deck in combos:
         deck_key   = f"{deck['leader']}|||{deck['base_key']}"
         deck_share = deck["decks"] / total_decks
+
+        # Require data against min_opponents of the top qualify_top_n decks
+        qual_count = sum(
+            1 for opp_key in top_qual_keys
+            if opp_key != deck_key
+            and pair_stats.get((deck_key, opp_key), {}).get("matches", 0) >= min_matches
+        )
+        if qual_count < min_opponents:
+            continue
 
         ev_num      = 0.0
         ev_den      = 0.0
