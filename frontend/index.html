@@ -1344,28 +1344,22 @@ select option { background: var(--surface2); }
 /* Small tiers sharing one row */
 .tier-combo-row {
   display: flex;
-  gap: 0;
+  flex-wrap: wrap;
+  gap: 16px;
   align-items: flex-start;
 }
-/* Each block takes equal share of the row so the bottom bar shows 25/33/50% */
+/* Each block grows equally but won't shrink below its cards' natural width */
 .tier-combo-row .tier-block {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 auto;
 }
-/* Header fills the full equal-width block; gap between blocks is just the border */
-.tier-combo-row .tier-section-header {
-  margin-top: 28px;
-  margin-right: 16px;
-}
-.tier-combo-row .tier-block:last-child .tier-section-header { margin-right: 0; }
+.tier-combo-row .tier-section-header { margin-top: 28px; }
 /* Cards inside stay fixed-width and left-aligned so they don't inflate */
 .tier-combo-row .tier-section-grid {
   justify-content: start;
 }
-@media (max-width: 900px) {
-  .tier-combo-row { flex-direction: column; }
-  .tier-combo-row .tier-block { width: 100%; flex: unset; }
-  .tier-combo-row .tier-section-header { margin-right: 0; }
+@media (max-width: 700px) {
+  .tier-combo-row { flex-direction: column; gap: 0; }
+  .tier-combo-row .tier-block { width: 100%; min-width: unset !important; }
   .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; justify-content: unset; }
 }
 
@@ -5142,7 +5136,8 @@ function renderLeaderGrid() {
       if (combo.length > 1) {
         html += `<div class="tier-combo-row">`;
         combo.forEach(b => {
-          html += `<div class="tier-block">` + renderTierBlock(b.t, b.group, true) + `</div>`;
+          const minW = b.group.length * 196 + (b.group.length - 1) * 12;
+          html += `<div class="tier-block" style="min-width:${minW}px">` + renderTierBlock(b.t, b.group, true) + `</div>`;
         });
         html += `</div>`;
         bi = j;
