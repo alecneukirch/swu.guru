@@ -4678,10 +4678,10 @@ function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
   if (v >= 1.6)  return { grade: 'SS', cls: 'tier-ss' };
   if (v >= 1.3)  return { grade: 'S',  cls: 'tier-s' };
-  if (v >= 1.1)  return { grade: 'A',  cls: 'tier-a' };
-  if (v >= 0.85) return { grade: 'B',  cls: 'tier-b' };
-  if (v >= 0.65) return { grade: 'C',  cls: 'tier-c' };
-  if (v >= 0.45) return { grade: 'D',  cls: 'tier-d' };
+  if (v >= 1.15) return { grade: 'A',  cls: 'tier-a' };
+  if (v >= 1.05) return { grade: 'B',  cls: 'tier-b' };
+  if (v >= 0.95) return { grade: 'C',  cls: 'tier-c' };
+  if (v >= 0.75) return { grade: 'D',  cls: 'tier-d' };
   return { grade: 'F', cls: 'tier-f' };
 }
 
@@ -5081,7 +5081,7 @@ function renderLeaderGrid() {
 
   const TIER_ORDER = ['SS','S','A','B','C','D','F'];
   const TIER_LABEL   = { SS:'SS Tier', S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_TOOLTIP = { SS:'≥ 1.6× expected — dominant', S:'≥ 1.3× expected — significantly overperforming', A:'≥ 1.1× expected — above average', B:'≥ 0.85× expected — on par with field', C:'≥ 0.65× expected — slightly underperforming', D:'≥ 0.45× expected — underperforming', F:'< 0.45× expected — well below field average' };
+  const TIER_TOOLTIP = { SS:'≥ 1.6× expected — dominant', S:'≥ 1.3× expected — significantly overperforming', A:'≥ 1.15× expected — above average', B:'≥ 1.05× expected — slightly above average', C:'0.95–1.05× expected — field average', D:'≥ 0.75× expected — below average', F:'< 0.75× expected — well below field average' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
 
   // Assign tiers using recalculated conversion (excludes rogue from baseline)
