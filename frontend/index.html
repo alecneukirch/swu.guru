@@ -1294,18 +1294,20 @@ select option { background: var(--surface2); }
   font-size: 12px;
   color: var(--text3);
 }
-.tier-section-header.tier-s { border-left-color: #f72585; }
-.tier-section-header.tier-a { border-left-color: #4cc9f0; }
-.tier-section-header.tier-b { border-left-color: #2ecc71; }
-.tier-section-header.tier-c { border-left-color: #f0b429; }
-.tier-section-header.tier-d { border-left-color: #ff9f1c; }
-.tier-section-header.tier-f { border-left-color: #e74c3c; }
-.tier-section-header.tier-s .tsh-grade { color: #f72585; }
-.tier-section-header.tier-a .tsh-grade { color: #4cc9f0; }
-.tier-section-header.tier-b .tsh-grade { color: #2ecc71; }
-.tier-section-header.tier-c .tsh-grade { color: #f0b429; }
-.tier-section-header.tier-d .tsh-grade { color: #ff9f1c; }
-.tier-section-header.tier-f .tsh-grade { color: #e74c3c; }
+.tier-section-header.tier-ss { border-left-color: #ffd700; background: rgba(255,215,0,0.06); }
+.tier-section-header.tier-s  { border-left-color: #f72585; }
+.tier-section-header.tier-a  { border-left-color: #4cc9f0; }
+.tier-section-header.tier-b  { border-left-color: #2ecc71; }
+.tier-section-header.tier-c  { border-left-color: #f0b429; }
+.tier-section-header.tier-d  { border-left-color: #ff9f1c; }
+.tier-section-header.tier-f  { border-left-color: #e74c3c; }
+.tier-section-header.tier-ss .tsh-grade { color: #ffd700; font-size: 22px; letter-spacing: -1px; }
+.tier-section-header.tier-s  .tsh-grade { color: #f72585; }
+.tier-section-header.tier-a  .tsh-grade { color: #4cc9f0; }
+.tier-section-header.tier-b  .tsh-grade { color: #2ecc71; }
+.tier-section-header.tier-c  .tsh-grade { color: #f0b429; }
+.tier-section-header.tier-d  .tsh-grade { color: #ff9f1c; }
+.tier-section-header.tier-f  .tsh-grade { color: #e74c3c; }
 
 /* ── Rogue Decks section ────────────────────────────────── */
 .rogue-section-header {
@@ -1376,7 +1378,8 @@ select option { background: var(--surface2); }
   text-shadow: none;
   border: 1px solid;
 }
-.lc-tier.tier-s { background: rgba(247,37,133,0.15); color: #f72585; border-color: rgba(247,37,133,0.4); }
+.lc-tier.tier-ss { background: rgba(255,215,0,0.15); color: #ffd700; border-color: rgba(255,215,0,0.4); }
+.lc-tier.tier-s  { background: rgba(247,37,133,0.15); color: #f72585; border-color: rgba(247,37,133,0.4); }
 .lc-tier.tier-a { background: rgba(76,201,240,0.12); color: #4cc9f0; border-color: rgba(76,201,240,0.35); }
 .lc-tier.tier-b { background: rgba(46,204,113,0.12); color: #2ecc71; border-color: rgba(46,204,113,0.35); }
 .lc-tier.tier-c { background: rgba(240,180,41,0.10); color: #f0b429; border-color: rgba(240,180,41,0.3); }
@@ -4669,11 +4672,12 @@ function aspectsDisplay(aspects, iconSize = 18) {
 // ── Tier grade ───────────────────────────────────────────────────────────────
 function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
-  if (v >= 1.3)  return { grade: 'S', cls: 'tier-s' };
-  if (v >= 1.1)  return { grade: 'A', cls: 'tier-a' };
-  if (v >= 0.9)  return { grade: 'B', cls: 'tier-b' };
-  if (v >= 0.7)  return { grade: 'C', cls: 'tier-c' };
-  if (v >= 0.5)  return { grade: 'D', cls: 'tier-d' };
+  if (v >= 1.6)  return { grade: 'SS', cls: 'tier-ss' };
+  if (v >= 1.3)  return { grade: 'S',  cls: 'tier-s' };
+  if (v >= 1.1)  return { grade: 'A',  cls: 'tier-a' };
+  if (v >= 0.85) return { grade: 'B',  cls: 'tier-b' };
+  if (v >= 0.65) return { grade: 'C',  cls: 'tier-c' };
+  if (v >= 0.45) return { grade: 'D',  cls: 'tier-d' };
   return { grade: 'F', cls: 'tier-f' };
 }
 
@@ -5071,9 +5075,9 @@ function renderLeaderGrid() {
   rogueRows.sort((a, b) => (b[homeSort] ?? 0) - (a[homeSort] ?? 0));
   const maxD = Math.max(...rows.map(r => r.total_decks), 1);
 
-  const TIER_ORDER = ['S','A','B','C','D','F'];
-  const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_TOOLTIP = { S:'≥ 1.3× expected — significantly overperforming', A:'≥ 1.1× expected — above average', B:'≥ 0.9× expected — on par with field', C:'≥ 0.7× expected — slightly underperforming', D:'≥ 0.5× expected — underperforming', F:'< 0.5× expected — well below field average' };
+  const TIER_ORDER = ['SS','S','A','B','C','D','F'];
+  const TIER_LABEL   = { SS:'SS Tier', S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
+  const TIER_TOOLTIP = { SS:'≥ 1.6× expected — dominant', S:'≥ 1.3× expected — significantly overperforming', A:'≥ 1.1× expected — above average', B:'≥ 0.85× expected — on par with field', C:'≥ 0.65× expected — slightly underperforming', D:'≥ 0.45× expected — underperforming', F:'< 0.45× expected — well below field average' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
 
   // Assign tiers using recalculated conversion (excludes rogue from baseline)
@@ -5090,8 +5094,8 @@ function renderLeaderGrid() {
   const allRows = [];
 
   const SMALL  = 3;   // tiers with ≤ this many cards are candidates to share a row
-  const MAX_CO = 2;   // max tiers per shared row
-  const MAX_CARDS_CO = 6; // bail out if combined cards would exceed this
+  const MAX_CO = 4;   // max tiers per shared row
+  const MAX_CARDS_CO = 12; // bail out if combined cards would exceed this
 
   function renderTierBlock(t, group, inCombo = false) {
     const tier = tierGrade(group[0]._conv);
