@@ -930,6 +930,71 @@ def leaders_by_base(
 
 
 # =============================================================================
+#  LEADER BASE-GROUPS LOOKUP
+# =============================================================================
+
+@app.get("/api/leader/{leader}/base-groups")
+def leader_base_groups(
+    leader:      str,
+    format:      str           = Query("standard"),
+    meta_id:     Optional[str] = Query(None),
+    days:        Optional[int] = Query(None),
+    event_level: Optional[str] = Query(None),
+):
+    """
+    Returns [{label, aspect, bases}] for a single leader.
+    Used by the frontend to resolve a base_group display label → raw base names
+    when routing from a URL that only carries base_group.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id, days, event_level)
+    tier_sql, tier_params = tier_filter_sql(event_level)
+    w = decay_weight()
+
+    if date_sql:
+        rows = db.fetchall(f"""
+            SELECT s.base,
+                   {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
+                   br.aspect AS base_aspect
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
+            {SWT_JOIN}
+            WHERE s.leader = %s
+              AND s.base IS NOT NULL
+              AND s.placement IS NOT NULL
+              {date_sql}
+            GROUP BY s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
+        """, [leader] + date_params)
+    else:
+        rows = db.fetchall(f"""
+            SELECT s.base,
+                   {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
+                   br.aspect AS base_aspect
+            FROM {t['standings']} s
+            JOIN {t['events']} e ON e.id = s.event_id
+            LEFT JOIN base_reference br ON br.name = s.base
+            {SWT_JOIN}
+            WHERE s.leader = %s
+              AND s.base IS NOT NULL
+              AND s.placement IS NOT NULL
+              AND e.date <= CURRENT_DATE
+              {tier_sql}
+            GROUP BY s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
+        """, [leader] + tier_params)
+
+    groups: dict = {}
+    for r in rows:
+        lbl = r['base_group'] or r['base']
+        if lbl not in groups:
+            groups[lbl] = {'label': lbl, 'aspect': r['base_aspect'] or '', 'bases': []}
+        if r['base'] not in groups[lbl]['bases']:
+            groups[lbl]['bases'].append(r['base'])
+
+    return list(groups.values())
+
+
+# =============================================================================
 #  LEADER DETAIL
 # =============================================================================
 

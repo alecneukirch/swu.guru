@@ -4516,6 +4516,22 @@ let currentLeader           = '';
 let currentLeaderBase       = null;
 let currentLeaderBaseAspect = null;
 let currentLeaderBaseGroup  = null;
+
+// Cache: leader → { groupLabel → { bases: 'name1|name2', aspect: 'Cunning' } }
+// Populated from home-page leaders/by-base response and on-demand via /api/leader/{name}/base-groups
+const leaderBaseMap = {};
+
+function _cacheBaseGroup(leader, label, bases, aspect) {
+  if (!leader || !label) return;
+  if (!leaderBaseMap[leader]) leaderBaseMap[leader] = {};
+  leaderBaseMap[leader][label] = { bases, aspect: aspect || '' };
+}
+
+async function _ensureBaseGroups(leader) {
+  if (leaderBaseMap[leader]) return;
+  const data = await api('/api/leader/' + encodeURIComponent(leader) + '/base-groups?format=' + currentFormat + metaParam());
+  data.forEach(g => _cacheBaseGroup(leader, g.label, g.bases.join('|'), g.aspect));
+}
 let leaderData     = [];
 let _eloFilterBucket = null;
 let cardSort       = 'inclusion_rate';
@@ -4734,6 +4750,7 @@ function openLeader(name, base = null, baseAspect = null, baseGroup = null) {
   currentLeaderBase = base || null;
   currentLeaderBaseAspect = baseAspect || null;
   currentLeaderBaseGroup  = baseGroup  || null;
+  if (base && baseGroup) _cacheBaseGroup(name, baseGroup, base, baseAspect);
   history.pushState(null, '', buildLeaderHash());
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
@@ -4765,8 +4782,6 @@ function openLeader(name, base = null, baseAspect = null, baseGroup = null) {
 
 function buildLeaderHash() {
   let h = '#leader=' + encodeURIComponent(currentLeader);
-  if (currentLeaderBase)      h += '&base='        + encodeURIComponent(currentLeaderBase);
-  if (currentLeaderBaseAspect) h += '&base_aspect=' + encodeURIComponent(currentLeaderBaseAspect);
   if (currentLeaderBaseGroup)  h += '&base_group='  + encodeURIComponent(currentLeaderBaseGroup);
   if (currentFormat === 'eternal') h += '&fmt=eternal';
   if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
@@ -4779,11 +4794,22 @@ function routeFromHash() {
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
   if (params.leader) {
     if (params.fmt === 'eternal') applyFormat('eternal');
-    openLeader(params.leader, params.base || null, params.base_aspect || null, params.base_group || null);
-    if (params.tab && params.tab !== 'cards') {
-      if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
-      setLeaderTab(params.tab);
+    const groupLabel = params.base_group || null;
+    async function doRoute() {
+      let bases      = params.base       || null;  // backwards compat with old URLs
+      let baseAspect = params.base_aspect || null;
+      if (groupLabel && !bases) {
+        await _ensureBaseGroups(params.leader);
+        const resolved = leaderBaseMap[params.leader]?.[groupLabel];
+        if (resolved) { bases = resolved.bases; baseAspect = resolved.aspect; }
+      }
+      openLeader(params.leader, bases, baseAspect, groupLabel);
+      if (params.tab && params.tab !== 'cards') {
+        if (params.tab === 'matchups' && params.mu) pendingMatchupOpponent = params.mu;
+        setLeaderTab(params.tab);
+      }
     }
+    doRoute();
     return true;
   }
   if (params.event) {
@@ -4846,6 +4872,7 @@ async function loadHome() {
       notice.style.display = 'none';
     }
     homeComboData = comboData;
+    comboData.forEach(r => _cacheBaseGroup(r.leader, r.base_group, (r.bases || []).join('|'), r.aspect));
     const uniqueLeaders = new Set(comboData.map(r => r.leader)).size;
     document.getElementById('mb-events').textContent  = summary.total_events != null ? summary.total_events.toLocaleString() : '—';
     document.getElementById('mb-decks').textContent   = summary.decklists_with_cards != null ? summary.decklists_with_cards.toLocaleString() : '—';
