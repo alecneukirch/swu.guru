@@ -1351,7 +1351,7 @@ select option { background: var(--surface2); }
 }
 .tier-combo-row .tier-section-header { margin-top: 28px; }
 .tier-combo-row .tier-section-header:first-child { margin-top: 28px; }
-@media (max-width: 700px) {
+@media (max-width: 900px) {
   .tier-combo-row { flex-direction: column; gap: 0; }
   .tier-combo-row .tier-block { flex: unset !important; width: 100%; }
 }
@@ -5088,9 +5088,9 @@ function renderLeaderGrid() {
   let imgIdx = 0;
   const allRows = [];
 
-  const SMALL  = 4;   // tiers with ≤ this many cards are candidates to share a row
-  const MAX_CO = 3;   // max tiers per shared row
-  const MAX_CARDS_CO = 9; // bail out if combined cards would exceed this
+  const SMALL  = 3;   // tiers with ≤ this many cards are candidates to share a row
+  const MAX_CO = 2;   // max tiers per shared row
+  const MAX_CARDS_CO = 6; // bail out if combined cards would exceed this
 
   function renderTierBlock(t, group, cls) {
     const tier = tierGrade(group[0]._conv);
