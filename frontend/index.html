@@ -1267,7 +1267,7 @@ select option { background: var(--surface2); }
   gap: 12px;
   padding: 8px 12px;
   margin: 28px 0 12px;
-  border-bottom: 2px solid var(--border2);
+  border-bottom: 3px solid var(--border2);
   border-left: 4px solid var(--border2);
   border-radius: 2px 0 0 2px;
   background: rgba(255,255,255,0.03);
@@ -1294,13 +1294,13 @@ select option { background: var(--surface2); }
   font-size: 12px;
   color: var(--text3);
 }
-.tier-section-header.tier-ss { border-left-color: #ffd700; background: rgba(255,215,0,0.06); }
-.tier-section-header.tier-s  { border-left-color: #f72585; }
-.tier-section-header.tier-a  { border-left-color: #4cc9f0; }
-.tier-section-header.tier-b  { border-left-color: #2ecc71; }
-.tier-section-header.tier-c  { border-left-color: #f0b429; }
-.tier-section-header.tier-d  { border-left-color: #ff9f1c; }
-.tier-section-header.tier-f  { border-left-color: #e74c3c; }
+.tier-section-header.tier-ss { border-left-color: #ffd700; border-bottom-color: #ffd700; background: rgba(255,215,0,0.06); }
+.tier-section-header.tier-s  { border-left-color: #f72585; border-bottom-color: #f72585; }
+.tier-section-header.tier-a  { border-left-color: #4cc9f0; border-bottom-color: #4cc9f0; }
+.tier-section-header.tier-b  { border-left-color: #2ecc71; border-bottom-color: #2ecc71; }
+.tier-section-header.tier-c  { border-left-color: #f0b429; border-bottom-color: #f0b429; }
+.tier-section-header.tier-d  { border-left-color: #ff9f1c; border-bottom-color: #ff9f1c; }
+.tier-section-header.tier-f  { border-left-color: #e74c3c; border-bottom-color: #e74c3c; }
 .tier-section-header.tier-ss .tsh-grade { color: #ffd700; font-size: 22px; letter-spacing: -1px; }
 .tier-section-header.tier-s  .tsh-grade { color: #f72585; }
 .tier-section-header.tier-a  .tsh-grade { color: #4cc9f0; }
@@ -1344,19 +1344,29 @@ select option { background: var(--surface2); }
 /* Small tiers sharing one row */
 .tier-combo-row {
   display: flex;
-  gap: 24px;
+  gap: 0;
   align-items: flex-start;
-  flex-wrap: wrap;
 }
+/* Each block takes equal share of the row so the bottom bar shows 25/33/50% */
 .tier-combo-row .tier-block {
-  flex: 0 0 auto;  /* size to grid content, don't stretch */
+  flex: 1 1 0;
+  min-width: 0;
 }
-.tier-combo-row .tier-section-header { margin-top: 28px; }
-.tier-combo-row .tier-section-header:first-child { margin-top: 28px; }
+/* Header fills the full equal-width block; gap between blocks is just the border */
+.tier-combo-row .tier-section-header {
+  margin-top: 28px;
+  margin-right: 16px;
+}
+.tier-combo-row .tier-block:last-child .tier-section-header { margin-right: 0; }
+/* Cards inside stay fixed-width and left-aligned so they don't inflate */
+.tier-combo-row .tier-section-grid {
+  justify-content: start;
+}
 @media (max-width: 900px) {
-  .tier-combo-row { flex-direction: column; gap: 0; }
-  .tier-combo-row .tier-block { width: 100%; }
-  .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; }
+  .tier-combo-row { flex-direction: column; }
+  .tier-combo-row .tier-block { width: 100%; flex: unset; }
+  .tier-combo-row .tier-section-header { margin-right: 0; }
+  .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; justify-content: unset; }
 }
 
 /* ── Tier badge (overlaid on leader card) ───────────────── */
