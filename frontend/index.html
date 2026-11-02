@@ -2846,6 +2846,8 @@ select option { background: var(--surface2); }
   color: var(--text3);
   font-weight: 700;
 }
+.matrix-col-label.best-col { color: var(--gold); }
+.best-col-more { margin-left: 1px; font-size: 9px; opacity: 0.8; }
 .matrix-row {
   display: flex;
   gap: 2px;
@@ -6744,10 +6746,15 @@ function renderMatrixCard(leaderBase, cells, best) {
     rows += rowHtml;
   }
 
-  // Column headers
+  // Column headers — highlight the best MD column in gold
+  const bestMd = best ? best.md_copies : -1;
   const colHeaders = `<div class="matrix-col-labels">
   <div class="matrix-row-spacer"></div>
-  ${Array.from({length: maxMd + 1}, (_, i) => `<div class="matrix-col-label">${i}</div>`).join('')}
+  ${Array.from({length: maxMd + 1}, (_, i) => {
+    const isOptCol = i === bestMd;
+    const atEdge   = isOptCol && i >= 3;
+    return `<div class="matrix-col-label${isOptCol ? ' best-col' : ''}">${i}${atEdge ? '<span class="best-col-more" title="Best is at the grid edge — may be even better with more copies">↑</span>' : ''}</div>`;
+  }).join('')}
 </div>`;
 
   return `<div class="matrix-card">
