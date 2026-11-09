@@ -8439,7 +8439,7 @@ async function loadPicks() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px">loading…</div>';
   const minDecks  = 2;
-  let url = `/api/meta-call?min_decks=${minDecks}&min_matches=3&min_opponents=5&qualify_top_n=15&top_n=30&format=${currentFormat}` + metaParam();
+  let url = `/api/meta-call?min_decks=${minDecks}&min_matches=2&min_opponents=4&qualify_top_n=15&top_n=30&format=${currentFormat}` + metaParam();
   try {
     const d = await api(url);
     _picksData = d.decks || [];
