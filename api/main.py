@@ -5566,13 +5566,23 @@ def generate_deck(
         ORDER BY name, subtitle, collector_number DESC
     """, [all_names, all_names])
 
-    # Leader uses "Name, Subtitle" format in standings — look up by base name + is_leader
-    leader_base_name = leader.split(",")[0].strip()
-    leader_row = db.fetchone("""
-        SELECT set_code, collector_number FROM cards
-        WHERE name = %s AND is_leader = TRUE AND collector_number ~ '^[0-9]'
-        ORDER BY collector_number DESC LIMIT 1
-    """, [leader_base_name])
+    # Leader uses "Name, Subtitle" format in standings — match both name and subtitle
+    # so "Luke Skywalker, Hero of Yavin" doesn't collide with "Luke Skywalker, I Can Save Him".
+    _ldr_parts = leader.split(", ", 1)
+    _ldr_name     = _ldr_parts[0].strip()
+    _ldr_subtitle = _ldr_parts[1].strip() if len(_ldr_parts) > 1 else None
+    if _ldr_subtitle:
+        leader_row = db.fetchone("""
+            SELECT set_code, collector_number FROM cards
+            WHERE name = %s AND subtitle = %s AND is_leader = TRUE AND collector_number ~ '^[0-9]'
+            ORDER BY collector_number DESC LIMIT 1
+        """, [_ldr_name, _ldr_subtitle])
+    else:
+        leader_row = db.fetchone("""
+            SELECT set_code, collector_number FROM cards
+            WHERE name = %s AND is_leader = TRUE AND collector_number ~ '^[0-9]'
+            ORDER BY collector_number DESC LIMIT 1
+        """, [_ldr_name])
 
     # Base uses plain card name
     base_row = db.fetchone("""
