@@ -3224,14 +3224,14 @@ select.sl-input { cursor: pointer; }
         <div class="cgh-row">
           <div class="sort-btn-wrap">
             <span style="color:var(--text3);margin-right:4px">Sort:</span>
-            <div class="gh-col active" id="gh-incl"   role="button" tabindex="0" onclick="setCardSort('inclusion_rate')" onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('inclusion_rate')">Inclusion</div>
+            <div class="gh-col active" id="gh-incl"   role="button" tabindex="0" onclick="setCardSort('in_color_rate')" onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('in_color_rate')">Inclusion</div>
             <div class="gh-col"        id="gh-conv"    role="button" tabindex="0" onclick="setCardSort('conversion')"     onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('conversion')">Conversion</div>
             <div class="gh-col"        id="gh-copies"  role="button" tabindex="0" onclick="setCardSort('avg_copies')"     onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('avg_copies')">Avg Copies</div>
             <div class="gh-col"        id="gh-decks"   role="button" tabindex="0" onclick="setCardSort('deck_count')"     onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('deck_count')">Decks</div>
             <div class="gh-col"        id="gh-t8s"     role="button" tabindex="0" onclick="setCardSort('t8_count')"       onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('t8_count')">T8s</div>
           </div>
           <select id="card-sort-select" style="display:none" onchange="setCardSort(this.value)">
-            <option value="inclusion_rate">Sort: Inclusion</option>
+            <option value="in_color_rate">Sort: Inclusion</option>
             <option value="conversion">Sort: Conversion</option>
             <option value="avg_copies">Sort: Avg Copies</option>
             <option value="deck_count">Sort: Decks</option>
@@ -3546,7 +3546,7 @@ select.sl-input { cursor: pointer; }
       <span style="color:var(--text3);margin-right:4px">Sort:</span>
       <button class="btn active" id="cp-sort-decks" onclick="setCpSort('deck_count')">Decks</button>
       <button class="btn"        id="cp-sort-conv"  onclick="setCpSort('conversion')">Conversion</button>
-      <button class="btn"        id="cp-sort-incl"  onclick="setCpSort('inclusion_rate')">Inclusion</button>
+      <button class="btn"        id="cp-sort-incl"  onclick="setCpSort('in_color_rate')">Inclusion</button>
       <button class="btn"        id="cp-sort-t8s"   onclick="setCpSort('t8_count')">T8s</button>
     </div>
     <div class="sep"></div>
@@ -3930,7 +3930,7 @@ async function _ensureBaseGroups(leader) {
 }
 let leaderData     = [];
 let _eloFilterBucket = null;
-let cardSort       = 'inclusion_rate';
+let cardSort       = 'in_color_rate';
 let cardSortDir    = -1;
 let eventsData     = [];
 let modalCard      = '';
@@ -4721,7 +4721,7 @@ function filterCards() {
 function setCardSort(col) {
   cardSortDir = (cardSort === col) ? cardSortDir * -1 : -1;
   cardSort    = col;
-  const colMap = { inclusion_rate:'incl', conversion:'conv', deck_count:'decks', t8_count:'t8s', avg_copies:'copies' };
+  const colMap = { in_color_rate:'incl', inclusion_rate:'incl', conversion:'conv', deck_count:'decks', t8_count:'t8s', avg_copies:'copies' };
   document.querySelectorAll('.gh-col').forEach(el => el.classList.remove('active'));
   const mapped = colMap[col];
   if (mapped) document.getElementById('gh-' + mapped)?.classList.add('active');
@@ -4773,7 +4773,7 @@ function renderCardTable(rows) {
 
     // When sorting by inclusion/decks/copies (the "natural" sorts),
     // use type → cost → stat as the sort key
-    const statSorts = ['inclusion_rate', 'deck_count', 'avg_copies', 't8_count'];
+    const statSorts = ['in_color_rate', 'inclusion_rate', 'deck_count', 'avg_copies', 't8_count'];
     if (statSorts.includes(cardSort)) {
       const secOrd = r => { const t = r.card_type||'Unit'; if(t==='Unit') return r.arena==='Space'?1:0; return t==='Event'?2:3; };
       const sa = secOrd(a), sb = secOrd(b);
@@ -4812,7 +4812,7 @@ function renderCardTable(rows) {
     return t;
   };
   const SECTION_ORDER = { 'Ground': 0, 'Space': 1, 'Event': 2, 'Upgrade': 3 };
-  const statSortsR   = ['inclusion_rate', 'deck_count', 'avg_copies', 't8_count'];
+  const statSortsR   = ['in_color_rate', 'inclusion_rate', 'deck_count', 'avg_copies', 't8_count'];
   const useTypeSections = statSortsR.includes(cardSort);
 
   // Build sections: [{type, rows}]
@@ -8130,7 +8130,7 @@ function setCpSort(col) {
   _cpDir  = _cpSort === col ? _cpDir * -1 : -1;
   _cpSort = col;
   ['decks','conv','incl','t8s'].forEach(id => document.getElementById('cp-sort-'+id)?.classList.remove('active'));
-  const map = { deck_count:'decks', conversion:'conv', inclusion_rate:'incl', t8_count:'t8s' };
+  const map = { deck_count:'decks', conversion:'conv', in_color_rate:'incl', inclusion_rate:'incl', t8_count:'t8s' };
   if (map[col]) document.getElementById('cp-sort-' + map[col])?.classList.add('active');
   filterGlobalCards();
 }
