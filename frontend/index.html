@@ -999,14 +999,12 @@ select option { background: var(--surface2); }
   font-size: 12px;
   color: var(--text3);
 }
-.tier-section-header.tier-ss { border-left-color: #ffd700; border-bottom-color: #ffd700; background: rgba(255,215,0,0.06); }
 .tier-section-header.tier-s  { border-left-color: #f72585; border-bottom-color: #f72585; }
 .tier-section-header.tier-a  { border-left-color: #4cc9f0; border-bottom-color: #4cc9f0; }
 .tier-section-header.tier-b  { border-left-color: #2ecc71; border-bottom-color: #2ecc71; }
 .tier-section-header.tier-c  { border-left-color: #f0b429; border-bottom-color: #f0b429; }
 .tier-section-header.tier-d  { border-left-color: #ff9f1c; border-bottom-color: #ff9f1c; }
 .tier-section-header.tier-f  { border-left-color: #e74c3c; border-bottom-color: #e74c3c; }
-.tier-section-header.tier-ss .tsh-grade { color: #ffd700; font-size: 22px; letter-spacing: -1px; }
 .tier-section-header.tier-s  .tsh-grade { color: #f72585; }
 .tier-section-header.tier-a  .tsh-grade { color: #4cc9f0; }
 .tier-section-header.tier-b  .tsh-grade { color: #2ecc71; }
@@ -1104,7 +1102,6 @@ select option { background: var(--surface2); }
   text-shadow: none;
   border: 1px solid;
 }
-.lc-tier.tier-ss { background: rgba(255,215,0,0.15); color: #ffd700; border-color: rgba(255,215,0,0.4); }
 .lc-tier.tier-s  { background: rgba(247,37,133,0.15); color: #f72585; border-color: rgba(247,37,133,0.4); }
 .lc-tier.tier-a { background: rgba(76,201,240,0.12); color: #4cc9f0; border-color: rgba(76,201,240,0.35); }
 .lc-tier.tier-b { background: rgba(46,204,113,0.12); color: #2ecc71; border-color: rgba(46,204,113,0.35); }
@@ -4071,12 +4068,11 @@ function aspectsDisplay(aspects, iconSize = 18) {
 // ── Tier grade ───────────────────────────────────────────────────────────────
 function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
-  if (v >= 1.8)  return { grade: 'SS', cls: 'tier-ss' };
-  if (v >= 1.5)  return { grade: 'S',  cls: 'tier-s' };
-  if (v >= 1.3)  return { grade: 'A',  cls: 'tier-a' };
+  if (v >= 1.7)  return { grade: 'S',  cls: 'tier-s' };
+  if (v >= 1.4)  return { grade: 'A',  cls: 'tier-a' };
   if (v >= 1.1)  return { grade: 'B',  cls: 'tier-b' };
-  if (v >= 0.9)  return { grade: 'C',  cls: 'tier-c' };
-  if (v >= 0.7)  return { grade: 'D',  cls: 'tier-d' };
+  if (v >= 0.8)  return { grade: 'C',  cls: 'tier-c' };
+  if (v >= 0.6)  return { grade: 'D',  cls: 'tier-d' };
   return { grade: 'F', cls: 'tier-f' };
 }
 
@@ -4469,9 +4465,9 @@ function renderLeaderGrid() {
   rogueRows.sort((a, b) => (b[homeSort] ?? 0) - (a[homeSort] ?? 0));
   const maxD = Math.max(...rows.map(r => r.total_decks), 1);
 
-  const TIER_ORDER = ['SS','S','A','B','C','D','F'];
-  const TIER_LABEL   = { SS:'SS Tier', S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_TOOLTIP = { SS:'≥ 1.6× expected — dominant', S:'≥ 1.45× expected — significantly overperforming', A:'≥ 1.3× expected — above average', B:'≥ 1.15× expected — slightly above average', C:'0.85–1.15× expected — field average', D:'≥ 0.7× expected — below average', F:'< 0.7× expected — well below field average' };
+  const TIER_ORDER = ['S','A','B','C','D','F'];
+  const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
+  const TIER_TOOLTIP = { S:'≥ 1.7× expected — dominant', A:'≥ 1.4× expected — significantly above average', B:'≥ 1.1× expected — above average', C:'≥ 0.8× expected — field average', D:'≥ 0.6× expected — below average', F:'< 0.6× expected — well below field average' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
 
   // Assign tiers using recalculated conversion (excludes rogue from baseline)
