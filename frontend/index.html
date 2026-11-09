@@ -1061,27 +1061,6 @@ select option { background: var(--surface2); }
 .tier-wrap.collapsed .tsh-chevron { transform: rotate(-90deg); }
 .tier-wrap.collapsed .tier-section-grid { display: none; }
 
-/* Small tiers sharing one row */
-.tier-combo-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-start;
-}
-/* Each block grows equally but won't shrink below its cards' natural width */
-.tier-combo-row .tier-block {
-  flex: 1 1 auto;
-}
-.tier-combo-row .tier-section-header { margin-top: 28px; }
-/* Cards inside stay fixed-width and left-aligned so they don't inflate */
-.tier-combo-row .tier-section-grid {
-  justify-content: start;
-}
-@media (max-width: 700px) {
-  .tier-combo-row { flex-direction: column; gap: 0; }
-  .tier-combo-row .tier-block { width: 100%; min-width: unset !important; }
-  .tier-combo-row .tier-section-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; justify-content: unset; }
-}
 
 /* ── Tier badge (overlaid on leader card) ───────────────── */
 .lc-tier {
@@ -4483,19 +4462,14 @@ function renderLeaderGrid() {
   let imgIdx = 0;
   const allRows = [];
 
-  const SMALL  = 3;   // tiers with ≤ this many cards are candidates to share a row
-  const MAX_CO = 4;   // max tiers per shared row
-  const MAX_CARDS_CO = 12; // bail out if combined cards would exceed this
   const COLLAPSED_DEFAULT = new Set(['D', 'F']);
 
-  function renderTierBlock(t, group, inCombo = false) {
+  function renderTierBlock(t, group) {
     const tier = tierGrade(group[0]._conv);
     const colClass = COLLAPSED_DEFAULT.has(t) ? ' collapsed' : '';
     let b = `<div class="tier-wrap${colClass}">`;
     b += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span><span class="tsh-count">${group.length}</span><span class="tsh-chevron">▾</span></div>`;
-    // In combo rows pin to exactly N columns so cards don't grow larger than S tier
-    const gridStyle = inCombo ? ` style="grid-template-columns:repeat(${group.length},minmax(180px,200px))"` : '';
-    b += `<div class="tier-section-grid"${gridStyle}>`;
+    b += `<div class="tier-section-grid">`;
     group.forEach(r => {
       const i = imgIdx++;
       b += mkCard(r, i, r._conv, maxD);
@@ -4505,40 +4479,9 @@ function renderLeaderGrid() {
     return b;
   }
 
-  const tierBlocks = TIER_ORDER.filter(t => byTier[t].length).map(t => ({ t, group: byTier[t] }));
-  let bi = 0;
-  while (bi < tierBlocks.length) {
-    const { t, group } = tierBlocks[bi];
-    if (group.length <= SMALL) {
-      // Collect consecutive small tiers into a combo row
-      const combo = [{ t, group }];
-      let totalCards = group.length;
-      let j = bi + 1;
-      while (j < tierBlocks.length && combo.length < MAX_CO) {
-        const nxt = tierBlocks[j];
-        if (nxt.group.length <= SMALL && totalCards + nxt.group.length <= MAX_CARDS_CO) {
-          combo.push(nxt);
-          totalCards += nxt.group.length;
-          j++;
-        } else break;
-      }
-      if (combo.length > 1) {
-        html += `<div class="tier-combo-row">`;
-        combo.forEach(b => {
-          const minW = b.group.length * 196 + (b.group.length - 1) * 12;
-          html += `<div class="tier-block" style="min-width:${minW}px">` + renderTierBlock(b.t, b.group, true) + `</div>`;
-        });
-        html += `</div>`;
-        bi = j;
-      } else {
-        html += renderTierBlock(t, group);
-        bi++;
-      }
-    } else {
-      html += renderTierBlock(t, group);
-      bi++;
-    }
-  }
+  TIER_ORDER.filter(t => byTier[t].length).forEach(t => {
+    html += renderTierBlock(t, byTier[t]);
+  });
 
   // Rogue section
   if (rogueRows.length) {
