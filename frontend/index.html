@@ -152,36 +152,6 @@ body::before {
   outline: none;
 }
 .nav-meta-select option { background: var(--surface2); color: var(--text2); }
-.nav-format-toggle {
-  margin-left: 8px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  padding: 4px;
-}
-.fmt-btn {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 6px 16px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text3);
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: background 0.15s, color 0.15s;
-}
-.fmt-btn:hover { color: var(--text2); }
-.fmt-btn.active {
-  background: var(--surface2);
-  color: var(--gold);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
 
 .nav-status {
   margin-left: 16px;
@@ -1384,7 +1354,6 @@ select option { background: var(--surface2); }
   .nav-logo { font-size: 20px; margin-right: 0; }
   #nav .nav-btn { display: none; }
   .nav-status { display: none; }
-  .nav-format-toggle { margin-left: 0; }
 
   /* Sort controls — swap buttons for dropdowns */
   .sort-btn-wrap { display: none; }
@@ -3193,9 +3162,6 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
   <select id="meta-select" class="nav-meta-select" aria-label="Meta period" onchange="setMeta(this.value)"></select>
-  <div class="nav-format-toggle">
-    <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
-  </div>
   <div class="nav-status">
     <div class="status-dot" id="status-dot"></div>
     <span id="status-text">connecting</span>
@@ -4280,7 +4246,6 @@ function routeFromHash() {
 // ══ HOME ════════════════════════════════════════════════════════════════════
 function applyFormat(fmt) {
   currentFormat = fmt;
-  document.getElementById('fmt-standard').classList.add('active');
   loadMetas();
 }
 function setFormat(fmt) {
