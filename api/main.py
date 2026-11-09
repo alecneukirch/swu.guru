@@ -5335,6 +5335,7 @@ def generate_deck(
         "deck_count":      0,
         "card_type":       None,
         "arena":           None,
+        "copy_votes":      defaultdict(float),  # qty → sum-of-weights
     })
     # Also track per-deck type counts for computing targets
     deck_type_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -5343,9 +5344,10 @@ def generate_deck(
         key = (row["card_name"], bool(row["is_sideboard"]))
         w   = score_by_id.get(row["standing_id"], 0)
         d   = card_data[key]
-        d["weighted_copies"] += row["quantity"] * w
-        d["weighted_score"]  += w
-        d["deck_count"]      += 1
+        d["weighted_copies"]        += row["quantity"] * w
+        d["weighted_score"]         += w
+        d["deck_count"]             += 1
+        d["copy_votes"][row["quantity"]] += w
         if not d["card_type"]:
             d["card_type"] = row.get("card_type") or "Unit"
             d["arena"]     = row.get("arena") or ""
@@ -5374,6 +5376,13 @@ def generate_deck(
             type_targets[slot_key] += count * w / valid_score
     type_targets = {k: round(v) for k, v in type_targets.items()}
 
+    def _best_copies(d: dict) -> int:
+        """Win-rate-weighted mode: pick the copy count most favoured by top-performing decks."""
+        votes = d.get("copy_votes") or {}
+        if not votes:
+            return max(1, round(d["weighted_copies"] / d["weighted_score"]) if d["weighted_score"] else 1)
+        return max(votes, key=votes.get)
+
     def _card_slot_key(d: dict) -> str:
         ctype = (d.get("card_type") or "Unit")
         if ctype not in ("Unit", "Event", "Upgrade"):
@@ -5388,12 +5397,12 @@ def generate_deck(
             if is_sb:
                 continue
             inc_rate   = d["deck_count"] / n_ref
-            avg_copies = d["weighted_copies"] / d["weighted_score"] if d["weighted_score"] else 0
+            best_qty   = _best_copies(d)
             type_buckets[_card_slot_key(d)].append({
                 "card_name": name,
                 "inc_rate":  inc_rate,
-                "avg_copies": avg_copies,
-                "card_score": inc_rate * avg_copies,
+                "best_qty":  best_qty,
+                "card_score": inc_rate * best_qty,
                 "inc_rate_raw": inc_rate,
             })
 
@@ -5409,7 +5418,7 @@ def generate_deck(
             for e in type_buckets.get(slot_key, []):
                 if type_filled[slot_key] >= slot_target or total >= target:
                     break
-                copies = max(1, round(e["avg_copies"]))
+                copies = max(1, e["best_qty"])
                 copies = min(copies, 3, slot_target - type_filled[slot_key], target - total)
                 if copies <= 0:
                     break
@@ -5435,7 +5444,7 @@ def generate_deck(
                 slot_target = type_targets.get(slot_key, 0)
                 if type_filled[slot_key] >= slot_target:
                     continue
-                copies = max(1, round(e["avg_copies"]))
+                copies = max(1, e["best_qty"])
                 copies = min(copies, 3, slot_target - type_filled[slot_key], target - total)
                 if copies <= 0:
                     continue
@@ -5454,7 +5463,7 @@ def generate_deck(
             for e in all_remaining:
                 if total >= target:
                     break
-                copies = max(1, round(e["avg_copies"]))
+                copies = max(1, e["best_qty"])
                 copies = min(copies, 3, target - total)
                 result.append({"name": e["card_name"], "count": copies,
                                "incRate": round(e["inc_rate_raw"], 3)})
@@ -5472,13 +5481,13 @@ def generate_deck(
             max_more = 3 - already
             if max_more <= 0:
                 continue
-            inc_rate   = d["deck_count"] / n_ref
-            avg_copies = d["weighted_copies"] / d["weighted_score"] if d["weighted_score"] else 0
+            inc_rate  = d["deck_count"] / n_ref
+            best_qty  = min(_best_copies(d), max_more)
             entries.append({
                 "card_name": name,
                 "inc_rate":  inc_rate,
-                "avg_copies": min(avg_copies, max_more),
-                "card_score": inc_rate * avg_copies,
+                "best_qty":  best_qty,
+                "card_score": inc_rate * best_qty,
                 "max_more":  max_more,
             })
 
@@ -5488,7 +5497,7 @@ def generate_deck(
         for e in entries:
             if total >= target:
                 break
-            copies = max(1, round(e["avg_copies"]))
+            copies = max(1, e["best_qty"])
             copies = min(copies, e["max_more"], target - total)
             if copies <= 0:
                 continue
