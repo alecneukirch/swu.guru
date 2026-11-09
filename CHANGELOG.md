@@ -23,6 +23,25 @@
 **DB cleanup**
 - Deleted corrupt decklist for standing 15591 (72 cards, mismatched leader) and marked `has_decklist=FALSE`
 
+### Loop Pass 2 — UX Refinement & Bug Fix
+
+**Critical bug fix**
+- Synergy endpoint (`/api/leader/{leader}/synergy`) was 500-ing for all unfiltered requests because it referenced `mv_card_synergy` materialized view that doesn't exist in `swu_cards`. Replaced with a live CTE query matching the base-scoped branch (identical logic, no base filter).
+
+**Leader hero sizing corrections** (per saved UI preference)
+- Portrait: 140×100px → 144×144px (square)
+- Stat values (`.lh-stat-val`): 22px → 24px
+- Stat labels (`.lh-stat-label`): 13px → 14px
+- Funnel values (`.lh-pct-val`): 16px → 20px
+- Stat gap: 20px → 24px
+
+**CSS audit**
+- All `var(--*)` usages are now declared in `:root`; `--villainy` is the only defined-but-unused token (intentional swatch, harmless)
+- No gradient text, excessive glassmorphism stacks, or floated elements found
+
+**API health check** — all 10 tested endpoints return 200 after fixes
+
 ### Notes for next pass
-- `mv_card_copy_matrix` materialized view appears stale (HMW data not reflected) — consider `REFRESH MATERIALIZED VIEW CONCURRENTLY mv_card_copy_matrix`
+- `mv_card_copy_matrix` materialized view may be stale — verify HMW data is reflected
 - No build/lint pipeline exists (vanilla JS + FastAPI) — worth adding `eslint` or `pyflakes` to CI
+- Consider creating `mv_card_synergy` to speed up unfiltered synergy queries (currently live CTE, may be slow for leaders with many decklists)
