@@ -4676,11 +4676,11 @@ function aspectsDisplay(aspects, iconSize = 18) {
 // ── Tier grade ───────────────────────────────────────────────────────────────
 function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
-  if (v >= 1.6)  return { grade: 'SS', cls: 'tier-ss' };
-  if (v >= 1.45) return { grade: 'S',  cls: 'tier-s' };
+  if (v >= 1.8)  return { grade: 'SS', cls: 'tier-ss' };
+  if (v >= 1.5)  return { grade: 'S',  cls: 'tier-s' };
   if (v >= 1.3)  return { grade: 'A',  cls: 'tier-a' };
-  if (v >= 1.15) return { grade: 'B',  cls: 'tier-b' };
-  if (v >= 0.85) return { grade: 'C',  cls: 'tier-c' };
+  if (v >= 1.1)  return { grade: 'B',  cls: 'tier-b' };
+  if (v >= 0.9)  return { grade: 'C',  cls: 'tier-c' };
   if (v >= 0.7)  return { grade: 'D',  cls: 'tier-d' };
   return { grade: 'F', cls: 'tier-f' };
 }
