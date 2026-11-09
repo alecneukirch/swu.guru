@@ -290,7 +290,7 @@ _LEADERS_TTL = 300              # 5 minutes
 @app.get("/api/leaders")
 def leaders(
     meta_id:   Optional[str] = Query(None),
-    min_decks: int            = Query(5),
+    min_decks: int            = Query(1),
     or_has_t8: bool           = Query(False, description="Also include leaders with any top-8 finish regardless of deck count"),
     format:       str            = Query("standard"),
     days:         Optional[int]  = Query(None),
@@ -613,7 +613,7 @@ def leaders(
 @app.get("/api/leaders/by-base")
 def leaders_by_base(
     meta_id:     Optional[str] = Query(None),
-    min_decks:   int            = Query(3),
+    min_decks:   int            = Query(1),
     or_has_t8:   bool           = Query(False),
     format:      str            = Query("standard"),
     days:        Optional[int]  = Query(None),
@@ -1254,7 +1254,7 @@ def leader_cards(
     base_group:   Optional[str]  = Query(None, description="Comma-separated list of base names from a base group"),
     meta_id:      Optional[str]  = Query(None),
     is_sideboard: Optional[bool] = Query(None),
-    min_decks:    int             = Query(5),
+    min_decks:    int             = Query(1),
     top8_only:    bool            = Query(False),
     elo_bucket:   Optional[int]   = Query(None, description="Filter to decks where pilot ELO bucket equals this value"),
     bucket:       int             = Query(100,  description="ELO bucket size used when elo_bucket is set"),
@@ -1814,7 +1814,7 @@ def cards_stats(
     format:    str           = Query("standard"),
     meta_id:   Optional[str] = Query(None),
     days:      Optional[int] = Query(None),
-    min_decks: int           = Query(5),
+    min_decks: int           = Query(1),
     ban:       bool          = Query(False),
 ):
     """
@@ -2040,7 +2040,7 @@ def leader_matchups(
     leader:     str,
     meta_id:    Optional[str] = Query(None),
     base_group: Optional[str] = Query(None),
-    min_matches: int            = Query(3),
+    min_matches: int            = Query(1),
     top8_only:   bool           = Query(False),
     format:      str            = Query("standard"),
     days:        Optional[int]  = Query(None),
@@ -2210,7 +2210,7 @@ def leader_matchup_cards(
     opponent_bases: str            = Query("", description="Comma-separated opponent base names"),
     base_group:     Optional[str]  = Query(None, description="Comma-separated base names for this leader"),
     meta_id:        Optional[str]  = Query(None),
-    min_matches:    int             = Query(3),
+    min_matches:    int             = Query(1),
     top8_only:      bool            = Query(False),
     format:         str             = Query("standard"),
     days:           Optional[int]   = Query(None),
@@ -2312,7 +2312,7 @@ def leader_matchup_cards(
 @app.get("/api/matchups")
 def matchup_matrix(
     meta_id:     Optional[str] = Query(None),
-    min_matches: int            = Query(5),
+    min_matches: int            = Query(1),
     days:        Optional[int]  = Query(None),
 ):
     """
@@ -2458,7 +2458,7 @@ def leader_weaknesses(
     base_group: Optional[str] = Query(None),
     format:     str           = Query("standard"),
     meta_id:    Optional[str] = Query(None),
-    min_matches: int           = Query(20),
+    min_matches: int           = Query(1),
     limit:       int           = Query(60),
     sort:        str           = Query("count"),  # "count" | "delta"
     days:       Optional[int] = Query(None),
@@ -2608,7 +2608,7 @@ def leader_mirror_breakers(
     base_group:  Optional[str] = Query(None),
     format:      str           = Query("standard"),
     meta_id:     Optional[str] = Query(None),
-    min_matches: int           = Query(10),
+    min_matches: int           = Query(1),
     limit:       int           = Query(60),
     sort:        str           = Query("count"),  # "count" | "delta"
     days:        Optional[int] = Query(None),
@@ -3003,9 +3003,9 @@ def matchup_matrix_by_base(
 @app.get("/api/meta-call")
 def meta_call(
     meta_id:       Optional[str] = Query(None),
-    min_decks:     int            = Query(5),
-    min_matches:   int            = Query(5),
-    min_opponents: int            = Query(2),
+    min_decks:     int            = Query(1),
+    min_matches:   int            = Query(1),
+    min_opponents: int            = Query(1),
     qualify_top_n: int            = Query(10),
     top_n:         int            = Query(30),
     format:        str            = Query("standard"),
@@ -4982,7 +4982,7 @@ def import_hmw_league_melee(body: dict):
 # ── Karabast (swustats.net matchup data) ─────────────────────────────────────
 
 @app.get("/api/karabast/leaders")
-def karabast_leaders(min_matches: int = Query(200)):
+def karabast_leaders(min_matches: int = Query(1)):
     _ce = _karabast_cache.get(min_matches)
     if _ce and _time.time() < _ce["ts"] + _LEADERS_TTL:
         return _ce["data"]
@@ -5260,8 +5260,8 @@ def generate_deck(
     base_label:  Optional[str] = Query(None),
     meta_id:     Optional[str] = Query(None),
     format:      str           = Query("standard"),
-    ref_decks:   int           = Query(15, ge=5, le=50, description="Max reference decks to aggregate from"),
-    min_decks:   int           = Query(5,  ge=1,         description="Minimum reference decks required"),
+    ref_decks:   int           = Query(15, ge=1, le=50, description="Max reference decks to aggregate from"),
+    min_decks:   int           = Query(1,               description="Minimum reference decks required"),
 ):
     """
     Generate a starting-point deck estimate for a leader.
