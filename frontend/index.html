@@ -5342,7 +5342,7 @@ async function openGenerateDeck() {
   const statusEl = document.getElementById('gendeck-status');
 
   backdrop.style.display = 'flex';
-  title.textContent = 'Generate Deck — ' + shortName(currentLeader);
+  title.textContent = 'Generate Deck — ' + shortName(currentLeader) + (currentLeaderBase ? ' - ' + currentLeaderBase : '');
   metaEl.textContent = '';
   jsonEl.textContent = '';
   statusEl.textContent = 'generating…';
