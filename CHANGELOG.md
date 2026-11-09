@@ -133,3 +133,32 @@
 
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+
+### Loop Pass 8 — Global Focus Styles, Form Control Labels & Keyboard Navigation
+
+**Global `:focus-visible` rule (`frontend/index.html`)**
+- Added `[role="button"]:focus-visible, [role="link"]:focus-visible, button:focus-visible, a:focus-visible` rule — 2px `--accent` outline, offset 2px — was completely absent; keyboard users had no visible focus indicator after outline resets
+
+**`aria-label` on form controls**
+- `#meta-select` → `aria-label="Meta period"` (nav dropdown)
+- `#lp-min-decks` → `aria-label="Minimum decks"` (leader cards tab)
+- `#wk-min-matches` → `aria-label="Minimum matches"` (weaknesses tab)
+- `#mr-min-matches` → `aria-label="Minimum mirror matches"` (mirror tab)
+- `#syn-min-co` → `aria-label="Minimum plays together"`, `#syn-min-lift` → `aria-label="Minimum lift"` (synergy tab)
+- `#pq-range` → `aria-label="Search radius"` (PQ finder)
+- `#cp-min-decks` → `aria-label="Minimum decks"`, `#cp-trait` → `aria-label="Filter by trait"`, `#cp-keyword` → `aria-label="Filter by keyword"` (cards page)
+- All above had visible adjacent text labels but no programmatic association
+
+**Keyboard navigation for navigation elements**
+- `.nav-logo` div → added `role="button" tabindex="0" aria-label="Go to home" onkeydown`
+- Both `.bc-link` breadcrumb spans → added `role="button" tabindex="0" onkeydown`
+
+**Keyboard navigation for section headers**
+- Both `.ct-type-divider` collapsible headers (leader cards + global cards pages) → added `role="button" tabindex="0" aria-label="Toggle … section" onkeydown`
+
+**Verification**
+- All 4 tested endpoints return 200 ✓
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- Remaining interactive divs without keyboard support: `.elo-bucket-col` (ELO filter chips), `.pd-event-row` (player history rows), `.sl-stat-card.sl-flippable` (league stat cards), `.pick-row` (meta call rows) — lower priority (all have clear visual affordance)
