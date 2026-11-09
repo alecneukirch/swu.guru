@@ -5342,14 +5342,15 @@ async function openGenerateDeck() {
   const statusEl = document.getElementById('gendeck-status');
 
   backdrop.style.display = 'flex';
-  title.textContent = 'Generate Deck — ' + shortName(currentLeader) + (currentLeaderBase ? ' - ' + currentLeaderBase : '');
+  title.textContent = 'Generate Deck — ' + shortName(currentLeader) + (currentLeaderBaseGroup ? ' - ' + currentLeaderBaseGroup : '');
   metaEl.textContent = '';
   jsonEl.textContent = '';
   statusEl.textContent = 'generating…';
 
   try {
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/generate-deck?format=' + currentFormat + metaParam();
-    if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
+    if (currentLeaderBase)      url += '&base_group=' + encodeURIComponent(currentLeaderBase);
+    if (currentLeaderBaseGroup) url += '&base_label=' + encodeURIComponent(currentLeaderBaseGroup);
     const data = await api(url);
 
     const m = data._meta;

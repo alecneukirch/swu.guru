@@ -5233,6 +5233,7 @@ def karabast_leader_matchups(leader_id: str, base_id: str):
 def generate_deck(
     leader:      str,
     base_group:  Optional[str] = Query(None),
+    base_label:  Optional[str] = Query(None),
     meta_id:     Optional[str] = Query(None),
     format:      str           = Query("standard"),
     ref_decks:   int           = Query(15, ge=5, le=50, description="Max reference decks to aggregate from"),
@@ -5579,12 +5580,12 @@ def generate_deck(
     leader_id = make_id(leader_row) if leader_row else None
     base_id   = make_id(base_row)   if base_row   else resolve_id(suggested_base)
 
-    leader_short = leader.split(",")[0].strip()
-    base_label   = base_names[0] if base_names else None
+    leader_short     = leader.split(",")[0].strip()
+    deck_base_label  = base_label or (base_names[0] if base_names else None)
 
     return {
         "metadata": {
-            "name":   f"{leader_short}{' - ' + base_label if base_label else ''} - Generated at swu.guru",
+            "name":   f"{leader_short}{' - ' + deck_base_label if deck_base_label else ''} - Generated at swu.guru",
             "author": "swu.guru",
         },
         "leader": {"id": leader_id, "count": 1} if leader_id else None,
