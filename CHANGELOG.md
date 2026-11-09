@@ -116,3 +116,20 @@
 
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+
+### Loop Pass 7 — Keyboard Accessibility & ARIA Fixes
+
+**ARIA icon buttons (`frontend/index.html`)**
+- Added `aria-label="Previous pool"` / `aria-label="Next pool"` to `←` / `→` correct-nav-btn icon buttons in pool correction UI — icon-only buttons were invisible to screen readers
+- Added `aria-label="Close"` to `✕` sl-modal-close buttons in sealed league and HMW league modal overlays
+- Added `aria-label="Add card"` to `+` correct-nav-btn in JS-rendered pool correction template literal
+
+**Keyboard sort controls (`frontend/index.html`)**
+- All 5 `.gh-col` sort header divs (`#gh-incl`, `#gh-conv`, `#gh-copies`, `#gh-decks`, `#gh-t8s`) used `onclick` with no `role` or `tabindex` — not reachable or activatable by keyboard
+- Added `role="button"`, `tabindex="0"`, and `onkeydown` Enter/Space handler to each
+
+**Verification**
+- All 6 tested endpoints return 200 ✓
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
