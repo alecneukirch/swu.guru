@@ -5352,14 +5352,15 @@ async function openGenerateDeck() {
     if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
     const data = await api(url);
 
-    const topOpp = data.meta.topOpponents
+    const m = data._meta;
+    const topOpp = m.topOpponents
       .slice(0, 5)
       .map(o => shortName(o.leader) + ' ' + (o.metaShare * 100).toFixed(1) + '%')
       .join(' · ');
 
     metaEl.innerHTML =
-      `<strong style="color:var(--text2)">${data.meta.referenceDecks} reference decks</strong>` +
-      ` · avg win rate <strong style="color:var(--green)">${(data.meta.avgWinRate * 100).toFixed(1)}%</strong>` +
+      `<strong style="color:var(--text2)">${m.referenceDecks} reference decks</strong>` +
+      ` · avg win rate <strong style="color:var(--green)">${(m.avgWinRate * 100).toFixed(1)}%</strong>` +
       `<br>Top opponents: ${topOpp}`;
 
     jsonEl.value = JSON.stringify(data, null, 2);
