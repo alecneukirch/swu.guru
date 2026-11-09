@@ -41,7 +41,25 @@
 
 **API health check** — all 10 tested endpoints return 200 after fixes
 
+### Loop Pass 3 — Feature Completion & Code Audit
+
+**Synergy tab (new feature)**
+- Wired up the half-implemented Synergy feature: CSS components + API endpoint both existed but had no UI entry point
+- Added "Synergy" tab on leader detail page (after Mirror)
+- Controls: min plays together + min lift threshold (1.1 default)
+- Renders card-art pair tiles with lift badge, inclusion rates (%), and co-occurrence count
+- Stale-request guard (`_synergyGen`) prevents race conditions on fast tab switches
+- URL hash routing (`&tab=synergy`) preserved automatically via existing routing
+
+**Code audits — no issues found**
+- CSS duplicate class check: 73 "standalone" defs are all inside `@media (max-width:700px)` — intentional responsive overrides
+- CSS variable audit: all `var(--*)` tokens are declared; `--villainy` (#040004) is the only defined-but-unused token (intentional swatch)
+- No synchronous XHR patterns found
+- No gradient text, excessive glassmorphism stacks, or unmotivated floating elements
+
+**All API endpoints: 200 ✓**
+
 ### Notes for next pass
 - `mv_card_copy_matrix` materialized view may be stale — verify HMW data is reflected
-- No build/lint pipeline exists (vanilla JS + FastAPI) — worth adding `eslint` or `pyflakes` to CI
-- Consider creating `mv_card_synergy` to speed up unfiltered synergy queries (currently live CTE, may be slow for leaders with many decklists)
+- Consider creating `mv_card_synergy` materialized view to speed up the now-active Synergy tab (live CTE works but is heavier for high-volume leaders)
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
