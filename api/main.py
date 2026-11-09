@@ -5369,7 +5369,8 @@ def generate_deck(
 
     # ── Step 3: resolve card collector_number IDs ─────────────────────────────
     all_names = [e["name"] for e in main_deck_entries + sideboard_entries]
-    all_names += [leader, suggested_base] if suggested_base else [leader]
+    if suggested_base:
+        all_names.append(suggested_base)
 
     id_rows = db.fetchall("""
         SELECT DISTINCT ON (name, subtitle)
@@ -5386,6 +5387,21 @@ def generate_deck(
           )
         ORDER BY name, subtitle, collector_number DESC
     """, [all_names, all_names])
+
+    # Leader uses "Name, Subtitle" format in standings — look up by base name + is_leader
+    leader_base_name = leader.split(",")[0].strip()
+    leader_row = db.fetchone("""
+        SELECT set_code, collector_number FROM cards
+        WHERE name = %s AND is_leader = TRUE AND collector_number ~ '^[0-9]'
+        ORDER BY collector_number DESC LIMIT 1
+    """, [leader_base_name])
+
+    # Base uses plain card name
+    base_row = db.fetchone("""
+        SELECT set_code, collector_number FROM cards
+        WHERE name = %s AND is_base = TRUE AND collector_number ~ '^[0-9]'
+        ORDER BY collector_number DESC LIMIT 1
+    """, [suggested_base]) if suggested_base else None
 
     def make_id(row: dict) -> str:
         return f"{row['set_code']}_{int(row['collector_number'][4:]):03d}"
@@ -5426,8 +5442,8 @@ def generate_deck(
     """, [leader, *date_params])
 
     # ── Step 5: build deckbuilder-importable JSON ─────────────────────────────
-    leader_id = resolve_id(leader)
-    base_id   = resolve_id(suggested_base) if suggested_base else None
+    leader_id = make_id(leader_row) if leader_row else None
+    base_id   = make_id(base_row)   if base_row   else resolve_id(suggested_base)
 
     leader_short = leader.split(",")[0].strip()
 
