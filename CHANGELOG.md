@@ -223,3 +223,25 @@
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - Performance audit (Core Web Vitals, DB query timing) is the next logical pass
+
+### Loop Pass 12 — API Result Caching & Dead Code Cleanup
+
+**API result caching (`api/main.py`)**
+- Added `_leaders_cache` and `_meta_call_cache` dicts with 5-minute TTL (`_LEADERS_TTL = 300`)
+- `/api/leaders`: cold 122ms → warm 5ms (cache key: all query params tuple)
+- `/api/meta-call`: cold 245ms → warm 16ms (cache key: all query params tuple)
+- Both endpoints are called on every page load; data only changes when new events are imported, making TTL caching safe
+
+**Dead CSS removed (`frontend/index.html`)**
+- Deleted `.sb-badge` — marked "used in other contexts" in a comment but never referenced in HTML or JS (~12 lines)
+
+**Error handling fix (`frontend/index.html`)**
+- `applyAllGuesses()`: final `/api/sealed/confirm-data` refresh call was unguarded — added try/catch; button now shows "(refresh failed)" instead of throwing silently
+
+**Verification**
+- All 7 tested endpoints return 200 ✓
+- Cold → warm speedup confirmed: leaders 122ms → 5ms, meta-call 245ms → 16ms
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- `/api/leaders/by-base` and other heavy endpoints are candidates for the same TTL cache pattern

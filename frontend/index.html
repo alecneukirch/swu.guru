@@ -1864,18 +1864,6 @@ select option { background: var(--surface2); }
   padding: 0 24px 32px;
 }
 
-/* SB badge (used in other contexts) */
-.sb-badge {
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: 9px;
-  padding: 1px 4px;
-  border-radius: 2px;
-  background: rgba(79,195,247,0.15);
-  color: var(--blue);
-  margin-left: 6px;
-  vertical-align: middle;
-}
 
 .mono { font-family: var(--mono); }
 .dim  { color: var(--text2); }
@@ -8899,8 +8887,12 @@ async function applyAllGuesses() {
     } catch(e) { /* skip */ }
   }
   btn.textContent = `Applied ${saved}`;
-  _confirmData = await api('/api/sealed/confirm-data');
-  renderConfirm();
+  try {
+    _confirmData = await api('/api/sealed/confirm-data');
+    renderConfirm();
+  } catch(e) {
+    btn.textContent = `Applied ${saved} (refresh failed)`;
+  }
 }
 
 async function saveLeader(poolId) {

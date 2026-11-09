@@ -280,6 +280,10 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
 #  LEADERS  —  Home page grid + meta overview
 # =============================================================================
 
+_leaders_cache: dict = {}   # key: param tuple → {"ts": float, "data": list}
+_meta_call_cache: dict = {} # key: param tuple → {"ts": float, "data": dict}
+_LEADERS_TTL = 300          # 5 minutes
+
 @app.get("/api/leaders")
 def leaders(
     meta_id:   Optional[str] = Query(None),
@@ -296,6 +300,11 @@ def leaders(
     meta_id filters by date range derived from the metas table
     (e.g. 'JTL-post-ban', 'SOR', 'eternal-post-ban').
     """
+    _ck = (meta_id, min_decks, or_has_t8, format, days, decay, event_level)
+    _ce = _leaders_cache.get(_ck)
+    if _ce and _time.time() < _ce["ts"] + _LEADERS_TTL:
+        return _ce["data"]
+
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days, event_level)
     tier_sql, tier_params = tier_filter_sql(event_level)
@@ -590,6 +599,7 @@ def leaders(
         })
 
     result.sort(key=lambda x: x["total_decks"], reverse=True)
+    _leaders_cache[_ck] = {"ts": _time.time(), "data": result}
     return result
 
 
@@ -3001,6 +3011,11 @@ def meta_call(
     meta field, weighted by each opponent's meta share.
     field_ev > 0.5 = positive expectation vs the field.
     """
+    _ck = (meta_id, min_decks, min_matches, min_opponents, qualify_top_n, top_n, format, days, ban)
+    _ce = _meta_call_cache.get(_ck)
+    if _ce and _time.time() < _ce["ts"] + _LEADERS_TTL:
+        return _ce["data"]
+
     t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days)
     ban_s, ban_m = ban_snippets(ban)
@@ -3154,7 +3169,9 @@ def meta_call(
         })
 
     result.sort(key=lambda x: (-(x["field_ev"] or 0), -x["decks"]))
-    return {"decks": result, "total_decks": total_decks}
+    out = {"decks": result, "total_decks": total_decks}
+    _meta_call_cache[_ck] = {"ts": _time.time(), "data": out}
+    return out
 
 
 @app.get("/api/events/recent-top8")
