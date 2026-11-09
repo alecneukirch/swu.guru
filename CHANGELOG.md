@@ -99,3 +99,20 @@
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - Picks page matchup table loses Meta% column on mobile (hidden to save space) — if column count becomes a UX issue, consider a horizontal-scroll table instead
+
+### Loop Pass 6 — Import Hygiene Round 2 & Mobile Tab Overflow
+
+**API cleanup (`api/main.py`)**
+- Added `import traceback` and `timedelta` to module-level imports — removed two more inline function-body imports
+- Removed redundant `import re as _re` inside `analyze_deck`; `re` is already a top-level import
+- All remaining inline imports confirmed intentional: `requests` (sync HTTP client for swudb.com), `scraper.melee` (heavy dep deferred for startup perf), `difflib` (sealed-only), `fitz` (PDF-only)
+
+**Frontend — mobile tab overflow (`frontend/index.html`)**
+- Leader page had 5 tabs (Cards / Matchups / Weaknesses / Mirror / Synergy) with no horizontal scroll — overflowed ~580px on a 375px screen
+- Added `overflow-x:auto; flex-wrap:nowrap` to `.lp-tabs` at mobile breakpoint; tightened tab padding to `8px 10px` and font to `11px; white-space:nowrap`
+
+**Verification**
+- All 5 tested endpoints return 200 ✓
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
