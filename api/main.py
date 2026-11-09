@@ -5449,7 +5449,7 @@ def generate_deck(
 
     return {
         "metadata": {
-            "name":   f"{leader_short}{' — ' + base_group if base_group else ''} — Generated at swu.guru",
+            "name":   f"{leader_short}{' - ' + base_group if base_group else ''} - Generated at swu.guru",
             "author": "swu.guru",
         },
         "leader": {"id": leader_id, "count": 1} if leader_id else None,
