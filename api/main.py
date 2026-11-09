@@ -14,6 +14,7 @@ import asyncio
 import json
 import re
 import time as _time
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -2862,7 +2863,6 @@ def matchup_matrix_by_base(
     all_leaders = list({c["leader"] for c in combos})
     ldr_ph = ','.join(['%s'] * len(all_leaders))
 
-    extra_join  = ""
     extra_join   = ""
     extra_select = ""
     extra_where  = ""
@@ -2910,7 +2910,6 @@ def matchup_matrix_by_base(
 
     # Accumulate W/L per ordered combo pair.
     # When min_elo is set, only record a direction if the row player meets the threshold.
-    from collections import defaultdict
     pair_stats: dict = defaultdict(lambda: {"wins": 0, "matches": 0})
 
     for m in matches:
@@ -3082,7 +3081,6 @@ def meta_call(
         for b in c["bases"]:
             base_to_combo[f"{c['leader']}||{b}"] = f"{c['leader']}|||{c['base_key']}"
 
-    from collections import defaultdict
     pair_stats: dict = defaultdict(lambda: {"wins": 0, "matches": 0})
     for m in matches:
         p1_key = base_to_combo.get(f"{m['p1_leader']}||{m['p1_base']}")
@@ -4995,7 +4993,7 @@ def karabast_leaders(min_matches: int = Query(200)):
 
 @app.get("/api/sealed/confirm-data")
 def sealed_confirm_data():
-    import difflib, re
+    import difflib
     EVENT_MELEE_ID = "421058"
 
     event = db.fetchone("SELECT id FROM events WHERE melee_id = %s", (EVENT_MELEE_ID,))
@@ -5295,8 +5293,6 @@ def generate_deck(
     suggested_base = max(base_counts, key=base_counts.get) if base_counts else None
 
     # ── Step 2: aggregate cards from reference standings ──────────────────────
-    from collections import defaultdict
-
     card_rows = db.fetchall(f"""
         SELECT
             dc.card_name,

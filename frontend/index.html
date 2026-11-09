@@ -2559,6 +2559,12 @@ select option { background: var(--surface2); }
   font-family: var(--mono);
   text-align: right;
 }
+@media (max-width: 700px) {
+  .picks-wrap-inner { flex-direction: column; }
+  .picks-list { width: 100%; }
+  .picks-detail-panel { margin-left: 0; margin-top: 16px; width: 100%; box-sizing: border-box; }
+  .pick-mu-table td:nth-child(4), .pick-mu-table th:nth-child(4) { display: none; }
+}
 
 /* ── Modal ────────────────────────────────────────────────── */
 #modal-backdrop {
