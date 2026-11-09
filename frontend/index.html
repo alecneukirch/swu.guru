@@ -18,27 +18,27 @@
 <style>
 /* ── Design tokens ───────────────────────────────────────── */
 :root {
-  --bg:          #09090f;
-  --bg2:         #0f0f1a;
-  --surface:     #13131f;
-  --surface2:    #1a1a2a;
-  --border:      rgba(255,255,255,0.07);
-  --border2:     rgba(255,255,255,0.12);
-  --text:        #e8e8f0;
-  --text2:       #9090a8;
-  --text3:       #9898b0;
-  --gold:        #f0b429;
-  --gold2:       #ffd166;
-  --conv-mid:    #f0b429;  /* neutral performance — not overridden by theme */
+  --bg:          #0e0e0e;
+  --bg2:         #161616;
+  --surface:     #1c1c1c;
+  --surface2:    #242424;
+  --border:      rgba(255,255,255,0.08);
+  --border2:     rgba(255,255,255,0.14);
+  --text:        #f1f1f1;
+  --text2:       #9ca3af;
+  --text3:       #9ca3af;
+  --gold:        #94a3b8;
+  --gold2:       #cbd5e1;
+  --conv-mid:    #94a3b8;  /* neutral performance — not overridden by theme */
   --green:       #2ecc71;
   --green2:      #00ff87;
   --red:         #e74c3c;
   --red2:        #ff6b6b;
   --blue:        #4fc3f7;
   --purple:      #b39ddb;
-  --accent:      #8d7ef8;  /* was #7c6af7; lifted for 4.5:1 AA on --surface2 */
-  --text1:       #e8e8f0;
-  --yellow:      #f0b429;
+  --accent:      #60a5fa;
+  --text1:       #f1f1f1;
+  --yellow:      #94a3b8;
   --mono:        'Share Tech Mono', monospace;
   --display:     'Rajdhani', sans-serif;
   --body:        'Barlow', sans-serif;
@@ -51,12 +51,6 @@
   --aggression:  #ff7043;
   --force:       #b39ddb;
   --unknown:     #78909c;
-}
-
-/* ── Eternal theme override ──────────────────────────────── */
-body.eternal-theme {
-  --gold:  #9b6dff;
-  --gold2: #c4a8ff;
 }
 
 /* ── Reset ───────────────────────────────────────────────── */
@@ -2040,7 +2034,6 @@ select option { background: var(--surface2); }
 }
 .pq-format-badge.premier  { color: var(--gold);   border-color: rgba(240,180,41,0.4);  background: rgba(240,180,41,0.08); }
 .pq-format-badge.limited  { color: var(--blue);   border-color: rgba(79,195,247,0.4);  background: rgba(79,195,247,0.08); }
-.pq-format-badge.eternal  { color: var(--purple); border-color: rgba(179,157,219,0.4); background: rgba(179,157,219,0.08); }
 .pq-format-badge.default  { color: var(--text3);  border-color: var(--border); background: transparent; }
 
 /* ── Picks page ───────────────────────────────────────────── */
@@ -3202,7 +3195,6 @@ select.sl-input { cursor: pointer; }
   <select id="meta-select" class="nav-meta-select" aria-label="Meta period" onchange="setMeta(this.value)"></select>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
-    <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
   </div>
   <div class="nav-status">
     <div class="status-dot" id="status-dot"></div>
@@ -3521,7 +3513,6 @@ select.sl-input { cursor: pointer; }
     <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">Format:</span>
     <button class="btn active" id="pq-fmt-premier" onclick="togglePQFormat('premier')">Premier</button>
     <button class="btn active" id="pq-fmt-limited" onclick="togglePQFormat('limited')">Limited</button>
-    <button class="btn active" id="pq-fmt-eternal" onclick="togglePQFormat('eternal')">Eternal</button>
   </div>
   <div class="pq-results">
     <div class="pq-status" id="pq-status"></div>
@@ -3969,7 +3960,7 @@ const API = (location.hostname === 'localhost' || location.protocol === 'file:')
   ? 'http://localhost:8000' : '';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let currentFormat  = 'standard';  // 'standard' | 'eternal'
+let currentFormat  = 'standard';
 let currentMeta    = null;         // 'ASH', 'LAW', etc. — null means all-time
 let metaOptions    = [];           // full list from loadMetas(), newest first
 let homeSort       = 'total_decks';
@@ -4247,7 +4238,6 @@ function openLeader(name, base = null, baseAspect = null, baseGroup = null) {
 function buildLeaderHash() {
   let h = '#leader=' + encodeURIComponent(currentLeader);
   if (currentLeaderBaseGroup)  h += '&base_group='  + encodeURIComponent(currentLeaderBaseGroup);
-  if (currentFormat === 'eternal') h += '&fmt=eternal';
   if (leaderTab && leaderTab !== 'cards') h += '&tab=' + leaderTab;
   return h;
 }
@@ -4257,8 +4247,7 @@ function routeFromHash() {
   if (!hash) return false;
   const params = Object.fromEntries(hash.split('&').map(p => p.split('=').map(decodeURIComponent)));
   if (params.leader) {
-    if (params.fmt === 'eternal') applyFormat('eternal');
-    const groupLabel = params.base_group || null;
+      const groupLabel = params.base_group || null;
     async function doRoute() {
       let bases      = params.base       || null;  // backwards compat with old URLs
       let baseAspect = params.base_aspect || null;
@@ -4291,9 +4280,7 @@ function routeFromHash() {
 // ══ HOME ════════════════════════════════════════════════════════════════════
 function applyFormat(fmt) {
   currentFormat = fmt;
-  document.body.classList.toggle('eternal-theme', fmt === 'eternal');
-  document.getElementById('fmt-standard').classList.toggle('active', fmt === 'standard');
-  document.getElementById('fmt-eternal').classList.toggle('active', fmt === 'eternal');
+  document.getElementById('fmt-standard').classList.add('active');
   loadMetas();
 }
 function setFormat(fmt) {
@@ -5756,7 +5743,7 @@ function formatPQCost(rawCost, country) {
 let _pqAutoGeoFired = false;
 
 let _pqSort = 'date'; // 'dist' | 'date'
-const _pqFormats = new Set(['premier', 'limited', 'eternal']);
+const _pqFormats = new Set(['premier', 'limited']);
 
 function setPQSort(mode) {
   _pqSort = mode;
@@ -5864,7 +5851,7 @@ async function findPQs() {
 function renderPQResults(results, useMiles = true) {
   results = results.filter(ev => {
     const fmt = (ev.format || '').toLowerCase();
-    const bucket = ['premier','limited','eternal'].includes(fmt) ? fmt : 'premier';
+    const bucket = ['premier','limited'].includes(fmt) ? fmt : 'premier';
     return _pqFormats.has(bucket);
   });
   if (_pqSort === 'date') {
@@ -5897,7 +5884,7 @@ function renderPQResults(results, useMiles = true) {
       ? `<a href="${ev.url}" target="_blank" class="btn" style="font-size:11px;padding:4px 10px">REGISTER ↗</a>`
       : '';
     const fmtLower = (ev.format || '').toLowerCase();
-    const fmtCls = ['premier','limited','eternal'].includes(fmtLower) ? fmtLower : 'default';
+    const fmtCls = ['premier','limited'].includes(fmtLower) ? fmtLower : 'default';
     const fmtBadge = ev.format
       ? `<span class="pq-format-badge ${fmtCls}">${ev.format}</span>`
       : '';
@@ -6559,8 +6546,7 @@ async function loadMatrix() {
   // top_n uses max of rows/cols so we always have enough combos for both axes
   const topN = Math.max(matrixRows, matrixCols);
 
-  const minDecks = currentFormat === 'eternal' ? 1 : 5;
-  let url = `/api/matrix?min_decks=${minDecks}&min_matches=1&top_n=${topN}&format=${currentFormat}` + metaParam();
+  let url = `/api/matrix?min_decks=5&min_matches=1&top_n=${topN}&format=${currentFormat}` + metaParam();
   if (matrixMinElo > 0)    url += `&min_elo=${matrixMinElo}`;
   if (matrixOppMinElo > 0) url += `&opp_min_elo=${matrixOppMinElo}`;
 

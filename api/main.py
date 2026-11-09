@@ -126,18 +126,15 @@ def meta_date_filter(meta_id: Optional[str], days: Optional[int] = None,
     return "AND " + " AND ".join(parts), params
 
 def _tnames(format: str, ban: bool = False) -> dict:
-    """Return DB table/view names for the given format ('standard' or 'eternal')."""
-    eternal = format == "eternal"
-    p = "eternal_" if eternal else ""
-    standings_tbl = "standings_no_bane" if (ban and not eternal) else f"{p}standings"
+    """Return DB table/view names for the standard format."""
     return {
-        "events":               f"{p}events",
-        "standings":            standings_tbl,
-        "decklist_cards":       f"{p}decklist_cards",
-        "matches":              f"{p}matches",
-        "mv_leader_stats":      "mv_eternal_leader_stats"      if eternal else "mv_leader_stats",
-        "mv_card_leader_stats": "mv_eternal_card_leader_stats" if eternal else "mv_card_leader_stats",
-        "mv_card_copy_matrix":  "mv_eternal_card_copy_matrix"  if eternal else "mv_card_copy_matrix",
+        "events":               "events",
+        "standings":            "standings_no_bane" if ban else "standings",
+        "decklist_cards":       "decklist_cards",
+        "matches":              "matches",
+        "mv_leader_stats":      "mv_leader_stats",
+        "mv_card_leader_stats": "mv_card_leader_stats",
+        "mv_card_copy_matrix":  "mv_card_copy_matrix",
     }
 
 # ── World-aware base group helpers ─────────────────────────────────────────────
@@ -301,7 +298,7 @@ def leaders(
     Returns aggregated leader stats (summed across all bases).
     Includes conversion vs expected (T8 rate / meta-average T8 rate).
     meta_id filters by date range derived from the metas table
-    (e.g. 'JTL-post-ban', 'SOR', 'eternal-post-ban').
+    (e.g. 'JTL-post-ban', 'SOR', 'LAW').
     """
     _ck = (meta_id, min_decks, or_has_t8, format, days, decay, event_level)
     _ce = _leaders_cache.get(_ck)
