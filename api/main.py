@@ -1716,18 +1716,17 @@ def card_copy_matrix(
                 "conversion": conv,
             }
 
-    # Best config: highest conversion across ALL cells (including 0/0), min 3 decks
+    # Best config: highest conversion across ALL cells (including 0/0)
     for combo, cells in by_leader.items():
         for cell in cells.values():
-            if cell["deck_count"] >= 3:
-                cur_best = best_config.get(combo)
-                if cur_best is None or (cell["conversion"] or 0) > (cur_best["conversion"] or 0):
-                    best_config[combo] = {
-                        "md_copies":  cell["md_copies"],
-                        "sb_copies":  cell["sb_copies"],
-                        "conversion": cell["conversion"],
-                        "deck_count": cell["deck_count"],
-                    }
+            cur_best = best_config.get(combo)
+            if cur_best is None or (cell["conversion"] or 0) > (cur_best["conversion"] or 0):
+                best_config[combo] = {
+                    "md_copies":  cell["md_copies"],
+                    "sb_copies":  cell["sb_copies"],
+                    "conversion": cell["conversion"],
+                    "deck_count": cell["deck_count"],
+                }
 
     return {
         "card_name":   card_name,
