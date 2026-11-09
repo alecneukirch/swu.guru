@@ -5377,6 +5377,7 @@ def generate_deck(
         "card_type":       None,
         "arena":           None,
         "copy_votes":      defaultdict(float),  # qty → sum-of-weights
+        "qty_counts":      defaultdict(int),    # qty → number of decks (unweighted)
     })
     # Also track per-deck type counts for computing targets
     deck_type_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -5385,10 +5386,11 @@ def generate_deck(
         key = (row["card_name"], bool(row["is_sideboard"]))
         w   = score_by_id.get(row["standing_id"], 0)
         d   = card_data[key]
-        d["weighted_copies"]        += row["quantity"] * w
-        d["weighted_score"]         += w
-        d["deck_count"]             += 1
+        d["weighted_copies"]             += row["quantity"] * w
+        d["weighted_score"]              += w
+        d["deck_count"]                  += 1
         d["copy_votes"][row["quantity"]] += w
+        d["qty_counts"][row["quantity"]] += 1
         if not d["card_type"]:
             d["card_type"] = row.get("card_type") or "Unit"
             d["arena"]     = row.get("arena") or ""
@@ -5451,16 +5453,20 @@ def generate_deck(
                 continue
             inc_rate   = d["deck_count"] / n_ref
             best_qty   = _best_copies(d)
+            qc         = d.get("qty_counts") or {}
             type_buckets[_card_slot_key(d)].append({
-                "card_name": name,
-                "inc_rate":  inc_rate,
-                "best_qty":  best_qty,
-                "card_score": inc_rate * best_qty,
+                "card_name":    name,
+                "inc_rate":     inc_rate,
+                "best_qty":     best_qty,
+                "card_score":   inc_rate * best_qty,
                 "inc_rate_raw": inc_rate,
+                "rate_3":       qc.get(3, 0) / n_ref,
+                "rate_2":       qc.get(2, 0) / n_ref,
             })
 
+        # Fill order: highest 3-of conversion rate first, then 2-of, then card_score
         for bucket in type_buckets.values():
-            bucket.sort(key=lambda x: x["card_score"], reverse=True)
+            bucket.sort(key=lambda x: (-x["rate_3"], -x["rate_2"], -x["card_score"]))
 
         result, total = [], 0
         used: set[str] = set()
