@@ -3895,6 +3895,7 @@ select.sl-input { cursor: pointer; }
     <button class="lp-tab"        id="lp-tab-matchups"   onclick="setLeaderTab('matchups')">Matchups</button>
     <button class="lp-tab"        id="lp-tab-weaknesses" onclick="setLeaderTab('weaknesses')">Weaknesses</button>
     <button class="lp-tab"        id="lp-tab-mirror"     onclick="setLeaderTab('mirror')">Mirror</button>
+    <button class="lp-tab"        id="lp-tab-synergy"    onclick="setLeaderTab('synergy')">Synergy</button>
   </div>
 
   <!-- Cards tab -->
@@ -3999,6 +4000,19 @@ select.sl-input { cursor: pointer; }
       <input type="number" id="mr-min-matches" value="5" min="1" style="width:64px" oninput="loadLeaderMirror()">
     </div>
     <div class="mu-cards-grid" id="leader-mirror-grid">
+      <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
+    </div>
+  </div>
+
+  <div id="lp-panel-synergy" style="display:none">
+    <div class="controls" style="padding-top:14px">
+      <span class="ctrl-label">Min plays together</span>
+      <input type="number" id="syn-min-co" value="5" min="1" style="width:64px" oninput="loadLeaderSynergy()">
+      <div class="sep"></div>
+      <span class="ctrl-label">Min lift</span>
+      <input type="number" id="syn-min-lift" value="1.1" min="1.0" step="0.1" style="width:64px" oninput="loadLeaderSynergy()">
+    </div>
+    <div class="synergy-grid" id="leader-synergy-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
     </div>
   </div>
@@ -5633,7 +5647,7 @@ let leaderTab = 'cards';
 
 function setLeaderTab(tab) {
   leaderTab = tab;
-  ['cards','matchups','weaknesses','mirror'].forEach(t => {
+  ['cards','matchups','weaknesses','mirror','synergy'].forEach(t => {
     document.getElementById('lp-tab-' + t).classList.toggle('active', t === tab);
     document.getElementById('lp-panel-' + t).style.display = t === tab ? '' : 'none';
   });
@@ -5641,6 +5655,7 @@ function setLeaderTab(tab) {
   if (tab === 'matchups'   && currentLeader) loadLeaderMatchups();
   if (tab === 'weaknesses' && currentLeader) loadLeaderWeaknesses();
   if (tab === 'mirror'     && currentLeader) loadLeaderMirror();
+  if (tab === 'synergy'    && currentLeader) loadLeaderSynergy();
 }
 
 // ══ MATCHUPS ════════════════════════════════════════════════════════════════
@@ -5999,6 +6014,71 @@ function renderMirror() {
   };
 
   artQueue.forEach(({ name, id }) => loadCardArt(name, id, 'loaded'));
+}
+
+// ══ SYNERGY PAIRS ═══════════════════════════════════════════════════════════
+
+let _synergyGen = 0;
+async function loadLeaderSynergy() {
+  const gen = ++_synergyGen;
+  const grid = document.getElementById('leader-synergy-grid');
+  if (!currentLeader || !grid) return;
+  grid.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
+  const minCo   = Math.max(1, parseInt(document.getElementById('syn-min-co')?.value  || 5));
+  const minLift = Math.max(1.0, parseFloat(document.getElementById('syn-min-lift')?.value || 1.1));
+  let url = '/api/leader/' + encodeURIComponent(currentLeader)
+    + '/synergy?min_co=' + minCo + '&min_lift=' + minLift + '&limit=30';
+  if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
+  try {
+    const rows = await api(url);
+    if (gen !== _synergyGen) return;
+    if (!rows.length) {
+      grid.innerHTML = '<div class="empty-state">// no synergy pairs found — try lowering min lift or min plays together</div>';
+      return;
+    }
+    grid.innerHTML = rows.map((r, i) => {
+      const liftNum  = parseFloat(r.lift);
+      const liftColor = liftNum >= 2.0 ? 'var(--green)' : liftNum >= 1.4 ? 'var(--gold)' : 'var(--text2)';
+      const inclA = r.total_decks ? Math.round(r.incl_a / r.total_decks * 100) : 0;
+      const inclB = r.total_decks ? Math.round(r.incl_b / r.total_decks * 100) : 0;
+      const nameA = r.card_a.split(' | ')[0];
+      const nameB = r.card_b.split(' | ')[0];
+      return `<div class="synergy-card">
+  <div class="synergy-arts">
+    <div class="synergy-art" id="syn-art-a-${i}">
+      <div class="synergy-art-scrim"></div>
+      <div class="synergy-art-label">${nameA}</div>
+    </div>
+    <div class="synergy-art" id="syn-art-b-${i}">
+      <div class="synergy-art-scrim"></div>
+      <div class="synergy-art-label">${nameB}</div>
+    </div>
+  </div>
+  <div class="synergy-stats-row">
+    <div class="synergy-stat">
+      <div class="synergy-stat-val">${inclA}%</div>
+      <div class="synergy-stat-label">Incl A</div>
+    </div>
+    <div class="synergy-lift-badge" style="color:${liftColor};background:color-mix(in srgb,${liftColor} 10%,transparent);border:1px solid color-mix(in srgb,${liftColor} 25%,transparent)">${liftNum.toFixed(2)}×</div>
+    <div class="synergy-stat">
+      <div class="synergy-stat-val">${inclB}%</div>
+      <div class="synergy-stat-label">Incl B</div>
+    </div>
+    <div class="synergy-stat">
+      <div class="synergy-stat-val">${r.co_occur}</div>
+      <div class="synergy-stat-label">Together</div>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+    rows.forEach((r, i) => {
+      loadCardArt(r.card_a, 'syn-art-a-' + i);
+      loadCardArt(r.card_b, 'syn-art-b-' + i);
+    });
+  } catch(e) {
+    if (gen !== _synergyGen) return;
+    grid.innerHTML = `<div class="empty-state">// ${e.message}</div>`;
+  }
 }
 
 // ══ ELO BREAKDOWN ═══════════════════════════════════════════════════════════
