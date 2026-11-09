@@ -5580,10 +5580,11 @@ def generate_deck(
     base_id   = make_id(base_row)   if base_row   else resolve_id(suggested_base)
 
     leader_short = leader.split(",")[0].strip()
+    base_label   = base_names[0] if base_names else None
 
     return {
         "metadata": {
-            "name":   f"{leader_short}{' - ' + base_group if base_group else ''} - Generated at swu.guru",
+            "name":   f"{leader_short}{' - ' + base_label if base_label else ''} - Generated at swu.guru",
             "author": "swu.guru",
         },
         "leader": {"id": leader_id, "count": 1} if leader_id else None,
