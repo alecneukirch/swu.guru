@@ -4520,6 +4520,24 @@ select.sl-input { cursor: pointer; }
 </div>
 
 <!-- ══ CARD MODAL ══ -->
+<div id="gendeck-backdrop" onclick="if(event.target===this)closeGenerateDeck()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div id="gendeck-modal" style="background:var(--surface1);border:1px solid var(--border2);border-radius:12px;width:min(680px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <div id="gendeck-title" style="font-family:var(--display);font-size:18px;font-weight:700;flex:1"></div>
+      <button class="modal-close" onclick="closeGenerateDeck()">✕</button>
+    </div>
+    <div id="gendeck-meta" style="padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text3)"></div>
+    <div style="flex:1;overflow-y:auto;padding:16px 20px">
+      <textarea id="gendeck-json" readonly style="width:100%;height:420px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-family:var(--mono);font-size:12px;line-height:1.5;padding:12px;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center">
+      <button class="btn" id="gendeck-copy-btn" onclick="copyDeckJson()">Copy JSON</button>
+      <span id="gendeck-copy-msg" style="font-family:var(--mono);font-size:12px;color:var(--green);display:none">✓ Copied!</span>
+      <span id="gendeck-status" style="font-family:var(--mono);font-size:12px;color:var(--text3);margin-left:auto"></span>
+    </div>
+  </div>
+</div>
+
 <div id="modal-backdrop" onclick="closeModal(event)">
   <div id="modal">
     <div id="modal-header">
@@ -5251,7 +5269,7 @@ async function renderLeaderHero(name) {
     <div class="lh-aspect" id="lh-aspect-display">${baseIcon}</div>
     ${baseLine}
     <div class="lh-name">${shortName(name)} <span class="lc-tier ${tier.cls}" style="position:static;display:inline-flex;vertical-align:middle;margin-left:8px">${tier.grade}</span></div>
-    <div class="lh-sub">${subtitle} <button class="share-btn" onclick="shareLeader(this)" title="Copy link">&#128279; Share</button></div>
+    <div class="lh-sub">${subtitle} <button class="share-btn" onclick="shareLeader(this)" title="Copy link">&#128279; Share</button> <button class="share-btn" onclick="openGenerateDeck()" title="Generate starting deck estimate">⚙ Generate Deck</button></div>
     <div class="lh-stats">
       <div class="lh-stat">
         <div class="lh-stat-val">${stats.total_decks != null ? Math.round(stats.total_decks).toLocaleString() : '—'}</div>
@@ -5312,6 +5330,56 @@ function shareLeader(btn) {
     btn.textContent = '✓ Copied!';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = '🔗 Share'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+async function openGenerateDeck() {
+  if (!currentLeader) return;
+  const backdrop = document.getElementById('gendeck-backdrop');
+  const title    = document.getElementById('gendeck-title');
+  const metaEl   = document.getElementById('gendeck-meta');
+  const jsonEl   = document.getElementById('gendeck-json');
+  const statusEl = document.getElementById('gendeck-status');
+
+  backdrop.style.display = 'flex';
+  title.textContent = 'Generate Deck — ' + shortName(currentLeader);
+  metaEl.textContent = '';
+  jsonEl.value = '';
+  statusEl.textContent = 'generating…';
+
+  try {
+    let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/generate-deck?format=' + currentFormat + metaParam();
+    if (currentLeaderBase) url += '&base_group=' + encodeURIComponent(currentLeaderBase);
+    const data = await api(url);
+
+    const topOpp = data.meta.topOpponents
+      .slice(0, 5)
+      .map(o => shortName(o.leader) + ' ' + (o.metaShare * 100).toFixed(1) + '%')
+      .join(' · ');
+
+    metaEl.innerHTML =
+      `<strong style="color:var(--text2)">${data.meta.referenceDecks} reference decks</strong>` +
+      ` · avg win rate <strong style="color:var(--green)">${(data.meta.avgWinRate * 100).toFixed(1)}%</strong>` +
+      `<br>Top opponents: ${topOpp}`;
+
+    jsonEl.value = JSON.stringify(data, null, 2);
+    statusEl.textContent = `${data.mainDeck.reduce((s,c)=>s+c.count,0)} main · ${data.sideboard.reduce((s,c)=>s+c.count,0)} sideboard`;
+  } catch(e) {
+    jsonEl.value = '// Error: ' + e.message;
+    statusEl.textContent = '';
+  }
+}
+
+function closeGenerateDeck() {
+  document.getElementById('gendeck-backdrop').style.display = 'none';
+}
+
+function copyDeckJson() {
+  const jsonEl = document.getElementById('gendeck-json');
+  const msgEl  = document.getElementById('gendeck-copy-msg');
+  navigator.clipboard.writeText(jsonEl.value).then(() => {
+    msgEl.style.display = 'inline';
+    setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
   });
 }
 

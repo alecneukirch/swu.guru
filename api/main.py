@@ -5226,6 +5226,181 @@ def karabast_leader_matchups(leader_id: str, base_id: str):
 
 
 # =============================================================================
+#  GENERATE DECK
+# =============================================================================
+
+@app.get("/api/leader/{leader}/generate-deck")
+def generate_deck(
+    leader:      str,
+    base_group:  Optional[str] = Query(None),
+    meta_id:     Optional[str] = Query(None),
+    format:      str           = Query("standard"),
+    ref_decks:   int           = Query(15, ge=5, le=50, description="Max reference decks to aggregate from"),
+    min_decks:   int           = Query(5,  ge=1,         description="Minimum reference decks required"),
+):
+    """
+    Generate a starting-point deck estimate for a leader.
+
+    Algorithm:
+    1. Find the top N standings (by combined win-rate + placement score) that have decklists.
+    2. Aggregate main deck cards from those standings, weighted by deck score.
+    3. Build a 50-card main deck greedily by card score (inclusion rate × avg copies).
+    4. Build a 10-card sideboard the same way from sideboard cards.
+    5. Return meta context: reference deck count, avg win rate, top opponents by meta share.
+    """
+    t = _tnames(format)
+    date_sql, date_params = meta_date_filter(meta_id)
+
+    base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
+    base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
+    base_params = [base_names] if base_names else []
+
+    # ── Step 1: find top reference standings ─────────────────────────────────
+    # Score = 0.5 × match_win_rate + 0.5 × (1 - placement / player_count)
+    ref_rows = db.fetchall(f"""
+        SELECT
+            s.id                                                       AS standing_id,
+            s.match_win_rate,
+            s.placement,
+            e.player_count,
+            s.base,
+            (
+                COALESCE(s.match_win_rate, 0) * 0.5
+                + (1.0 - s.placement::float / NULLIF(e.player_count, 0)) * 0.5
+            )                                                          AS deck_score
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        WHERE s.leader = %s
+          AND s.has_decklist = TRUE
+          AND s.placement IS NOT NULL
+          AND e.player_count >= 16
+          {date_sql}
+          {base_filter}
+        ORDER BY deck_score DESC
+        LIMIT %s
+    """, [leader, *date_params, *base_params, ref_decks])
+
+    if len(ref_rows) < min_decks:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Not enough reference decklists ({len(ref_rows)}/{min_decks} required). "
+                   "Try a broader meta filter."
+        )
+
+    standing_ids   = [r["standing_id"]  for r in ref_rows]
+    score_by_id    = {r["standing_id"]: float(r["deck_score"]) for r in ref_rows}
+    total_score    = sum(score_by_id.values())
+    n_ref          = len(ref_rows)
+    avg_win_rate   = sum(float(r["match_win_rate"] or 0) for r in ref_rows) / n_ref
+
+    # Most common base across reference decks
+    base_counts: dict[str, int] = {}
+    for r in ref_rows:
+        if r["base"]:
+            base_counts[r["base"]] = base_counts.get(r["base"], 0) + 1
+    suggested_base = max(base_counts, key=base_counts.get) if base_counts else None
+
+    # ── Step 2: aggregate cards from reference standings ──────────────────────
+    card_rows = db.fetchall(f"""
+        SELECT
+            dc.card_name,
+            dc.is_sideboard,
+            dc.standing_id,
+            dc.quantity
+        FROM decklist_cards dc
+        WHERE dc.standing_id = ANY(%s::int[])
+          AND NOT EXISTS (
+              SELECT 1 FROM cards c
+              WHERE split_part(dc.card_name, ' | ', 1) = c.name
+                AND (c.is_leader OR c.is_base)
+          )
+    """, [standing_ids])
+
+    # Accumulate weighted totals per card per slot (main/sideboard)
+    from collections import defaultdict
+    card_data: dict[tuple[str, bool], dict] = defaultdict(lambda: {
+        "weighted_copies": 0.0,
+        "weighted_score":  0.0,
+        "deck_count":      0,
+    })
+    for row in card_rows:
+        key = (row["card_name"], bool(row["is_sideboard"]))
+        w   = score_by_id.get(row["standing_id"], 0)
+        d   = card_data[key]
+        d["weighted_copies"] += row["quantity"] * w
+        d["weighted_score"]  += w
+        d["deck_count"]      += 1
+
+    def build_slot(is_sb: bool, target: int) -> list[dict]:
+        # Cards that appear in this slot across reference decks
+        entries = []
+        for (name, sb), d in card_data.items():
+            if sb != is_sb:
+                continue
+            inc_rate  = d["deck_count"] / n_ref
+            avg_copies = d["weighted_copies"] / d["weighted_score"] if d["weighted_score"] else 0
+            # Card score weights inclusion heavily; avg_copies breaks ties
+            card_score = inc_rate * avg_copies
+            entries.append({
+                "card_name":   name,
+                "inc_rate":    inc_rate,
+                "avg_copies":  avg_copies,
+                "card_score":  card_score,
+            })
+
+        entries.sort(key=lambda x: x["card_score"], reverse=True)
+
+        # Greedy fill to `target` cards
+        result, total = [], 0
+        for e in entries:
+            if total >= target:
+                break
+            copies = max(1, round(e["avg_copies"]))
+            # Don't overflow target
+            copies = min(copies, target - total)
+            result.append({"name": e["card_name"], "count": copies,
+                           "incRate": round(e["inc_rate"], 3)})
+            total += copies
+
+        return result
+
+    main_deck = build_slot(is_sb=False, target=50)
+    sideboard  = build_slot(is_sb=True,  target=10)
+
+    # ── Step 3: top opponents by meta share (for sideboard context) ───────────
+    opp_rows = db.fetchall(f"""
+        SELECT
+            s.leader                                                       AS leader_name,
+            COUNT(*)::INT                                                  AS total_decks,
+            COUNT(*) * 1.0 / SUM(COUNT(*)) OVER ()                        AS meta_share
+        FROM {t['standings']} s
+        JOIN {t['events']} e ON e.id = s.event_id
+        WHERE s.leader IS NOT NULL
+          AND s.leader != %s
+          AND e.player_count >= 16
+          {date_sql}
+        GROUP BY s.leader
+        ORDER BY total_decks DESC
+        LIMIT 8
+    """, [leader, *date_params])
+
+    return {
+        "leader":     leader,
+        "base":       suggested_base,
+        "mainDeck":   main_deck,
+        "sideboard":  sideboard,
+        "meta": {
+            "referenceDecks":  n_ref,
+            "avgWinRate":      round(avg_win_rate, 3),
+            "topOpponents":    [
+                {"leader": r["leader_name"], "metaShare": round(float(r["meta_share"]), 4)}
+                for r in opp_rows
+            ],
+        },
+    }
+
+
+# =============================================================================
 #  SEALED DECKLIST CORRECTION
 # =============================================================================
 
