@@ -202,3 +202,24 @@
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - Performance audit (Core Web Vitals, DB query timing) is next logical pass
+
+### Loop Pass 11 — Dead CSS Sweep (218 lines removed)
+
+**Duplicate/dead CSS removed (`frontend/index.html`)**
+- Removed first duplicate `.players-table` block plus dead child classes (`.pl-rank`, `.pl-name`, `.pl-num`, `.pl-leader`, `.pl-mwr-*`, `.player-detail-header`, `.player-detail-name`, `.player-detail-stats`, `.player-stat-val/label`) — these were an older table design superseded by `.pt-*` classes, never referenced in HTML or JS (~76 lines)
+- Restored missing `cursor: pointer` on `.players-table tr:hover td` (was lost in the surviving block)
+- Removed dead first `.sl-table` CSS block — all 6 HTML uses of `.sl-table` are in the league sections and use the second (league-section) definition; first block was overridden at every selector; `.sl-num*` subclasses never used in any template (~14 lines)
+- Removed `.elo-insight` — never referenced in HTML or JS (~6 lines)
+- Removed old list-based matchup card classes (`.mu-card-row`, `.mu-card-art`, `.mu-card-name`, `.mu-card-wr`, `.mu-card-games`, `.mu-card-bar`, `.mu-delta`) — replaced by card-tile grid system; never referenced (~34 lines)
+- Removed dead SB card decoration classes (`.ct-sb-divider`, `.ct-sb-divider-line`, `.ct-sb-divider-label`, `.ct-sb-flag`) — never referenced in templates (~36 lines)
+- Removed `.conv-pill` and `.incl-bar`/`.incl-track`/`.incl-fill`/`.incl-val` — both appear to be old table-row display components replaced by the current `ct-conv`/`ct-incl` card-tile system (~26 lines)
+- Removed `.merge-confidence` and `.hmw-pts-badge` — never referenced in HTML or JS (~9 lines)
+- Removed `.dim2` utility class — never referenced in HTML or JS (~1 line)
+
+**Verification**
+- All 6 tested endpoints return 200 ✓ (pq-finder 500 is pre-existing external network timeout)
+- File: 9569 → 9351 lines (218 lines removed this pass, ~985 lines removed total across passes 10–11)
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- Performance audit (Core Web Vitals, DB query timing) is the next logical pass

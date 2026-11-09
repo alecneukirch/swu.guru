@@ -456,13 +456,6 @@ select option { background: var(--surface2); }
   margin-top: 6px;
   white-space: nowrap;
 }
-.elo-insight {
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--text3);
-  font-style: italic;
-}
-
 /* ── Matchup table ────────────────────────────────────────────── */
 .matchup-grid {
   display: grid;
@@ -567,40 +560,6 @@ select option { background: var(--surface2); }
   padding: 10px 0 4px;
   border-bottom: 1px solid var(--border);
 }
-.mu-card-row {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  transition: border-color 0.15s;
-}
-.mu-card-row:hover { border-color: var(--border2); }
-.mu-card-art {
-  width: 30px; height: 30px;
-  border-radius: 3px;
-  background: var(--surface);
-  background-size: 200% auto;
-  background-position: 50% 20%;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.mu-card-art.loaded { opacity: 1; }
-.mu-card-name { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mu-card-games { font-family: var(--mono); font-size: 11px; color: var(--text3); flex-shrink: 0; }
-.mu-card-wr { font-family: var(--mono); font-size: 13px; color: var(--text2); flex-shrink: 0; min-width: 34px; text-align: right; }
-.mu-delta { font-family: var(--mono); font-size: 13px; font-weight: 600; flex-shrink: 0; min-width: 46px; text-align: right; }
-.mu-delta.good { color: var(--green); }
-.mu-delta.bad  { color: var(--red2); }
-.mu-delta.neu  { color: var(--text3); }
-.mu-card-bar { position: absolute; bottom: 0; left: 0; height: 2px; opacity: 0.5; }
-
 /* ── Matchup matrix ──────────────────────────────────────── */
 .mx-table {
   border-collapse: collapse;
@@ -1905,44 +1864,6 @@ select option { background: var(--surface2); }
   padding: 0 24px 32px;
 }
 
-/* SB section divider in card grid */
-.ct-sb-divider {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 4px 4px;
-  margin-top: 4px;
-}
-.ct-sb-divider-line {
-  flex: 1;
-  height: 1px;
-  background: var(--border2);
-}
-.ct-sb-divider-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--text3);
-  white-space: nowrap;
-}
-
-.ct-sb-flag {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(79,195,247,0.22);
-  color: var(--blue);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 5px;
-  border-radius: 3px;
-  z-index: 3;
-}
-
 /* SB badge (used in other contexts) */
 .sb-badge {
   display: inline-block;
@@ -1958,45 +1879,6 @@ select option { background: var(--surface2); }
 
 .mono { font-family: var(--mono); }
 .dim  { color: var(--text2); }
-.dim2 { color: var(--text3); }
-
-/* Conversion pill in table */
-.conv-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.conv-pill.good { background: rgba(46,204,113,0.12); color: var(--green); }
-.conv-pill.mid  { background: rgba(240,180,41,0.12);  color: var(--conv-mid); }
-.conv-pill.bad  { background: rgba(231,76,60,0.12);   color: var(--red); }
-.conv-pill.neu  { background: rgba(79,195,247,0.10);  color: var(--blue); }
-
-/* Inclusion bar */
-.incl-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.incl-track {
-  width: 80px;
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.incl-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--gold);
-  transition: width 0.3s;
-}
-.incl-val { font-family: var(--mono); font-size: 12px; color: var(--text2); white-space: nowrap; }
 
 .empty-state {
   text-align: center;
@@ -2848,83 +2730,6 @@ select option { background: var(--surface2); }
   vertical-align: middle;
 }
 .players-table tr:hover td { background: rgba(255,255,255,0.025); cursor: pointer; }
-.pl-rank   { font-family: var(--mono); font-size: 13px; color: var(--text3); width: 40px; }
-.pl-name   { font-weight: 700; color: var(--text); }
-.pl-num    { font-family: var(--mono); font-size: 14px; color: var(--text2); text-align: right; }
-.pl-num.gold { color: var(--gold); }
-.pl-num.green { color: var(--green); }
-.pl-leader { font-size: 12px; color: var(--text3); }
-.pl-mwr-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.pl-mwr-track {
-  width: 60px;
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.pl-mwr-fill {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--green);
-}
-
-/* Player detail panel */
-.player-detail-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 24px 24px 0;
-  flex-wrap: wrap;
-}
-.player-detail-name {
-  font-family: var(--display);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-.player-detail-stats {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.player-stat-val   { font-family: var(--mono); font-size: 22px; font-weight: 700; line-height: 1; }
-.player-stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
-
-/* ── Players page ────────────────────────────────────────────────────────── */
-.players-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.players-table th {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text3);
-  padding: 8px 14px;
-  text-align: left;
-  border-bottom: 2px solid var(--border2);
-  white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
-}
-.players-table th:hover { color: var(--text2); }
-.players-table th.active { color: var(--gold); }
-.players-table th .sort-arrow { margin-left: 4px; opacity: 0.6; }
-.players-table td {
-  padding: 9px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  vertical-align: middle;
-}
-.players-table tr:hover td { background: rgba(255,255,255,0.025); }
 .pt-name   { font-weight: 600; color: var(--text); cursor: pointer; }
 .pt-name:hover { color: var(--gold); }
 .pt-num    { font-family: var(--mono); color: var(--text2); text-align: right; }
@@ -3102,19 +2907,6 @@ select option { background: var(--surface2); }
 .sealed-filter-btn { font-family:var(--mono); font-size:11px; padding:4px 10px; border-radius:3px;
   cursor:pointer; border:1px solid var(--border); background:var(--bg2); color:var(--text3); }
 .sealed-filter-btn.active { border-color:var(--accent); color:var(--accent); }
-/* sealed card table */
-.sl-table { width:100%; border-collapse:collapse; }
-.sl-table th { font-family:var(--mono); font-size:11px; color:var(--text3); text-align:left;
-  padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
-.sl-table th:hover { color:var(--text2); }
-.sl-table th.sort-asc::after  { content:' ↑'; }
-.sl-table th.sort-desc::after { content:' ↓'; }
-.sl-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); font-size:13px; vertical-align:middle; }
-.sl-table tr:hover td { background:rgba(255,255,255,0.02); }
-.sl-table .sl-num { font-family:var(--mono); font-size:13px; font-weight:600; }
-.sl-table .sl-num-good { color:var(--green); }
-.sl-table .sl-num-mid  { color:var(--text2); }
-.sl-table .sl-num-bad  { color:var(--red2); }
 .sl-bar-wrap { width:80px; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; display:inline-block; vertical-align:middle; }
 .sl-bar { height:6px; border-radius:3px; }
 /* sealed leader card */
@@ -3187,11 +2979,6 @@ select option { background: var(--surface2); }
   transition: background 0.15s;
 }
 .merge-reject-btn:hover { background: rgba(231,76,60,0.22); }
-.merge-confidence {
-  font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 3px;
-  background: rgba(240,180,41,0.12); color: var(--gold); border: 1px solid rgba(240,180,41,0.25);
-}
-
 /* ── Decklist Correction ─────────────────────────────────── */
 .correct-layout { display:flex; gap:0; height:calc(100vh - 120px); overflow:hidden; }
 .correct-image-panel { flex:0 0 52%; display:flex; flex-direction:column; border-right:1px solid var(--border2); overflow:hidden; }
@@ -3369,11 +3156,6 @@ select.sl-input { cursor: pointer; }
   text-decoration:none;
 }
 .hmw-melee-link:hover { text-decoration:underline; }
-.hmw-pts-badge {
-  font-family:var(--mono); font-size:11px; color:var(--text3);
-  background:var(--surface2); border-radius:4px;
-  padding:2px 6px; white-space:nowrap;
-}
 /* pack earner row: gold highlight */
 #page-leagueHMW tr.hmw-pack-row td { background: rgba(212,175,55,0.10) !important; }
 #page-leagueHMW tr.hmw-pack-row .sl-player-name { color: var(--gold); font-weight: 700; }
