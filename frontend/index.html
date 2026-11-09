@@ -61,6 +61,12 @@ body.eternal-theme {
 
 /* ── Reset ───────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[role="button"]:focus-visible, [role="link"]:focus-visible,
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 html { height: 100%; font-size: 125%; }  /* base scale — 1rem ≈ 20px */
 body {
   height: 100%;
@@ -3813,7 +3819,7 @@ select.sl-input { cursor: pointer; }
 
 <!-- NAV -->
 <nav id="nav">
-  <div class="nav-logo" onclick="goHome();loadHome();" style="cursor:pointer">SWU<span>//</span>GURU</div>
+  <div class="nav-logo" role="button" tabindex="0" onclick="goHome();loadHome();" onkeydown="if(event.key==='Enter'||event.key===' '){goHome();loadHome();}" aria-label="Go to home" style="cursor:pointer">SWU<span>//</span>GURU</div>
   <button class="nav-btn active" id="nav-home"    onclick="showPage('home')">Leaders</button>
   <button class="nav-btn"        id="nav-picks"   onclick="showPage('picks')">Meta Call</button>
   <button class="nav-btn"        id="nav-cards"   onclick="showPage('cards')">Cards</button>
@@ -3821,7 +3827,7 @@ select.sl-input { cursor: pointer; }
   <button class="nav-btn"        id="nav-pqfinder" onclick="showPage('pqfinder')">Find PQs</button>
   <button class="nav-btn"        id="nav-events"  onclick="showPage('events')">Events</button>
   <button class="nav-btn"        id="nav-players" onclick="showPage('players')">Players</button>
-  <select id="meta-select" class="nav-meta-select" onchange="setMeta(this.value)"></select>
+  <select id="meta-select" class="nav-meta-select" aria-label="Meta period" onchange="setMeta(this.value)"></select>
   <div class="nav-format-toggle">
     <button class="fmt-btn active" id="fmt-standard" onclick="setFormat('standard')">Premier</button>
     <button class="fmt-btn"        id="fmt-eternal"  onclick="setFormat('eternal')">Eternal</button>
@@ -3834,8 +3840,8 @@ select.sl-input { cursor: pointer; }
 
 <!-- BREADCRUMB -->
 <div id="breadcrumb">
-  <span class="bc-link" id="bc-home" onclick="goHome()">Leaders</span>
-  <span class="bc-link" id="bc-events-back" style="display:none" onclick="showPage('events')">Events</span>
+  <span class="bc-link" id="bc-home" role="button" tabindex="0" onclick="goHome()" onkeydown="if(event.key==='Enter'||event.key===' ')goHome()">Leaders</span>
+  <span class="bc-link" id="bc-events-back" role="button" tabindex="0" style="display:none" onclick="showPage('events')" onkeydown="if(event.key==='Enter'||event.key===' ')showPage('events')">Events</span>
   <span class="bc-sep">›</span>
   <span class="bc-cur" id="bc-leader"></span>
   <span class="bc-cur" id="bc-event-name" style="display:none"></span>
@@ -3928,6 +3934,7 @@ select.sl-input { cursor: pointer; }
           <div class="sep cgh-sep" style="margin:0 4px"></div>
           <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
           <input type="number" id="lp-min-decks" value="2" min="1" max="999"
+            aria-label="Minimum decks"
             style="width:52px;padding:3px 6px;font-size:12px"
             oninput="loadLeaderCards()">
         </div>
@@ -3992,7 +3999,7 @@ select.sl-input { cursor: pointer; }
       </div>
       <div class="sep"></div>
       <span class="ctrl-label">Min matches</span>
-      <input type="number" id="wk-min-matches" value="20" min="1" style="width:64px" oninput="loadLeaderWeaknesses()">
+      <input type="number" id="wk-min-matches" value="20" min="1" aria-label="Minimum matches" style="width:64px" oninput="loadLeaderWeaknesses()">
     </div>
     <div class="card-grid" id="leader-weaknesses-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
@@ -4003,7 +4010,7 @@ select.sl-input { cursor: pointer; }
   <div id="lp-panel-mirror" style="display:none">
     <div class="controls" style="padding-top:14px">
       <span class="ctrl-label">Min matches</span>
-      <input type="number" id="mr-min-matches" value="5" min="1" style="width:64px" oninput="loadLeaderMirror()">
+      <input type="number" id="mr-min-matches" value="5" min="1" aria-label="Minimum mirror matches" style="width:64px" oninput="loadLeaderMirror()">
     </div>
     <div class="mu-cards-grid" id="leader-mirror-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
@@ -4013,10 +4020,10 @@ select.sl-input { cursor: pointer; }
   <div id="lp-panel-synergy" style="display:none">
     <div class="controls" style="padding-top:14px">
       <span class="ctrl-label">Min plays together</span>
-      <input type="number" id="syn-min-co" value="5" min="1" style="width:64px" oninput="loadLeaderSynergy()">
+      <input type="number" id="syn-min-co" value="5" min="1" aria-label="Minimum plays together" style="width:64px" oninput="loadLeaderSynergy()">
       <div class="sep"></div>
       <span class="ctrl-label">Min lift</span>
-      <input type="number" id="syn-min-lift" value="1.1" min="1.0" step="0.1" style="width:64px" oninput="loadLeaderSynergy()">
+      <input type="number" id="syn-min-lift" value="1.1" min="1.0" step="0.1" aria-label="Minimum lift" style="width:64px" oninput="loadLeaderSynergy()">
     </div>
     <div class="synergy-grid" id="leader-synergy-grid">
       <div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>
@@ -4121,7 +4128,7 @@ select.sl-input { cursor: pointer; }
     <input type="text" id="pq-address" placeholder="Enter your address, city, or zip…" style="flex:1;min-width:220px;max-width:420px"
       onkeydown="if(event.key==='Enter')findPQs()">
     <button class="pq-geo-btn" title="Use my location" onclick="pqUseGeolocation()">⊕</button>
-    <select id="pq-range" class="pq-radius-select" onchange="reapplyPQFilters()">
+    <select id="pq-range" class="pq-radius-select" aria-label="Search radius" onchange="reapplyPQFilters()">
       <option value="100">100 mi</option>
       <option value="200" selected>200 mi</option>
       <option value="300">300 mi</option>
@@ -4240,7 +4247,7 @@ select.sl-input { cursor: pointer; }
     <div class="sep"></div>
     <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
     <input type="number" id="cp-min-decks" value="5" min="1" max="999"
-      style="width:52px;padding:3px 6px;font-size:12px" oninput="loadCardsPage()">
+      aria-label="Minimum decks" style="width:52px;padding:3px 6px;font-size:12px" oninput="loadCardsPage()">
     <div class="sep"></div>
     <input type="text" id="cp-search" placeholder="Search cards…" oninput="filterGlobalCards()" style="width:130px;padding:3px 8px;font-size:12px">
     <div class="sep"></div>
@@ -4257,10 +4264,10 @@ select.sl-input { cursor: pointer; }
   <div class="controls" style="padding-top:6px;flex-wrap:wrap;gap:8px">
     <div id="cp-cost-filters" style="display:flex;gap:3px;flex-wrap:wrap"></div>
     <div class="sep"></div>
-    <select id="cp-trait" onchange="filterGlobalCards()" style="padding:3px 8px;font-size:12px;height:28px">
+    <select id="cp-trait" aria-label="Filter by trait" onchange="filterGlobalCards()" style="padding:3px 8px;font-size:12px;height:28px">
       <option value="">All traits</option>
     </select>
-    <select id="cp-keyword" onchange="filterGlobalCards()" style="padding:3px 8px;font-size:12px;height:28px">
+    <select id="cp-keyword" aria-label="Filter by keyword" onchange="filterGlobalCards()" style="padding:3px 8px;font-size:12px;height:28px">
       <option value="">All keywords</option>
     </select>
   </div>
@@ -5591,7 +5598,7 @@ function renderCardTable(rows) {
     const typeLabel = sec.type === 'Ground' ? 'Ground Units' : sec.type === 'Space' ? 'Space Units' : sec.type + 's';
     const secId = 'ct-sec-' + sec.type;
     return `<div class="ct-type-section" id="${secId}">
-  <div class="ct-type-divider" data-tooltip="Click to collapse" onclick="toggleTypeSection('${secId}')">
+  <div class="ct-type-divider" data-tooltip="Click to collapse" role="button" tabindex="0" aria-label="Toggle ${typeLabel} section" onclick="toggleTypeSection('${secId}')" onkeydown="if(event.key==='Enter'||event.key===' ')toggleTypeSection('${secId}')">
     <div class="ct-type-line"></div>
     <span class="ct-type-label"><span class="ct-type-chevron">▾</span>${typeLabel}</span>
     <div class="ct-type-line"></div>
@@ -9019,7 +9026,7 @@ function renderGlobalCards(rows) {
     const typeLabel = sec.type === 'Ground' ? 'Ground Units' : sec.type === 'Space' ? 'Space Units' : sec.type + 's';
     const secId = 'cp-sec-' + sec.type;
     return `<div class="ct-type-section" id="${secId}">
-  <div class="ct-type-divider" onclick="toggleTypeSection('${secId}')">
+  <div class="ct-type-divider" role="button" tabindex="0" aria-label="Toggle ${typeLabel} section" onclick="toggleTypeSection('${secId}')" onkeydown="if(event.key==='Enter'||event.key===' ')toggleTypeSection('${secId}')">
     <div class="ct-type-line"></div>
     <span class="ct-type-label"><span class="ct-type-chevron">▾</span>${typeLabel}</span>
     <div class="ct-type-line"></div>
