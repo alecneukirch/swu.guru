@@ -5301,13 +5301,23 @@ def generate_deck(
     suggested_base = max(base_counts, key=base_counts.get) if base_counts else None
 
     # ── Step 2: aggregate cards from reference standings ──────────────────────
+    from collections import defaultdict
+
     card_rows = db.fetchall(f"""
         SELECT
             dc.card_name,
             dc.is_sideboard,
             dc.standing_id,
-            dc.quantity
+            dc.quantity,
+            COALESCE(ct.type, 'Unit') AS card_type,
+            ct.arena
         FROM decklist_cards dc
+        LEFT JOIN LATERAL (
+            SELECT type, arena FROM cards
+            WHERE split_part(dc.card_name, ' | ', 1) = name
+              AND NOT is_leader AND NOT is_base
+            ORDER BY collector_number DESC LIMIT 1
+        ) ct ON TRUE
         WHERE dc.standing_id = ANY(%s::int[])
           AND NOT EXISTS (
               SELECT 1 FROM cards c
@@ -5317,12 +5327,16 @@ def generate_deck(
     """, [standing_ids])
 
     # Accumulate weighted totals per card per slot (main/sideboard)
-    from collections import defaultdict
     card_data: dict[tuple[str, bool], dict] = defaultdict(lambda: {
         "weighted_copies": 0.0,
         "weighted_score":  0.0,
         "deck_count":      0,
+        "card_type":       None,
+        "arena":           None,
     })
+    # Also track per-deck type counts for computing targets
+    deck_type_counts: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
     for row in card_rows:
         key = (row["card_name"], bool(row["is_sideboard"]))
         w   = score_by_id.get(row["standing_id"], 0)
@@ -5330,42 +5344,127 @@ def generate_deck(
         d["weighted_copies"] += row["quantity"] * w
         d["weighted_score"]  += w
         d["deck_count"]      += 1
+        if not d["card_type"]:
+            d["card_type"] = row.get("card_type") or "Unit"
+            d["arena"]     = row.get("arena") or ""
 
-    def build_slot(is_sb: bool, target: int) -> list[dict]:
-        # Cards that appear in this slot across reference decks
-        entries = []
-        for (name, sb), d in card_data.items():
-            if sb != is_sb:
+        # Accumulate main-deck type counts per reference deck
+        if not row["is_sideboard"]:
+            ctype = (row.get("card_type") or "Unit")
+            if ctype not in ("Unit", "Event", "Upgrade"):
+                ctype = "Unit"
+            arena = (row.get("arena") or "")
+            slot_key = f"Unit:{arena}" if ctype == "Unit" else ctype
+            deck_type_counts[row["standing_id"]][slot_key] += row["quantity"]
+
+    # Weighted average type targets for the main deck
+    type_targets: dict[str, float] = defaultdict(float)
+    for sid, type_dict in deck_type_counts.items():
+        w = score_by_id.get(sid, 0)
+        for slot_key, count in type_dict.items():
+            type_targets[slot_key] += count * w / total_score
+    type_targets = {k: round(v) for k, v in type_targets.items()}
+
+    def _card_slot_key(d: dict) -> str:
+        ctype = (d.get("card_type") or "Unit")
+        if ctype not in ("Unit", "Event", "Upgrade"):
+            ctype = "Unit"
+        arena = (d.get("arena") or "")
+        return f"Unit:{arena}" if ctype == "Unit" else ctype
+
+    def build_main_deck(target: int = 50) -> list[dict]:
+        # Group candidate cards by type slot
+        type_buckets: dict[str, list] = defaultdict(list)
+        for (name, is_sb), d in card_data.items():
+            if is_sb:
                 continue
-            inc_rate  = d["deck_count"] / n_ref
+            inc_rate   = d["deck_count"] / n_ref
             avg_copies = d["weighted_copies"] / d["weighted_score"] if d["weighted_score"] else 0
-            # Card score weights inclusion heavily; avg_copies breaks ties
-            card_score = inc_rate * avg_copies
+            type_buckets[_card_slot_key(d)].append({
+                "card_name": name,
+                "inc_rate":  inc_rate,
+                "avg_copies": avg_copies,
+                "card_score": inc_rate * avg_copies,
+                "inc_rate_raw": inc_rate,
+            })
+
+        for bucket in type_buckets.values():
+            bucket.sort(key=lambda x: x["card_score"], reverse=True)
+
+        result, total, used = [], 0, set()
+
+        # Fill each type bucket up to its weighted-average target
+        for slot_key, slot_target in sorted(type_targets.items(), key=lambda x: -x[1]):
+            bucket = type_buckets.get(slot_key, [])
+            bucket_total = 0
+            for e in bucket:
+                if bucket_total >= slot_target or total >= target:
+                    break
+                copies = max(1, round(e["avg_copies"]))
+                copies = min(copies, 3, slot_target - bucket_total, target - total)
+                result.append({"name": e["card_name"], "count": copies,
+                               "incRate": round(e["inc_rate_raw"], 3)})
+                used.add(e["card_name"])
+                total += copies
+                bucket_total += copies
+
+        # Fill any remaining slots with highest-scoring unused cards
+        if total < target:
+            remaining = [
+                e for bucket in type_buckets.values()
+                for e in bucket if e["card_name"] not in used
+            ]
+            remaining.sort(key=lambda x: x["card_score"], reverse=True)
+            for e in remaining:
+                if total >= target:
+                    break
+                copies = max(1, round(e["avg_copies"]))
+                copies = min(copies, 3, target - total)
+                result.append({"name": e["card_name"], "count": copies,
+                               "incRate": round(e["inc_rate_raw"], 3)})
+                used.add(e["card_name"])
+                total += copies
+
+        return result
+
+    def build_sideboard(main_copies: dict[str, int], target: int = 10) -> list[dict]:
+        entries = []
+        for (name, is_sb), d in card_data.items():
+            if not is_sb:
+                continue
+            already  = main_copies.get(name, 0)
+            max_more = 3 - already
+            if max_more <= 0:
+                continue
+            inc_rate   = d["deck_count"] / n_ref
+            avg_copies = d["weighted_copies"] / d["weighted_score"] if d["weighted_score"] else 0
             entries.append({
-                "card_name":   name,
-                "inc_rate":    inc_rate,
-                "avg_copies":  avg_copies,
-                "card_score":  card_score,
+                "card_name": name,
+                "inc_rate":  inc_rate,
+                "avg_copies": min(avg_copies, max_more),
+                "card_score": inc_rate * avg_copies,
+                "max_more":  max_more,
             })
 
         entries.sort(key=lambda x: x["card_score"], reverse=True)
 
-        # Greedy fill to `target` cards
         result, total = [], 0
         for e in entries:
             if total >= target:
                 break
             copies = max(1, round(e["avg_copies"]))
-            # Don't overflow target
-            copies = min(copies, target - total)
+            copies = min(copies, e["max_more"], target - total)
+            if copies <= 0:
+                continue
             result.append({"name": e["card_name"], "count": copies,
                            "incRate": round(e["inc_rate"], 3)})
             total += copies
 
         return result
 
-    main_deck_entries = build_slot(is_sb=False, target=50)
-    sideboard_entries = build_slot(is_sb=True,  target=10)
+    main_deck_entries = build_main_deck(target=50)
+    main_copies       = {e["name"]: e["count"] for e in main_deck_entries}
+    sideboard_entries = build_sideboard(main_copies, target=10)
 
     # ── Step 3: resolve card collector_number IDs ─────────────────────────────
     all_names = [e["name"] for e in main_deck_entries + sideboard_entries]
