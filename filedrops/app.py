@@ -108,17 +108,17 @@ _BASE_STYLE = """
 
 UPLOAD_HTML = """<!DOCTYPE html>
 <html lang="en">
-<head>{style}<title>File Drop · swu.guru</title></head>
+<head>__STYLE__<title>File Drop · swu.guru</title></head>
 <body>
 <div class="logo"><span>swu</span>.guru / files</div>
 <div class="card">
   <h1>Deck Sheet Drop</h1>
   <p class="sub">files.swu.guru · submit scanned registration sheets</p>
-  {msg}
+  __MSG__
   <form id="f" method="post" action="/upload" enctype="multipart/form-data">
     <div class="field">
       <label>Your name / org</label>
-      <input type="text" name="to_name" placeholder="e.g. Brute Squad Gaming" required>
+      <input type="text" name="to_name" placeholder="e.g. Fantasy Flight Games" required>
     </div>
     <div class="field">
       <label>Event name</label>
@@ -134,7 +134,7 @@ UPLOAD_HTML = """<!DOCTYPE html>
     </div>
     <div class="drop-zone" id="dz" onclick="document.getElementById('fi').click()">
       <p>Drop files here or click to browse</p>
-      <small>PDF, PNG, JPG, TIFF &nbsp;·&nbsp; up to {max_mb} MB per file &nbsp;·&nbsp; multiple allowed</small>
+      <small>PDF, PNG, JPG, TIFF &nbsp;·&nbsp; up to __MAX_MB__ MB per file &nbsp;·&nbsp; multiple allowed</small>
       <div id="file-list"></div>
     </div>
     <input type="file" id="fi" name="files" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff"
@@ -164,13 +164,13 @@ function onFiles(inp) {
 
 SUCCESS_HTML = """<!DOCTYPE html>
 <html lang="en">
-<head>{style}<title>Uploaded · swu.guru</title></head>
+<head>__STYLE__<title>Uploaded · swu.guru</title></head>
 <body>
 <div class="logo"><span>swu</span>.guru / files</div>
 <div class="card">
   <h1>Files received</h1>
   <p class="sub">files.swu.guru · submit scanned registration sheets</p>
-  <div class="msg msg-ok">✓ {count} file(s) uploaded successfully. Thanks!</div>
+  <div class="msg msg-ok">✓ __COUNT__ file(s) uploaded successfully. Thanks!</div>
   <a href="/" style="font-family:var(--mono);font-size:13px">← Submit more</a>
 </div>
 </body></html>
@@ -178,15 +178,15 @@ SUCCESS_HTML = """<!DOCTYPE html>
 
 ADMIN_HTML = """<!DOCTYPE html>
 <html lang="en">
-<head>{style}<title>Admin · files.swu.guru</title></head>
+<head>__STYLE__<title>Admin · files.swu.guru</title></head>
 <body>
 <div class="logo"><span>swu</span>.guru / files / admin</div>
 <div class="card" style="max-width:900px">
   <h1>Uploads</h1>
-  <p class="sub">{count} submission(s)</p>
+  <p class="sub">__COUNT__ submission(s)</p>
   <table>
     <thead><tr><th>Received</th><th>Event</th><th>From</th><th>Notes</th><th>Files</th></tr></thead>
-    <tbody>{rows}</tbody>
+    <tbody>__ROWS__</tbody>
   </table>
 </div>
 </body></html>
@@ -196,7 +196,10 @@ ADMIN_HTML = """<!DOCTYPE html>
 @app.get("/", response_class=HTMLResponse)
 async def index():
     max_mb = MAX_BYTES // (1024 * 1024)
-    return UPLOAD_HTML.format(style=_BASE_STYLE, msg="", max_mb=max_mb)
+    return (UPLOAD_HTML
+            .replace("__STYLE__", _BASE_STYLE)
+            .replace("__MSG__", "")
+            .replace("__MAX_MB__", str(max_mb)))
 
 
 @app.post("/upload", response_class=HTMLResponse)
@@ -250,8 +253,9 @@ async def upload(
     )
     await _send_email(f"[files.swu.guru] {event_name} — {to_name}", body)
 
-    max_mb = MAX_BYTES // (1024 * 1024)
-    return SUCCESS_HTML.format(style=_BASE_STYLE, count=len(saved))
+    return (SUCCESS_HTML
+            .replace("__STYLE__", _BASE_STYLE)
+            .replace("__COUNT__", str(len(saved))))
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -284,7 +288,10 @@ async def admin(token: str = ""):
             f"</tr>"
         )
 
-    return ADMIN_HTML.format(style=_BASE_STYLE, count=count, rows=rows or "<tr><td colspan='5' style='color:var(--text3);font-family:var(--mono);padding:24px'>no submissions yet</td></tr>")
+    return (ADMIN_HTML
+            .replace("__STYLE__", _BASE_STYLE)
+            .replace("__COUNT__", str(count))
+            .replace("__ROWS__", rows or "<tr><td colspan='5' style='color:var(--text3);font-family:var(--mono);padding:24px'>no submissions yet</td></tr>"))
 
 
 @app.get("/admin/file/{dirname}/{filename}")
