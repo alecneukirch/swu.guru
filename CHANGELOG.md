@@ -185,3 +185,20 @@
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - All major interactive elements now have keyboard support and aria-label coverage
 - Next: performance audit (Core Web Vitals, DB query timing), or CSS dead-code removal pass
+
+### Loop Pass 10 — Dead Code Removal
+
+**Dead ternary fix (`frontend/index.html`)**
+- `loadPicks()`: `const minDecks = currentFormat === 'eternal' ? 2 : 2;` → `const minDecks = 2;` — both branches were identical
+
+**Dead CSS removal (~385 lines, `frontend/index.html`)**
+- Deleted Block 1+2: `.threat-pill`, `.ctr-*`, `.counter-*` classes (~228 lines) — orphaned "Meta Counter" feature CSS with no corresponding HTML or JS usage
+- Deleted Block 3: `.counters-grid`, `.ctr2-card`, `.ctr2-target`, `.ctr2-counters`, `.ctr2-counter-*` classes (~157 lines) including `@media` overrides — same orphaned feature
+- `/api/meta-counter` backend endpoint exists but is never called from the frontend; CSS was the only artifact
+
+**Verification**
+- All 5 tested endpoints return 200 ✓
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- Performance audit (Core Web Vitals, DB query timing) is next logical pass
