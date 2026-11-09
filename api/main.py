@@ -2371,103 +2371,60 @@ def leader_synergy(
     """
     base_names = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
 
+    # Shared query template — pre-materialize standing IDs and leader cards
+    # to avoid repeated standings joins in the self-join step.
     if base_names:
-        # Live query scoped to specific bases
         ph = ','.join(['%s'] * len(base_names))
-        rows = db.fetchall(f"""
-            WITH leader_decks AS (
-                SELECT COUNT(DISTINCT s.id)::INT AS total_decks
-                FROM standings s
-                JOIN events e ON e.id = s.event_id
-                INNER JOIN (SELECT DISTINCT standing_id FROM decklist_cards) has_dl
-                    ON has_dl.standing_id = s.id
-                WHERE s.leader = %s AND s.base IN ({ph})
-            ),
-            card_incl AS (
-                SELECT dc.card_name, COUNT(DISTINCT s.id)::INT AS deck_count
-                FROM decklist_cards dc
-                JOIN standings s ON s.id = dc.standing_id
-                WHERE dc.is_sideboard = false
-                  AND s.leader = %s AND s.base IN ({ph})
-                GROUP BY dc.card_name
-            ),
-            pairs AS (
-                SELECT dc1.card_name AS card_a, dc2.card_name AS card_b,
-                       COUNT(DISTINCT s.id)::INT AS co_occur
-                FROM decklist_cards dc1
-                JOIN decklist_cards dc2
-                  ON  dc2.standing_id = dc1.standing_id
-                  AND dc2.is_sideboard = false
-                  AND dc2.card_name > dc1.card_name
-                JOIN standings s ON s.id = dc1.standing_id
-                WHERE dc1.is_sideboard = false
-                  AND s.leader = %s AND s.base IN ({ph})
-                GROUP BY dc1.card_name, dc2.card_name
-                HAVING COUNT(DISTINCT s.id) >= %s
-            )
-            SELECT p.card_a, p.card_b, p.co_occur,
-                   a.deck_count AS incl_a, b.deck_count AS incl_b,
-                   ld.total_decks,
-                   ROUND(p.co_occur::numeric
-                     / NULLIF((a.deck_count::numeric * b.deck_count::numeric)
-                              / NULLIF(ld.total_decks, 0), 0), 3) AS lift
-            FROM pairs p
-            JOIN card_incl a ON a.card_name = p.card_a
-            JOIN card_incl b ON b.card_name = p.card_b
-            CROSS JOIN leader_decks ld
-            WHERE ROUND(p.co_occur::numeric
-                     / NULLIF((a.deck_count::numeric * b.deck_count::numeric)
-                              / NULLIF(ld.total_decks, 0), 0), 3) >= %s
-            ORDER BY lift DESC, co_occur DESC
-            LIMIT %s
-        """, [leader] + base_names + [leader] + base_names + [leader] + base_names + [min_co, min_lift, limit])
+        base_filter = f"AND s.base IN ({ph})"
+        base_params = base_names
     else:
-        rows = db.fetchall("""
-            WITH leader_decks AS (
-                SELECT COUNT(DISTINCT s.id)::INT AS total_decks
-                FROM standings s
-                INNER JOIN (SELECT DISTINCT standing_id FROM decklist_cards) has_dl
-                    ON has_dl.standing_id = s.id
-                WHERE s.leader = %s
-            ),
-            card_incl AS (
-                SELECT dc.card_name, COUNT(DISTINCT s.id)::INT AS deck_count
-                FROM decklist_cards dc
-                JOIN standings s ON s.id = dc.standing_id
-                WHERE dc.is_sideboard = false
-                  AND s.leader = %s
-                GROUP BY dc.card_name
-            ),
-            pairs AS (
-                SELECT dc1.card_name AS card_a, dc2.card_name AS card_b,
-                       COUNT(DISTINCT s.id)::INT AS co_occur
-                FROM decklist_cards dc1
-                JOIN decklist_cards dc2
-                  ON  dc2.standing_id = dc1.standing_id
-                  AND dc2.is_sideboard = false
-                  AND dc2.card_name > dc1.card_name
-                JOIN standings s ON s.id = dc1.standing_id
-                WHERE dc1.is_sideboard = false
-                  AND s.leader = %s
-                GROUP BY dc1.card_name, dc2.card_name
-                HAVING COUNT(DISTINCT s.id) >= %s
-            )
-            SELECT p.card_a, p.card_b, p.co_occur,
-                   a.deck_count AS incl_a, b.deck_count AS incl_b,
-                   ld.total_decks,
-                   ROUND(p.co_occur::numeric
-                     / NULLIF((a.deck_count::numeric * b.deck_count::numeric)
-                              / NULLIF(ld.total_decks, 0), 0), 3) AS lift
-            FROM pairs p
-            JOIN card_incl a ON a.card_name = p.card_a
-            JOIN card_incl b ON b.card_name = p.card_b
-            CROSS JOIN leader_decks ld
-            WHERE ROUND(p.co_occur::numeric
-                     / NULLIF((a.deck_count::numeric * b.deck_count::numeric)
-                              / NULLIF(ld.total_decks, 0), 0), 3) >= %s
-            ORDER BY lift DESC, co_occur DESC
-            LIMIT %s
-        """, [leader, leader, leader, min_co, min_lift, limit])
+        base_filter = ""
+        base_params = []
+
+    rows = db.fetchall(f"""
+        WITH leader_sids AS (
+            SELECT s.id
+            FROM standings s
+            WHERE s.leader = %s AND s.has_decklist = TRUE {base_filter}
+        ),
+        leader_cards AS (
+            SELECT dc.standing_id, dc.card_name
+            FROM decklist_cards dc
+            WHERE dc.standing_id IN (SELECT id FROM leader_sids)
+              AND dc.is_sideboard = FALSE
+        ),
+        leader_decks AS (
+            SELECT COUNT(DISTINCT standing_id)::INT AS total_decks FROM leader_cards
+        ),
+        card_incl AS (
+            SELECT card_name, COUNT(DISTINCT standing_id)::INT AS deck_count
+            FROM leader_cards
+            GROUP BY card_name
+        ),
+        pairs AS (
+            SELECT a.card_name AS card_a, b.card_name AS card_b,
+                   COUNT(DISTINCT a.standing_id)::INT AS co_occur
+            FROM leader_cards a
+            JOIN leader_cards b ON b.standing_id = a.standing_id AND b.card_name > a.card_name
+            GROUP BY a.card_name, b.card_name
+            HAVING COUNT(DISTINCT a.standing_id) >= %s
+        )
+        SELECT p.card_a, p.card_b, p.co_occur,
+               ca.deck_count AS incl_a, cb.deck_count AS incl_b,
+               ld.total_decks,
+               ROUND(p.co_occur::numeric
+                 / NULLIF((ca.deck_count::numeric * cb.deck_count::numeric)
+                          / NULLIF(ld.total_decks, 0), 0), 3) AS lift
+        FROM pairs p
+        JOIN card_incl ca ON ca.card_name = p.card_a
+        JOIN card_incl cb ON cb.card_name = p.card_b
+        CROSS JOIN leader_decks ld
+        WHERE ROUND(p.co_occur::numeric
+                 / NULLIF((ca.deck_count::numeric * cb.deck_count::numeric)
+                          / NULLIF(ld.total_decks, 0), 0), 3) >= %s
+        ORDER BY lift DESC, co_occur DESC
+        LIMIT %s
+    """, [leader] + base_params + [min_co, min_lift, limit])
     return rows
 
 

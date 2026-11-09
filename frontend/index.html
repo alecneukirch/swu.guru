@@ -4169,12 +4169,12 @@ select.sl-input { cursor: pointer; }
 <!-- Merge review modal -->
 <div id="merge-review-backdrop" onclick="closeMergeReview()"
   style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;backdrop-filter:blur(4px)"></div>
-<div id="merge-review-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+<div id="merge-review-modal" role="dialog" aria-modal="true" aria-label="Review Player Merges" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
   width:min(700px,95vw);max-height:85vh;overflow:hidden;display:none;flex-direction:column;
   background:var(--surface);border:1px solid var(--border2);border-radius:10px;z-index:201;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
     <div style="font-family:var(--display);font-size:20px;font-weight:700">Review Player Merges</div>
-    <button class="modal-close" onclick="closeMergeReview()">✕</button>
+    <button class="modal-close" onclick="closeMergeReview()" aria-label="Close">✕</button>
   </div>
   <div style="padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;font-family:var(--mono);font-size:12px;color:var(--text3)">
     Players with the same name who never shared a tournament are auto-merged.
@@ -4187,13 +4187,13 @@ select.sl-input { cursor: pointer; }
 
 <!-- Player detail panel -->
 <div id="player-detail-backdrop" onclick="closePlayerDetail()"></div>
-<div id="player-detail-panel">
+<div id="player-detail-panel" role="dialog" aria-modal="true" aria-labelledby="pd-name">
   <div class="pd-header">
     <div>
       <div class="pd-name" id="pd-name">—</div>
       <div class="pd-id"  id="pd-id">—</div>
     </div>
-    <button class="modal-close" onclick="closePlayerDetail()">✕</button>
+    <button class="modal-close" onclick="closePlayerDetail()" aria-label="Close">✕</button>
   </div>
   <div class="pd-stats" id="pd-stats"></div>
   <div class="pd-events" id="pd-events">
@@ -4556,7 +4556,7 @@ select.sl-input { cursor: pointer; }
 </div>
 
 <div id="modal-backdrop" onclick="closeModal(event)">
-  <div id="modal">
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-card-name">
     <div id="modal-header">
       <div id="modal-header-art"></div>
       <div id="modal-header-overlay"></div>
@@ -4565,7 +4565,7 @@ select.sl-input { cursor: pointer; }
           <div id="modal-card-name"></div>
           <div id="modal-card-subtitle"></div>
         </div>
-        <button class="modal-close" onclick="closeModal()" style="align-self:flex-start;margin-top:4px">✕</button>
+        <button class="modal-close" onclick="closeModal()" aria-label="Close" style="align-self:flex-start;margin-top:4px">✕</button>
       </div>
     </div>
     <div id="modal-tabs">
@@ -5410,7 +5410,7 @@ async function loadLeaderCards() {
 
   renderLeaderHero(currentLeader);
 
-  document.getElementById('leader-cards-tbody').innerHTML = '<tr><td colspan="6" class="loading">loading…</td></tr>';
+  document.getElementById('leader-cards-tbody').innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
   try {
     const minDecks = parseInt(document.getElementById('lp-min-decks')?.value) || 5;
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat + metaParam();
@@ -5419,7 +5419,7 @@ async function loadLeaderCards() {
     leaderData = await api(url) || [];
     filterCards();
   } catch(e) {
-    document.getElementById('leader-cards-tbody').innerHTML = `<tr><td colspan="6" class="empty-state">// ${e.message}</td></tr>`;
+    document.getElementById('leader-cards-tbody').innerHTML = `<div class="empty-state" style="padding:24px;grid-column:1/-1">// ${e.message}</div>`;
   }
 }
 
