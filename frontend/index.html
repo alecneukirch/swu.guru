@@ -1097,7 +1097,8 @@ select option { background: var(--surface2); }
   display: block;
 }
 #leader-grid.tier-grouped .tier-section-grid {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 240px));
+  justify-content: start;
 }
 
 .leader-card {
@@ -1336,10 +1337,27 @@ select option { background: var(--surface2); }
 
 .tier-section-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
+  justify-content: start;
   gap: 12px;
   margin-bottom: 8px;
 }
+
+/* ── Collapsible tiers ───────────────────────────────────── */
+.tier-section-header,
+.rogue-section-header {
+  cursor: pointer;
+  user-select: none;
+}
+.tsh-chevron {
+  margin-left: auto;
+  font-size: 16px;
+  color: var(--text3);
+  transition: transform 0.2s;
+  line-height: 1;
+}
+.tier-wrap.collapsed .tsh-chevron { transform: rotate(-90deg); }
+.tier-wrap.collapsed .tier-section-grid { display: none; }
 
 /* Small tiers sharing one row */
 .tier-combo-row {
@@ -5100,10 +5118,13 @@ function renderLeaderGrid() {
   const SMALL  = 3;   // tiers with ≤ this many cards are candidates to share a row
   const MAX_CO = 4;   // max tiers per shared row
   const MAX_CARDS_CO = 12; // bail out if combined cards would exceed this
+  const COLLAPSED_DEFAULT = new Set(['D', 'F']);
 
   function renderTierBlock(t, group, inCombo = false) {
     const tier = tierGrade(group[0]._conv);
-    let b = `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span></div>`;
+    const colClass = COLLAPSED_DEFAULT.has(t) ? ' collapsed' : '';
+    let b = `<div class="tier-wrap${colClass}">`;
+    b += `<div class="tier-section-header ${tier.cls}"><span class="tsh-grade" data-tooltip="${TIER_TOOLTIP[t]}">${t}</span><span class="tsh-label">${TIER_LABEL[t]}</span><span class="tsh-count">${group.length}</span><span class="tsh-chevron">▾</span></div>`;
     // In combo rows pin to exactly N columns so cards don't grow larger than S tier
     const gridStyle = inCombo ? ` style="grid-template-columns:repeat(${group.length},minmax(180px,200px))"` : '';
     b += `<div class="tier-section-grid"${gridStyle}>`;
@@ -5112,7 +5133,7 @@ function renderLeaderGrid() {
       b += mkCard(r, i, r._conv, maxD);
       allRows.push({ r, i });
     });
-    b += `</div>`;
+    b += `</div></div>`;
     return b;
   }
 
@@ -5153,19 +5174,25 @@ function renderLeaderGrid() {
 
   // Rogue section
   if (rogueRows.length) {
-    html += `<div id="rogue-anchor" class="rogue-section-header"><span class="rogue-label">Rogue Decks</span><span class="rogue-sub">&lt; 0.6% meta share · excluded from tier grades</span><span class="tsh-count">${rogueRows.length}</span></div>`;
+    html += `<div class="tier-wrap collapsed">`;
+    html += `<div id="rogue-anchor" class="rogue-section-header"><span class="rogue-label">Rogue Decks</span><span class="rogue-sub">&lt; 0.6% meta share · excluded from tier grades</span><span class="tsh-count">${rogueRows.length}</span><span class="tsh-chevron">▾</span></div>`;
     html += `<div class="tier-section-grid rogue-grid">`;
     rogueRows.forEach(r => {
       const i = imgIdx++;
       html += mkCard(r, i, r.conversion, maxD);
       allRows.push({ r, i });
     });
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   grid.innerHTML = html;
 
   grid.onclick = e => {
+    const header = e.target.closest('.tier-section-header, .rogue-section-header');
+    if (header) {
+      header.closest('.tier-wrap')?.classList.toggle('collapsed');
+      return;
+    }
     const card = e.target.closest('.leader-card[data-leader]');
     if (card) openLeader(card.dataset.leader, card.dataset.bases || null, card.dataset.baseAspect || null, card.dataset.baseGroup || null);
   };
