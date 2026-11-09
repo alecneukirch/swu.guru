@@ -36,7 +36,7 @@
   --red2:        #ff6b6b;
   --blue:        #4fc3f7;
   --purple:      #b39ddb;
-  --accent:      #7c6af7;
+  --accent:      #8d7ef8;  /* was #7c6af7; lifted for 4.5:1 AA on --surface2 */
   --text1:       #e8e8f0;
   --yellow:      #f0b429;
   --mono:        'Share Tech Mono', monospace;
@@ -46,7 +46,7 @@
   /* Aspect colors */
   --heroism:     #c6c1a0;
   --villainy:    #040004;
-  --villainy-text: #8b3a6b;  /* readable purple for text uses */
+  --villainy-text: #be6ab4;  /* was #8b3a6b; lifted for 4.5:1 AA (5.59:1 on bg) */
   --cunning:     #f0b429;
   --aggression:  #ff7043;
   --force:       #b39ddb;
@@ -4332,18 +4332,18 @@ select.sl-input { cursor: pointer; }
       <!-- Add Match -->
       <div class="sl-admin-card">
         <div class="sl-admin-title">Add Match Result</div>
-        <select id="sl-match-session" class="sl-input"></select>
+        <select id="sl-match-session" class="sl-input" aria-label="Session"></select>
         <div class="sl-score-row">
-          <select id="sl-match-p1" class="sl-input"></select>
-          <input type="number" id="sl-match-p1gw" class="sl-input" min="0" max="2" value="2" title="Game wins">
+          <select id="sl-match-p1" class="sl-input" aria-label="Player 1"></select>
+          <input type="number" id="sl-match-p1gw" class="sl-input" min="0" max="2" value="2" aria-label="Player 1 game wins" title="Game wins">
         </div>
         <div style="display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--text3)">
           <span style="flex:1;text-align:center">Game draws</span>
-          <input type="number" id="sl-match-gdraw" class="sl-input" style="width:52px" min="0" max="3" value="0" title="Game draws">
+          <input type="number" id="sl-match-gdraw" class="sl-input" style="width:52px" min="0" max="3" value="0" aria-label="Game draws" title="Game draws">
         </div>
         <div class="sl-score-row">
-          <select id="sl-match-p2" class="sl-input"></select>
-          <input type="number" id="sl-match-p2gw" class="sl-input" min="0" max="2" value="0" title="Game wins">
+          <select id="sl-match-p2" class="sl-input" aria-label="Player 2"></select>
+          <input type="number" id="sl-match-p2gw" class="sl-input" min="0" max="2" value="0" aria-label="Player 2 game wins" title="Game wins">
         </div>
         <button class="btn" onclick="leagueAddMatch()">Record Match</button>
       </div>
@@ -4351,7 +4351,7 @@ select.sl-input { cursor: pointer; }
       <div class="sl-admin-card">
         <div class="sl-admin-title">Import from Melee.gg</div>
         <input type="text" id="sl-import-id" class="sl-input" placeholder="Tournament ID (e.g. 428296)">
-        <select id="sl-import-session" class="sl-input">
+        <select id="sl-import-session" class="sl-input" aria-label="Target session">
           <option value="">Auto-create new session</option>
         </select>
         <input type="date" id="sl-import-date" class="sl-input" title="Session date (only used when creating a new session)">
@@ -6145,7 +6145,7 @@ function renderLeaderElo(rows) {
     const tPct = r.t8_rate != null ? Math.round(r.t8_rate * 100) + '%' : '—';
     const t8Line = r.t8_rate > 0 ? `<span class="elo-col-t8">${tPct} T8</span>` : '';
     const sel  = _eloFilterBucket === r.elo_bucket ? ' selected' : '';
-    return `<div class="elo-bucket-col${sel}" onclick="toggleEloFilter(${r.elo_bucket})">
+    return `<div class="elo-bucket-col${sel}" role="button" tabindex="0" aria-label="ELO ${r.elo_bucket}+ filter" aria-pressed="${sel ? 'true' : 'false'}" onclick="toggleEloFilter(${r.elo_bucket})" onkeydown="if(event.key==='Enter'||event.key===' ')toggleEloFilter(${r.elo_bucket})">
   <div class="elo-col-stats">
     <span class="elo-col-n">n=${r.deck_count}</span>
     <span class="elo-col-mwr">${mPct}</span>
@@ -7509,7 +7509,7 @@ async function openPlayerDetail(playerId, playerName) {
       const deckLink = r.decklist_url
         ? `<a class="pd-deck-link" href="${r.decklist_url}" target="_blank" onclick="event.stopPropagation()">DECK ↗</a>`
         : '';
-      return `<div class="pd-event-row" data-leader="${safe}" onclick="if(this.dataset.leader){openLeader(this.dataset.leader)}">
+      return `<div class="pd-event-row" data-leader="${safe}" role="button" tabindex="0" aria-label="Open ${r.leader||'leader'} detail" onclick="if(this.dataset.leader){openLeader(this.dataset.leader)}" onkeydown="if((event.key==='Enter'||event.key===' ')&&this.dataset.leader)openLeader(this.dataset.leader)">
   <div class="pd-place ${pCls}">${r.placement}</div>
   <div class="pd-event-info">
     <div class="pd-event-name">${r.event_name}</div>
@@ -8037,7 +8037,7 @@ function renderLeagueOverview(summary, sessData) {
 
   const flippableCard = (id, normalHTML, flippedHTML) => {
     _flippableCards[id] = { normalHTML, flippedHTML, flipped: false };
-    return `<div class="sl-stat-card sl-flippable" id="sl-${id}-card" onclick="toggleStatCard('${id}')">${normalHTML}</div>`;
+    return `<div class="sl-stat-card sl-flippable" id="sl-${id}-card" role="button" tabindex="0" aria-label="Flip stat card" onclick="toggleStatCard('${id}')" onkeydown="if(event.key==='Enter'||event.key===' ')toggleStatCard('${id}')">${normalHTML}</div>`;
   };
 
   let cards = '';
@@ -9115,7 +9115,7 @@ function renderPicks() {
     const muChips = muChipArr.join('');
 
     listHtml += `
-    <div class="pick-row${isOpen ? ' open' : ''}" onclick="togglePickRow('${key}')">
+    <div class="pick-row${isOpen ? ' open' : ''}" role="button" tabindex="0" aria-expanded="${isOpen ? 'true' : 'false'}" onclick="togglePickRow('${key}')" onkeydown="if(event.key==='Enter'||event.key===' ')togglePickRow('${key}')">
       <div class="pick-row-top">
         <div class="pick-rank ${rankCls}">#${rank}</div>
         <div class="pick-deck">
