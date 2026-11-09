@@ -3912,11 +3912,11 @@ select.sl-input { cursor: pointer; }
         <div class="cgh-row">
           <div class="sort-btn-wrap">
             <span style="color:var(--text3);margin-right:4px">Sort:</span>
-            <div class="gh-col active" id="gh-incl"   onclick="setCardSort('inclusion_rate')">Inclusion</div>
-            <div class="gh-col"        id="gh-conv"    onclick="setCardSort('conversion')">Conversion</div>
-            <div class="gh-col"        id="gh-copies"  onclick="setCardSort('avg_copies')">Avg Copies</div>
-            <div class="gh-col"        id="gh-decks"   onclick="setCardSort('deck_count')">Decks</div>
-            <div class="gh-col"        id="gh-t8s"     onclick="setCardSort('t8_count')">T8s</div>
+            <div class="gh-col active" id="gh-incl"   role="button" tabindex="0" onclick="setCardSort('inclusion_rate')" onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('inclusion_rate')">Inclusion</div>
+            <div class="gh-col"        id="gh-conv"    role="button" tabindex="0" onclick="setCardSort('conversion')"     onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('conversion')">Conversion</div>
+            <div class="gh-col"        id="gh-copies"  role="button" tabindex="0" onclick="setCardSort('avg_copies')"     onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('avg_copies')">Avg Copies</div>
+            <div class="gh-col"        id="gh-decks"   role="button" tabindex="0" onclick="setCardSort('deck_count')"     onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('deck_count')">Decks</div>
+            <div class="gh-col"        id="gh-t8s"     role="button" tabindex="0" onclick="setCardSort('t8_count')"       onkeydown="if(event.key==='Enter'||event.key===' ')setCardSort('t8_count')">T8s</div>
           </div>
           <select id="card-sort-select" style="display:none" onchange="setCardSort(this.value)">
             <option value="inclusion_rate">Sort: Inclusion</option>
@@ -4493,9 +4493,9 @@ select.sl-input { cursor: pointer; }
     </div>
   </div>
   <div class="correct-nav" id="correct-nav">
-    <button class="correct-nav-btn" onclick="correctPrev()">←</button>
+    <button class="correct-nav-btn" onclick="correctPrev()" aria-label="Previous pool">←</button>
     <select class="correct-pool-select" id="correct-pool-select" onchange="correctGoTo(+this.value)"></select>
-    <button class="correct-nav-btn" onclick="correctNext()">→</button>
+    <button class="correct-nav-btn" onclick="correctNext()" aria-label="Next pool">→</button>
     <span id="correct-nav-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:8px"></span>
   </div>
   <div class="correct-layout" id="correct-layout">
@@ -7763,7 +7763,7 @@ async function showLeaguePlayerModal(id) {
   overlay.id = 'sl-modal-overlay';
   overlay.className = 'sl-modal-overlay';
   overlay.innerHTML = `<div class="sl-modal"><p class="sl-modal-title">${name}</p>
-    <button class="sl-modal-close" onclick="document.getElementById('sl-modal-overlay').remove()">✕</button>
+    <button class="sl-modal-close" onclick="document.getElementById('sl-modal-overlay').remove()" aria-label="Close">✕</button>
     <div id="sl-modal-body"><div class="loading" style="padding:16px">loading…</div></div>
   </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -8420,7 +8420,7 @@ async function showHmwLeaguePlayerModal(id) {
   overlay.id = 'hmw-modal-overlay';
   overlay.className = 'sl-modal-overlay';
   overlay.innerHTML = `<div class="sl-modal"><p class="sl-modal-title">${name}</p>
-    <button class="sl-modal-close" onclick="document.getElementById('hmw-modal-overlay').remove()">✕</button>
+    <button class="sl-modal-close" onclick="document.getElementById('hmw-modal-overlay').remove()" aria-label="Close">✕</button>
     <div id="hmw-modal-body"><div class="loading" style="padding:16px">loading…</div></div>
   </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -9819,7 +9819,7 @@ function renderCorrectCards(data) {
         <input class="correct-cnt-input" id="cadd-input-${sec}-${pool.id}" list="${listId}"
           placeholder="add card…" style="flex:1;width:auto;text-align:left;font-size:11px;color:var(--text2)"
           onkeydown="if(event.key==='Enter')correctAddCard(${pool.id},'${sec}',this)">
-        <button class="correct-nav-btn" style="padding:3px 10px;font-size:11px"
+        <button class="correct-nav-btn" style="padding:3px 10px;font-size:11px" aria-label="Add card"
           onclick="correctAddCard(${pool.id},'${sec}',document.getElementById('cadd-input-${sec}-${pool.id}'))">+</button>
       </div>`;
   }
