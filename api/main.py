@@ -5280,6 +5280,23 @@ def generate_deck(
     base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
     base_params = [base_names] if base_names else []
 
+    # For world-specific base groups (e.g. "Cunning Naboo" → group_key "cunning__naboo"),
+    # only include standings whose decklists actually contain that world's indicator cards.
+    # Scanned decks with a different world (or no world) are excluded; unscanned decks
+    # (swt.standing_id IS NULL) are kept since we can't verify them yet.
+    _WORLD_GK = re.compile(r'^[a-z]+__(naboo|endor|kashyyyk|tatooine)$')
+    _expected_world: Optional[str] = None
+    if base_names:
+        _br = db.fetchone("SELECT group_key FROM base_reference WHERE name = %s", [base_names[0]])
+        if _br:
+            _m = _WORLD_GK.match(_br.get('group_key') or '')
+            if _m:
+                _expected_world = _m.group(1)
+
+    swt_join     = SWT_JOIN if _expected_world else ""
+    world_filter = "AND (swt.standing_id IS NULL OR LOWER(swt.world) = %s)" if _expected_world else ""
+    world_params = [_expected_world] if _expected_world else []
+
     # ── Step 1: find top reference standings ─────────────────────────────────
     # Score = 0.5 × match_win_rate + 0.5 × (1 - placement / player_count)
     ref_rows = db.fetchall(f"""
@@ -5295,15 +5312,17 @@ def generate_deck(
             )                                                          AS deck_score
         FROM {t['standings']} s
         JOIN {t['events']} e ON e.id = s.event_id
+        {swt_join}
         WHERE s.leader = %s
           AND s.has_decklist = TRUE
           AND s.placement IS NOT NULL
           AND e.player_count >= 16
           {date_sql}
           {base_filter}
+          {world_filter}
         ORDER BY deck_score DESC
         LIMIT %s
-    """, [leader, *date_params, *base_params, ref_decks])
+    """, [leader, *date_params, *base_params, *world_params, ref_decks])
 
     if len(ref_rows) < min_decks:
         raise HTTPException(
