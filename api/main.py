@@ -14,8 +14,9 @@ import asyncio
 import json
 import re
 import time as _time
+import traceback
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -3592,10 +3593,9 @@ def analyze_deck(url: str = Query(...)):
     e.g. url=https://swudb.com/deck/xcMDHCSSPxG
     """
     import requests as req
-    import re as _re
 
     # Extract deck ID from URL
-    m = _re.search(r'swudb\.com/deck/([A-Za-z0-9]+)', url)
+    m = re.search(r'swudb\.com/deck/([A-Za-z0-9]+)', url)
     if not m:
         raise HTTPException(status_code=400, detail="Invalid swudb.com deck URL. Expected format: https://swudb.com/deck/DECKID")
     deck_id = m.group(1)
@@ -3827,7 +3827,6 @@ def meta_counter(
     with week-on-week trend.
     Returns weeks most-recent-first, each with per-leader stats.
     """
-    import traceback
     try:
         return _meta_counter_inner(weeks, format=format)
     except Exception as e:
@@ -3860,11 +3859,10 @@ def _meta_counter_inner(weeks: int = 2, format: str = "standard"):
 
     week_starts = [r["week_start"] for r in week_rows]
 
-    from datetime import timedelta as _td
     # For each weekend window (Sat–Sun) get per-leader stats
     result_weeks = []
     for i, ws in enumerate(week_starts[:weeks]):
-        week_end = ws + _td(days=1)  # Saturday + 1 = Sunday
+        week_end = ws + timedelta(days=1)  # Saturday + 1 = Sunday
 
         rows = db.fetchall(f"""
             SELECT
