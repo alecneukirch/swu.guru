@@ -246,6 +246,42 @@
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - `/api/leaders/by-base` and other heavy endpoints are candidates for the same TTL cache pattern
 
+### Loop Pass 15 — Deck Generation Algorithm Overhaul
+
+**Dynamic deck size target (`api/main.py`)**
+- Generated decklists now use a weighted-average target size derived from reference decklists instead of hardcoded 50 — Data Vault leaders correctly produce 60-card main decks
+
+**Leader subtitle lookup fix (`api/main.py`)**
+- Leader lookup in generate-deck now matches on `name + subtitle` when a subtitle is provided (e.g. "Luke Skywalker, Jedi Knight" vs "Luke Skywalker, I Can Save Him") — was previously only matching on base name, returning the wrong leader card
+
+**World indicator filtering (`api/main.py`)**
+- Generate-deck reference deck pool now filters for decklists that include the world indicator cards for world-scoped bases (Naboo, Kashyyyk, Endor, Tatooine)
+- Fixed case mismatch: `standing_world_tag.world` stores title-case ("Kashyyyk") but group_key regex captures lowercase — changed SQL filter to `LOWER(swt.world) = %s`
+
+**Raised ref_decks default (`api/main.py`)**
+- Default reference deck count raised from 15 to 50 (max 200) — reduces outlier distortion from all-ground builds inflating type targets
+
+**Minimum deck thresholds removed (`api/main.py`)**
+- Lowered all `min_decks` / `min_matches` defaults to 1 across leader stats, matchup matrix, and synergy endpoints — no data is hidden from low-volume leaders
+
+**Meta-call qualification thresholds (`frontend/index.html`)**
+- Changed from 5 opponents / 3 matches to 4 opponents / 2 matches for meta-call qualification
+
+**Copy-matrix best config fix (`api/main.py`)**
+- Removed hardcoded 3-deck minimum from best-config selection — was showing "Best: 0 copies" for single-deck cells; now considers all cells including those with 1 deck
+
+**Bucket fill order fix (`api/main.py`)**
+- Changed deck slot sort to: highest rate-of-3-copies first, then rate-of-2-copies, then `incRate × best_qty` — ensures the most-confirmed copy counts fill each type slot first
+
+**Phase 4 must-include pass (`api/main.py`)**
+- Added Phase 4 after existing fill phases: any main-deck card appearing in >50% of reference decklists that is missing or under-copied vs best_qty is inserted by displacing lower-priority cards
+- Displacement uses `incRate × count` score comparison — prevents high-incRate 3-ofs from being bumped by slightly higher-incRate 2-ofs
+- Fixed duplicate-entry bug: when Phase 3 had already added a card at count=1, Phase 4 now updates the existing entry in-place rather than re-appending the same dict object
+
+**Verification**
+- Wicket Command Splash: ref_decks=50, total=50, Rebellious Hammerhead correctly present at 2 copies ✓
+- All tested endpoints return 200 ✓
+
 ### Loop Pass 14 — Pyflakes Static Analysis Fixes
 
 **Bug fixes (`api/main.py`)**

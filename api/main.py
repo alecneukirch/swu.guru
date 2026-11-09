@@ -5259,7 +5259,7 @@ def generate_deck(
     base_label:  Optional[str] = Query(None),
     meta_id:     Optional[str] = Query(None),
     format:      str           = Query("standard"),
-    ref_decks:   int           = Query(15, ge=1, le=50, description="Max reference decks to aggregate from"),
+    ref_decks:   int           = Query(50, ge=1, le=200, description="Max reference decks to aggregate from"),
     min_decks:   int           = Query(1,               description="Minimum reference decks required"),
 ):
     """
@@ -5527,6 +5527,58 @@ def generate_deck(
                                "incRate": round(e["inc_rate_raw"], 3)})
                 used.add(e["card_name"])
                 total += copies
+
+        # Phase 4: must-include — any main-deck card appearing in >50% of reference
+        # decklists that is missing OR under-copied vs best_qty gets corrected by
+        # displacing lower-priority cards. Comparison uses incRate × full_qty so
+        # a confirmed 3-of at 80% (score 2.4) won't be bumped for a 2-of at 82% (1.64).
+        all_main = [e for bucket in type_buckets.values() for e in bucket]
+        result_map = {r["name"]: r for r in result}
+        candidates = sorted(
+            [e for e in all_main
+             if e["inc_rate_raw"] > 0.5
+             and result_map.get(e["card_name"], {}).get("count", 0) < min(e["best_qty"], 3)],
+            key=lambda x: (-x["rate_3"], -x["rate_2"], -x["card_score"])
+        )
+        for e in candidates:
+            want_total = min(e["best_qty"], 3)
+            have       = result_map.get(e["card_name"], {}).get("count", 0)
+            need       = want_total - have
+            if need <= 0:
+                continue
+            e_score = e["inc_rate_raw"] * want_total
+            displace_pool = sorted(
+                [r for r in result
+                 if r["name"] != e["card_name"]
+                 and r["incRate"] * r["count"] < e_score],
+                key=lambda r: (r["incRate"] * r["count"], r["count"])
+            )
+            freed = 0
+            displaced: list[dict] = []
+            for victim in displace_pool:
+                take = min(victim["count"], need - freed)
+                if take <= 0:
+                    continue
+                displaced.append({"entry": victim, "take": take})
+                freed += take
+                if freed >= need:
+                    break
+            if freed < need:
+                continue
+            for d_item in displaced:
+                d_item["entry"]["count"] -= d_item["take"]
+            result = [r for r in result if r["count"] > 0]
+            if e["card_name"] in result_map:
+                # Entry already in result (added by Phase 3) — update count in-place, don't re-append
+                result_map[e["card_name"]]["count"] += need
+            else:
+                new_entry = {"name": e["card_name"], "count": need,
+                             "incRate": round(e["inc_rate_raw"], 3)}
+                result.append(new_entry)
+                result_map[e["card_name"]] = new_entry
+            used.add(e["card_name"])
+            # Rebuild result_map to reflect any count changes from displacement
+            result_map = {r["name"]: r for r in result}
 
         return result
 
