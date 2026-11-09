@@ -4528,7 +4528,7 @@ select.sl-input { cursor: pointer; }
     </div>
     <div id="gendeck-meta" style="padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text3)"></div>
     <div style="flex:1;overflow-y:auto;padding:16px 20px">
-      <textarea id="gendeck-json" readonly style="width:100%;height:420px;background:var(--surface2,#1a1a2e);background-color:var(--surface2,#1a1a2e);border:1px solid var(--border);border-radius:8px;color:var(--text1,#e2e8f0);font-family:var(--mono);font-size:12px;line-height:1.5;padding:12px;resize:vertical;box-sizing:border-box;-webkit-appearance:none;appearance:none;opacity:1"></textarea>
+      <div style="width:100%;height:420px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:auto;box-sizing:border-box"><pre id="gendeck-json" style="margin:0;padding:12px;color:var(--text1);font-family:var(--mono);font-size:12px;line-height:1.5;white-space:pre;cursor:text;min-height:100%"></pre></div>
     </div>
     <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center">
       <button class="btn" id="gendeck-copy-btn" onclick="copyDeckJson()">Copy JSON</button>
@@ -5344,7 +5344,7 @@ async function openGenerateDeck() {
   backdrop.style.display = 'flex';
   title.textContent = 'Generate Deck — ' + shortName(currentLeader);
   metaEl.textContent = '';
-  jsonEl.value = '';
+  jsonEl.textContent = '';
   statusEl.textContent = 'generating…';
 
   try {
@@ -5363,10 +5363,10 @@ async function openGenerateDeck() {
       ` · avg win rate <strong style="color:var(--green)">${(m.avgWinRate * 100).toFixed(1)}%</strong>` +
       `<br>Top opponents: ${topOpp}`;
 
-    jsonEl.value = JSON.stringify(data, null, 2);
+    jsonEl.textContent = JSON.stringify(data, null, 2);
     statusEl.textContent = `${(data.deck||[]).reduce((s,c)=>s+c.count,0)} main · ${(data.sideboard||[]).reduce((s,c)=>s+c.count,0)} sideboard`;
   } catch(e) {
-    jsonEl.value = '// Error: ' + e.message;
+    jsonEl.textContent = '// Error: ' + e.message;
     statusEl.textContent = '';
   }
 }
@@ -5378,7 +5378,7 @@ function closeGenerateDeck() {
 function copyDeckJson() {
   const jsonEl = document.getElementById('gendeck-json');
   const msgEl  = document.getElementById('gendeck-copy-msg');
-  navigator.clipboard.writeText(jsonEl.value).then(() => {
+  navigator.clipboard.writeText(jsonEl.textContent).then(() => {
     msgEl.style.display = 'inline';
     setTimeout(() => { msgEl.style.display = 'none'; }, 2000);
   });
