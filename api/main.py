@@ -1336,12 +1336,13 @@ def leader_cards(
                 4) AS conversion,
                 COALESCE(c.type, 'Unit') AS card_type,
                 COALESCE(c.cost, 0)      AS cost,
-                c.arena                  AS arena
+                c.arena                  AS arena,
+                c.aspects                AS aspects
             FROM card_stats cs
             CROSS JOIN leader_totals lt
             LEFT JOIN (
                 SELECT DISTINCT ON (name, COALESCE(subtitle,''))
-                    name, subtitle, type, cost, arena
+                    name, subtitle, type, cost, arena, aspects
                 FROM cards
                 WHERE variant_type = 'Standard'
                   AND is_leader = false
@@ -1409,12 +1410,13 @@ def leader_cards(
                 4)                                                                         AS conversion,
                 COALESCE(c.type, 'Unit') AS card_type,
                 COALESCE(c.cost, 0)      AS cost,
-                c.arena                  AS arena
+                c.arena                  AS arena,
+                c.aspects                AS aspects
             FROM card_stats cs
             CROSS JOIN leader_totals lt
             LEFT JOIN (
                 SELECT DISTINCT ON (name, COALESCE(subtitle,''))
-                    name, subtitle, type, cost, arena
+                    name, subtitle, type, cost, arena, aspects
                 FROM cards
                 WHERE variant_type = 'Standard'
                   AND is_leader = false
@@ -1443,11 +1445,12 @@ def leader_cards(
                 m.inclusion_rate, m.card_t8_rate, m.baseline_t8_rate, m.conversion,
                 COALESCE(c.type, 'Unit') AS card_type,
                 COALESCE(c.cost, 0)      AS cost,
-                c.arena                  AS arena
+                c.arena                  AS arena,
+                c.aspects                AS aspects
             FROM {t['mv_card_leader_stats']} m
             LEFT JOIN (
                 SELECT DISTINCT ON (name, COALESCE(subtitle,''))
-                    name, subtitle, type, cost, arena
+                    name, subtitle, type, cost, arena, aspects
                 FROM cards
                 WHERE variant_type = 'Standard'
                   AND is_leader = false
@@ -1502,6 +1505,50 @@ def leader_cards(
         }
         for r in rows:
             r['card_mwr'] = mwr_map.get((r['card_name'], r.get('is_sideboard', False)))
+
+    # In-color inclusion rate: deck_count / decks_that_have_all_card_aspects_available
+    if rows:
+        _lname = leader.split(', ', 1)[0].strip()
+        _lsub  = leader.split(', ', 1)[1].strip() if ', ' in leader else ''
+        _la    = db.fetchone(
+            "SELECT aspects FROM cards WHERE name=%s AND subtitle=%s AND is_leader=TRUE AND variant_type='Standard' LIMIT 1",
+            [_lname, _lsub]
+        )
+        leader_asp = frozenset(_la['aspects'] or []) if _la else frozenset()
+
+        if date_sql:
+            _base_rows = db.fetchall(f"""
+                SELECT COALESCE(cb.aspects, '{{}}') AS base_asp, COUNT(DISTINCT s.id)::INT AS cnt
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                LEFT JOIN cards cb ON cb.name = s.base AND cb.is_base = TRUE AND cb.variant_type = 'Standard'
+                WHERE s.leader = %s AND s.placement IS NOT NULL
+                  {date_sql} {base_filter} {t8_filter} {elo_filter}
+                GROUP BY cb.aspects
+            """, [leader] + date_params + base_params)
+        else:
+            _w = decay_weight()
+            _base_rows = db.fetchall(f"""
+                SELECT COALESCE(cb.aspects, '{{}}') AS base_asp, SUM({_w}) AS cnt
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                LEFT JOIN cards cb ON cb.name = s.base AND cb.is_base = TRUE AND cb.variant_type = 'Standard'
+                {elo_join}
+                WHERE s.leader = %s AND s.placement IS NOT NULL AND e.date <= CURRENT_DATE
+                  {base_filter} {t8_filter} {elo_filter} {tier_sql}
+                GROUP BY cb.aspects
+            """, [leader] + base_params + tier_params)
+
+        for row in rows:
+            card_asp = frozenset(row.get('aspects') or [])
+            in_color = sum(
+                float(br['cnt'])
+                for br in _base_rows
+                if card_asp <= (leader_asp | frozenset(br['base_asp'] or []))
+            )
+            row['in_color_total'] = round(in_color, 1)
+            raw = float(row['deck_count']) / in_color if in_color else None
+            row['in_color_rate']  = round(min(1.0, raw), 4) if raw is not None else None
 
     return rows
 
@@ -1892,6 +1939,37 @@ def cards_stats(
         WHERE c.type IS NOT NULL
         ORDER BY cs.deck_count DESC, cs.t8_count DESC
     """, date_params + date_params + [min_decks])
+
+    if rows:
+        in_color_rows = db.fetchall(f"""
+            WITH deck_aspects AS (
+                SELECT
+                    s.id,
+                    ARRAY(SELECT DISTINCT unnest(
+                        COALESCE(cl.aspects,'{{}}') || COALESCE(cb.aspects,'{{}}')
+                    )) AS avail
+                FROM {t['standings']} s
+                JOIN {t['events']} e ON e.id = s.event_id
+                LEFT JOIN cards cl ON cl.name = SPLIT_PART(s.leader, ', ', 1)
+                                   AND cl.subtitle = SUBSTRING(s.leader FROM LENGTH(SPLIT_PART(s.leader, ', ', 1)) + 3)
+                                   AND cl.is_leader = TRUE AND cl.variant_type = 'Standard'
+                LEFT JOIN cards cb ON cb.name = s.base AND cb.is_base = TRUE AND cb.variant_type = 'Standard'
+                WHERE s.placement IS NOT NULL AND s.leader IS NOT NULL {date_sql}
+            )
+            SELECT avail, COUNT(DISTINCT id)::INT AS cnt
+            FROM deck_aspects
+            GROUP BY avail
+        """, date_params)
+
+        for row in rows:
+            card_asp = frozenset(row.get('aspects') or [])
+            in_color = sum(
+                ic['cnt'] for ic in in_color_rows
+                if card_asp <= frozenset(ic['avail'] or [])
+            )
+            row['in_color_total'] = in_color
+            raw = row['deck_count'] / in_color if in_color else None
+            row['in_color_rate'] = round(min(1.0, raw), 4) if raw is not None else None
 
     return rows
 

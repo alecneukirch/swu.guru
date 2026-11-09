@@ -4849,7 +4849,7 @@ function renderCardTable(rows) {
   <div class="ct-bottom">
     <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` data-tooltip="${ctSub}"` : ''}>${ctName}</div></div>
     <div class="ct-stats">
-      <span class="ct-incl" data-tooltip="Match win rate of decks running this card">${r.card_mwr != null ? Math.round(r.card_mwr * 100) + '%' : fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-incl" data-tooltip="${r.card_mwr != null ? 'Match win rate of decks running this card' : (r.in_color_rate != null ? '% of in-color decks running this card' : 'Inclusion rate')}">${r.card_mwr != null ? Math.round(r.card_mwr * 100) + '%' : fmtPct(r.in_color_rate ?? r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
     </div>
   </div>
@@ -4898,7 +4898,7 @@ function renderCardTable(rows) {
   <div class="ct-bottom">
     <div class="ct-name-row">${sbCostBadge}<div class="ct-name"${sbSub ? ` data-tooltip="${sbSub}"` : ''}>${sbName}</div></div>
     <div class="ct-stats">
-      <span class="ct-incl" data-tooltip="Match win rate of decks running this card">${r.card_mwr != null ? Math.round(r.card_mwr * 100) + '%' : fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-incl" data-tooltip="${r.card_mwr != null ? 'Match win rate of decks running this card' : (r.in_color_rate != null ? '% of in-color decks running this card' : 'Inclusion rate')}">${r.card_mwr != null ? Math.round(r.card_mwr * 100) + '%' : fmtPct(r.in_color_rate ?? r.inclusion_rate)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
     </div>
   </div>
@@ -8264,7 +8264,8 @@ function renderGlobalCards(rows) {
       const costVal = (r.cost != null && r.cost > 0) ? r.cost : (r.cost === 0 ? '0' : '');
       const costBadge = costVal !== '' ? `<div class="ct-cost">${costVal}</div>` : '';
       const { name: ctName, subtitle: ctSub } = cardNameParts(r.card_name);
-      const inclTip  = `${r.deck_count} of ${r.total_decks} decks included this card (counted by deck, not copies)`;
+      const displayIncl = r.in_color_rate != null ? r.in_color_rate : r.inclusion_rate;
+      const inclTipText = r.in_color_rate != null ? `% of in-color decks running this card (${Math.round(r.in_color_total).toLocaleString()} in-color decks)` : `${Math.round(r.deck_count)} of ${Math.round(r.total_decks)} total decks`;
       const t8sTip   = `${r.t8_count} top-cut decks · ${fmtPct(r.card_t8_rate)} T8 rate among decks running it`;
       const decksTip = `${Math.round(r.deck_count)} of ${Math.round(r.total_decks)} total decks in this meta`;
       return `<div class="card-tile conv-${cc}" data-card="${safe}" data-idx="${i}">
@@ -8277,7 +8278,7 @@ function renderGlobalCards(rows) {
   <div class="ct-bottom">
     <div class="ct-name-row">${costBadge}<div class="ct-name"${ctSub ? ` data-tooltip="${ctSub}"` : ''}>${ctName}</div></div>
     <div class="ct-stats">
-      <span class="ct-incl" data-tooltip="${inclTip}">${fmtPct(r.inclusion_rate)}</span>
+      <span class="ct-incl" data-tooltip="${inclTipText}">${fmtPct(displayIncl)}</span>
       <span class="ct-conv ${cc}" data-tooltip="${convTooltip(r.conversion)}">${convArrow(r.conversion)} ${fmtConv(r.conversion)}</span>
     </div>
   </div>
