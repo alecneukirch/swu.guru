@@ -5364,15 +5364,56 @@ def generate_deck(
 
         return result
 
-    main_deck = build_slot(is_sb=False, target=50)
-    sideboard  = build_slot(is_sb=True,  target=10)
+    main_deck_entries = build_slot(is_sb=False, target=50)
+    sideboard_entries = build_slot(is_sb=True,  target=10)
 
-    # ── Step 3: top opponents by meta share (for sideboard context) ───────────
+    # ── Step 3: resolve card collector_number IDs ─────────────────────────────
+    all_names = [e["card_name"] for e in main_deck_entries + sideboard_entries]
+    all_names += [leader, suggested_base] if suggested_base else [leader]
+
+    id_rows = db.fetchall("""
+        SELECT DISTINCT ON (name, subtitle)
+            name || CASE WHEN subtitle IS NOT NULL AND subtitle != '' THEN ' | ' || subtitle ELSE '' END AS full_name,
+            set_code,
+            collector_number,
+            is_leader,
+            is_base
+        FROM cards
+        WHERE collector_number ~ '^[0-9]'
+          AND (
+              name || CASE WHEN subtitle IS NOT NULL AND subtitle != '' THEN ' | ' || subtitle ELSE '' END = ANY(%s::text[])
+              OR name = ANY(%s::text[])
+          )
+        ORDER BY name, subtitle, collector_number DESC
+    """, [all_names, all_names])
+
+    def make_id(row: dict) -> str:
+        return f"{row['set_code']}_{int(row['collector_number'][4:]):03d}"
+
+    # Build lookup: full_name → deckbuilder id
+    # Prefer exact full_name match; fall back to base name match
+    id_map: dict[str, str] = {}
+    for row in id_rows:
+        fn = row["full_name"]
+        did = make_id(row)
+        # Only overwrite if not already set (DISTINCT ON + ORDER BY collector_number DESC
+        # gives most recent set first)
+        if fn not in id_map:
+            id_map[fn] = did
+        # Also index by base name alone for fallback
+        base_nm = fn.split(" | ")[0]
+        if base_nm not in id_map:
+            id_map[base_nm] = did
+
+    def resolve_id(card_name: str) -> Optional[str]:
+        return id_map.get(card_name) or id_map.get(card_name.split(" | ")[0])
+
+    # ── Step 4: top opponents by meta share (sideboard context) ──────────────
     opp_rows = db.fetchall(f"""
         SELECT
-            s.leader                                                       AS leader_name,
-            COUNT(*)::INT                                                  AS total_decks,
-            COUNT(*) * 1.0 / SUM(COUNT(*)) OVER ()                        AS meta_share
+            s.leader                                     AS leader_name,
+            COUNT(*)::INT                                AS total_decks,
+            COUNT(*) * 1.0 / SUM(COUNT(*)) OVER ()      AS meta_share
         FROM {t['standings']} s
         JOIN {t['events']} e ON e.id = s.event_id
         WHERE s.leader IS NOT NULL
@@ -5384,15 +5425,33 @@ def generate_deck(
         LIMIT 8
     """, [leader, *date_params])
 
+    # ── Step 5: build deckbuilder-importable JSON ─────────────────────────────
+    leader_id = resolve_id(leader)
+    base_id   = resolve_id(suggested_base) if suggested_base else None
+
+    leader_short = leader.split(",")[0].strip()
+
     return {
-        "leader":     leader,
-        "base":       suggested_base,
-        "mainDeck":   main_deck,
-        "sideboard":  sideboard,
-        "meta": {
-            "referenceDecks":  n_ref,
-            "avgWinRate":      round(avg_win_rate, 3),
-            "topOpponents":    [
+        "metadata": {
+            "name":   f"{leader_short} — Generated",
+            "author": "swu.guru",
+        },
+        "leader": {"id": leader_id, "count": 1} if leader_id else None,
+        "base":   {"id": base_id,   "count": 1} if base_id   else None,
+        "deck": [
+            {"id": resolve_id(e["card_name"]), "count": e["count"], "_name": e["card_name"], "_incRate": e["incRate"]}
+            for e in main_deck_entries
+            if resolve_id(e["card_name"])
+        ],
+        "sideboard": [
+            {"id": resolve_id(e["card_name"]), "count": e["count"], "_name": e["card_name"], "_incRate": e["incRate"]}
+            for e in sideboard_entries
+            if resolve_id(e["card_name"])
+        ],
+        "_meta": {
+            "referenceDecks": n_ref,
+            "avgWinRate":     round(avg_win_rate, 3),
+            "topOpponents":   [
                 {"leader": r["leader_name"], "metaShare": round(float(r["meta_share"]), 4)}
                 for r in opp_rows
             ],
