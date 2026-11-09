@@ -459,6 +459,27 @@ def _parse_matches(raw: list, include_byes: bool = False) -> list[dict]:
 
 # ── Melee: decklists ───────────────────────────────────────────────────────
 
+def melee_player_decklist(player_id: str) -> Optional[dict]:
+    """
+    GET /Player/GetPlayerDetails?id={player_id} → first decklist {id, name}.
+    Fallback for tournaments where the standings API returns no DecklistId but
+    the deck is visible via the player hover card (e.g. private-decklist events).
+    """
+    url = f"{MELEE}/Player/GetPlayerDetails?id={player_id}"
+    try:
+        sess = _get_session()
+        resp = sess.get(url, timeout=15)
+        resp.raise_for_status()
+        time.sleep(SLEEP)
+        data = resp.json()
+        decklists = data.get("decklists") or []
+        if decklists:
+            return {"id": decklists[0]["id"], "name": decklists[0]["name"]}
+    except Exception as e:
+        log.debug(f"    melee_player_decklist({player_id}): {e}")
+    return None
+
+
 def melee_decklist_cards(deck_id: str) -> list[dict]:
     """
     GET /Decklist/View/{uuid} → parse card list.
@@ -802,6 +823,28 @@ def import_tournament(
 
     # Step 4: decklists (optional)
     if fetch_cards:
+        # For standings missing a deck ID, try the player hover-card endpoint
+        no_deck = [s for s in standings if not s.get("melee_deck_id") and s.get("melee_player_id")]
+        if no_deck:
+            log.info(f"  Resolving {len(no_deck)} missing decklists via player details...")
+            for s in no_deck:
+                dl = melee_player_decklist(s["melee_player_id"])
+                if dl:
+                    s["melee_deck_id"]  = dl["id"]
+                    s["melee_deck_url"] = f"{MELEE}/Decklist/View/{dl['id']}"
+                    s["deck_name"]      = dl["name"]
+                    leader, base = _parse_deck_name(dl["name"])
+                    if leader:
+                        s["leader"] = leader
+                        s["base"]   = base
+                    # Patch standing row with new deck info
+                    st_id = standing_id_map.get(s["melee_player_id"])
+                    if st_id:
+                        db.execute(
+                            f"UPDATE {tbls['standings']} SET leader=%s, base=%s, decklist_url=%s, has_decklist=TRUE WHERE id=%s",
+                            (s.get("leader"), s.get("base"), s["melee_deck_url"], st_id),
+                        )
+
         deck_ids = {s["melee_deck_id"] for s in standings if s.get("melee_deck_id")}
         log.info(f"  Fetching {len(deck_ids)} decklists...")
         for deck_id in deck_ids:
