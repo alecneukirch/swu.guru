@@ -162,3 +162,26 @@
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - Remaining interactive divs without keyboard support: `.elo-bucket-col` (ELO filter chips), `.pd-event-row` (player history rows), `.sl-stat-card.sl-flippable` (league stat cards), `.pick-row` (meta call rows) — lower priority (all have clear visual affordance)
+
+### Loop Pass 9 — WCAG AA Contrast Fixes & Interactive Div Accessibility
+
+**WCAG AA contrast fixes (`frontend/index.html`)**
+- `--villainy-text` `#8b3a6b` → `#be6ab4`: 2.76:1 → 5.59:1 on `--bg` — was failing AA for all text uses (aspect label, filter button active state)
+- `--accent` `#7c6af7` → `#8d7ef8`: 4.29:1 → 5.28:1 on `--surface2` — was failing AA for active text (`.sealed-filter-btn.active`, focus rings now also stronger)
+
+**Remaining interactive div accessibility (`frontend/index.html`)**
+- `.elo-bucket-col` → `role="button" tabindex="0" aria-pressed aria-label="ELO N+ filter" onkeydown`
+- `.pd-event-row` → `role="button" tabindex="0" aria-label="Open leader detail" onkeydown`
+- `.sl-stat-card.sl-flippable` → `role="button" tabindex="0" aria-label="Flip stat card" onkeydown`
+- `.pick-row` → `role="button" tabindex="0" aria-expanded onkeydown`
+
+**League admin form control labels**
+- Added `aria-label` to `#sl-match-session`, `#sl-match-p1`, `#sl-match-p2`, `#sl-match-p1gw`, `#sl-match-gdraw`, `#sl-match-p2gw`, `#sl-import-session`
+
+**Verification**
+- All 5 tested endpoints return 200 ✓
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- All major interactive elements now have keyboard support and aria-label coverage
+- Next: performance audit (Core Web Vitals, DB query timing), or CSS dead-code removal pass
