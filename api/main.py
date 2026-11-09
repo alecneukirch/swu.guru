@@ -2423,15 +2423,51 @@ def leader_synergy(
         """, [leader] + base_names + [leader] + base_names + [leader] + base_names + [min_co, min_lift, limit])
     else:
         rows = db.fetchall("""
-            SELECT card_a, card_b, co_occur, incl_a, incl_b, total_decks, lift
-            FROM mv_card_synergy
-            WHERE leader = %s
-              AND co_occur >= %s
-              AND lift >= %s
-              AND lift IS NOT NULL
+            WITH leader_decks AS (
+                SELECT COUNT(DISTINCT s.id)::INT AS total_decks
+                FROM standings s
+                INNER JOIN (SELECT DISTINCT standing_id FROM decklist_cards) has_dl
+                    ON has_dl.standing_id = s.id
+                WHERE s.leader = %s
+            ),
+            card_incl AS (
+                SELECT dc.card_name, COUNT(DISTINCT s.id)::INT AS deck_count
+                FROM decklist_cards dc
+                JOIN standings s ON s.id = dc.standing_id
+                WHERE dc.is_sideboard = false
+                  AND s.leader = %s
+                GROUP BY dc.card_name
+            ),
+            pairs AS (
+                SELECT dc1.card_name AS card_a, dc2.card_name AS card_b,
+                       COUNT(DISTINCT s.id)::INT AS co_occur
+                FROM decklist_cards dc1
+                JOIN decklist_cards dc2
+                  ON  dc2.standing_id = dc1.standing_id
+                  AND dc2.is_sideboard = false
+                  AND dc2.card_name > dc1.card_name
+                JOIN standings s ON s.id = dc1.standing_id
+                WHERE dc1.is_sideboard = false
+                  AND s.leader = %s
+                GROUP BY dc1.card_name, dc2.card_name
+                HAVING COUNT(DISTINCT s.id) >= %s
+            )
+            SELECT p.card_a, p.card_b, p.co_occur,
+                   a.deck_count AS incl_a, b.deck_count AS incl_b,
+                   ld.total_decks,
+                   ROUND(p.co_occur::numeric
+                     / NULLIF((a.deck_count::numeric * b.deck_count::numeric)
+                              / NULLIF(ld.total_decks, 0), 0), 3) AS lift
+            FROM pairs p
+            JOIN card_incl a ON a.card_name = p.card_a
+            JOIN card_incl b ON b.card_name = p.card_b
+            CROSS JOIN leader_decks ld
+            WHERE ROUND(p.co_occur::numeric
+                     / NULLIF((a.deck_count::numeric * b.deck_count::numeric)
+                              / NULLIF(ld.total_decks, 0), 0), 3) >= %s
             ORDER BY lift DESC, co_occur DESC
             LIMIT %s
-        """, [leader, min_co, min_lift, limit])
+        """, [leader, leader, leader, min_co, min_lift, limit])
     return rows
 
 
