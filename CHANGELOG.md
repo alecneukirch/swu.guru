@@ -79,3 +79,23 @@
 ### Notes for next pass
 - `mv_card_copy_matrix` materialized view may be stale — verify HMW data is reflected
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+
+### Loop Pass 5 — Import Hygiene & Mobile Responsiveness
+
+**API cleanup (`api/main.py`)**
+- Moved `from collections import defaultdict` from three inline function-body imports (`matchup_matrix_by_base`, `meta_call`, `generate_deck`) to module-level — eliminates repeated import overhead on every request
+- Removed duplicate `extra_join = ""` dead assignment in `matchup_matrix_by_base` (leftover from refactor)
+- Removed redundant `import re` inside `sealed_confirm_data` — `re` is already a top-level import
+
+**Frontend — mobile responsiveness (`frontend/index.html`)**
+- Picks page had no `@media (max-width:700px)` override: `.picks-list` was fixed at 520px wide with the detail panel beside it, causing horizontal overflow on phones
+- Added breakpoint: stack list + detail panel vertically, `width:100%` on both, hide Meta% column from matchup table (space-saving)
+
+**Verification**
+- `--asp-color` confirmed intentional: set via inline `style=` on each aspect button, not a missing `:root` token
+- `mv_card_copy_matrix` confirmed current: 205 HMW card rows present (Hera, Ahsoka covered)
+- All 7 tested endpoints return 200 ✓
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- Picks page matchup table loses Meta% column on mobile (hidden to save space) — if column count becomes a UX issue, consider a horizontal-scroll table instead
