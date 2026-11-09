@@ -5526,7 +5526,10 @@ function renderCardTable(rows) {
   const sbPanel   = document.getElementById('leader-sb-panel');
 
   if (!sorted.length) {
-    container.innerHTML = '<div class="empty-state" style="padding:24px;grid-column:1/-1">// no cards</div>';
+    const baseMsg = currentLeaderBase
+      ? `// no cards — not enough decklists for <strong>${currentLeaderBaseGroup || currentLeaderBase}</strong>. Try lowering Min Decks.`
+      : '// no cards';
+    container.innerHTML = `<div class="empty-state" style="padding:24px;grid-column:1/-1">${baseMsg}</div>`;
     sbPanel.innerHTML = '<div class="sb-panel-title">Sideboard</div>';
     return;
   }
