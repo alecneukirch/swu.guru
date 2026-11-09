@@ -245,3 +245,38 @@
 ### Notes for next pass
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - `/api/leaders/by-base` and other heavy endpoints are candidates for the same TTL cache pattern
+
+### Loop Pass 13 — Caching Round 2 & CSS Duplicate Cleanup
+
+**Additional API result caching (`api/main.py`)**
+- `/api/leaders/by-base`: 115–130ms → 6ms warm (key: 8 params)
+- `/api/players`: 104–117ms → 3ms warm (key: limit, offset, search, meta_id, days)
+- `/api/karabast/leaders`: 70–78ms → 3ms warm (key: min_matches)
+- All use existing `_LEADERS_TTL = 300s` (5 min); data only changes on event import
+
+**All 5 hot page-load endpoints now cached:**
+| Endpoint | Cold | Warm |
+|---|---|---|
+| `/api/leaders` | 122ms | 5ms |
+| `/api/meta-call` | 245ms | 16ms |
+| `/api/leaders/by-base` | 130ms | 6ms |
+| `/api/players` | 117ms | 3ms |
+| `/api/karabast/leaders` | 78ms | 3ms |
+
+**WCAG contrast audit** — all CSS tokens pass AA on both `--bg` and `--surface2`:
+- `--text2`: 6.37:1 on bg, 5.50:1 on surface2 ✓
+- `--text3`: 7.05:1 on bg, 6.08:1 on surface2 ✓
+- `--accent`: 6.12:1 on bg, 5.28:1 on surface2 ✓
+- All other tokens: AA or better ✓
+
+**Dead/duplicate CSS removed (`frontend/index.html`)**
+- Removed orphaned `.ev-section-header td` + `.ev-upcoming td:first-child` block (~12 lines) that was misplaced inside the card-tile CSS section and was silently overridden by the identical rules in the events section
+- Moved `.ev-upcoming td { color: var(--text); }` to the proper events section (rule existed only in the orphaned block)
+
+**Verification**
+- All 7 tested endpoints return 200 ✓
+- Warm cache confirmed for all 3 new endpoints
+
+### Notes for next pass
+- No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
+- All 5 heavy page-load endpoints are now cached; remaining work is incremental

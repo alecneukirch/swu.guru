@@ -280,9 +280,12 @@ def summary(format: str = Query("standard"), meta_id: Optional[str] = Query(None
 #  LEADERS  —  Home page grid + meta overview
 # =============================================================================
 
-_leaders_cache: dict = {}   # key: param tuple → {"ts": float, "data": list}
-_meta_call_cache: dict = {} # key: param tuple → {"ts": float, "data": dict}
-_LEADERS_TTL = 300          # 5 minutes
+_leaders_cache: dict = {}       # key: param tuple → {"ts": float, "data": list}
+_meta_call_cache: dict = {}     # key: param tuple → {"ts": float, "data": dict}
+_by_base_cache: dict = {}       # key: param tuple → {"ts": float, "data": list}
+_players_cache: dict = {}       # key: param tuple → {"ts": float, "data": dict}
+_karabast_cache: dict = {}      # key: min_matches → {"ts": float, "data": list}
+_LEADERS_TTL = 300              # 5 minutes
 
 @app.get("/api/leaders")
 def leaders(
@@ -622,6 +625,11 @@ def leaders_by_base(
     Returns stats for each leader+base-group combo.
     Base groups use aspect/ability classification: plain, splash, force, or rare.
     """
+    _ck = (meta_id, min_decks, or_has_t8, format, days, decay, ban, event_level)
+    _ce = _by_base_cache.get(_ck)
+    if _ce and _time.time() < _ce["ts"] + _LEADERS_TTL:
+        return _ce["data"]
+
     t = _tnames(format, ban)
     date_sql, date_params = meta_date_filter(meta_id, days, event_level)
     tier_sql, tier_params = tier_filter_sql(event_level)
@@ -938,6 +946,7 @@ def leaders_by_base(
         })
 
     result.sort(key=lambda x: x['total_decks'], reverse=True)
+    _by_base_cache[_ck] = {"ts": _time.time(), "data": result}
     return result
 
 
@@ -3404,6 +3413,11 @@ def players(
     days:    Optional[int]  = Query(None),
 ):
     """Player leaderboard — grouped by stable identity UUID."""
+    _ck = (limit, offset, search, meta_id, days)
+    _ce = _players_cache.get(_ck)
+    if _ce and _time.time() < _ce["ts"] + _LEADERS_TTL:
+        return _ce["data"]
+
     date_sql, date_params = meta_date_filter(meta_id, days)
     search_sql   = "AND (m.display_name ILIKE %s OR s.player_name ILIKE %s)" if search else ""
     search_param = ['%' + search + '%', '%' + search + '%'] if search else []
@@ -3481,7 +3495,9 @@ def players(
           AND (%s IS NULL OR m.display_name ILIKE %s OR s.player_name ILIKE %s)
     """, date_params + [search, '%' + search + '%' if search else None, '%' + search + '%' if search else None])
 
-    return {"players": rows, "total": total["total"] if total else 0}
+    out = {"players": rows, "total": total["total"] if total else 0}
+    _players_cache[_ck] = {"ts": _time.time(), "data": out}
+    return out
 
 
 @app.get("/api/players/{identity_id}")
@@ -4970,6 +4986,9 @@ def import_hmw_league_melee(body: dict):
 
 @app.get("/api/karabast/leaders")
 def karabast_leaders(min_matches: int = Query(200)):
+    _ce = _karabast_cache.get(min_matches)
+    if _ce and _time.time() < _ce["ts"] + _LEADERS_TTL:
+        return _ce["data"]
     rows = db.fetchall("""
         SELECT leader_id, base_id, leader_name, base_name,
                SUM(num_wins)::int  AS total_wins,
@@ -4996,7 +5015,7 @@ def karabast_leaders(min_matches: int = Query(200)):
     total_wins  = sum(r["total_wins"]  for r in rows)
     total_plays = sum(r["total_plays"] for r in rows)
     avg_mwr = total_wins / total_plays if total_plays else 0.5
-    return [
+    result = [
         {
             **r,
             "mwr":       round(r["total_wins"] / r["total_plays"], 4),
@@ -5004,6 +5023,8 @@ def karabast_leaders(min_matches: int = Query(200)):
         }
         for r in rows
     ]
+    _karabast_cache[min_matches] = {"ts": _time.time(), "data": result}
+    return result
 
 
 @app.get("/api/sealed/confirm-data")
