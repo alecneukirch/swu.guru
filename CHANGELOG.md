@@ -246,6 +246,21 @@
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
 - `/api/leaders/by-base` and other heavy endpoints are candidates for the same TTL cache pattern
 
+### Loop Pass 14 — Pyflakes Static Analysis Fixes
+
+**Bug fixes (`api/main.py`)**
+- **CRITICAL runtime fix**: Changed `_re.search(...)` → `re.search(...)` at line ~3698 — `import re as _re` inside `analyze_deck` was removed in Pass 6 but the alias reference was missed; would cause `NameError` on any request hitting that code path
+- Removed unused `w = decay_weight()` assignment in `leader_base_groups()` — function doesn't use decay weights; dead assignment removed
+- Removed unused `combo_keys` list comprehension at matchup matrix build — `row_key`/`col_key` are computed inline in the loop; the pre-built list was never read
+- Stripped spurious `f` prefix from two plain SQL strings: `elo_join = f"""` → `elo_join = """` and `card_rows = db.fetchall(f"""` → `card_rows = db.fetchall("""`
+
+**Verification**
+- `python3 -m pyflakes api/main.py` → 0 warnings ✓
+- All 5 tested endpoints return 200 ✓
+
+### Notes for next pass
+- Consider adding `POST /api/admin/cache-clear` endpoint to allow manual cache invalidation after event imports without full container restart
+
 ### Loop Pass 13 — Caching Round 2 & CSS Duplicate Cleanup
 
 **Additional API result caching (`api/main.py`)**

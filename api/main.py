@@ -970,7 +970,6 @@ def leader_base_groups(
     t = _tnames(format)
     date_sql, date_params = meta_date_filter(meta_id, days, event_level)
     tier_sql, tier_params = tier_filter_sql(event_level)
-    w = decay_weight()
 
     if date_sql:
         rows = db.fetchall(f"""
@@ -1282,7 +1281,7 @@ def leader_cards(
     elo_join    = ""
     elo_filter  = ""
     if elo_bucket is not None:
-        elo_join   = f"""
+        elo_join   = """
                 JOIN player_id_map pm ON pm.melee_player_id = s.melee_player_id AND pm.status != 'rejected'
                 JOIN player_identities pi ON pi.id = pm.identity_id"""
         elo_filter = f"AND (FLOOR(pi.hri_rating / {int(bucket)}::float) * {int(bucket)})::INT = {int(elo_bucket)}"
@@ -2948,8 +2947,6 @@ def matchup_matrix_by_base(
             if m["winner"] == "p2":
                 pair_stats[(p2_key, p1_key)]["wins"] += 1
 
-    combo_keys = [f"{c['leader']}|||{c['base_key']}" for c in combos]
-
     # Build matrix rows
     matrix = []
     for row_c in combos:
@@ -3696,7 +3693,7 @@ def analyze_deck(url: str = Query(...)):
     id_map = {}
     for r in rows:
         url_val = r.get("front_image_url") or ""
-        m2 = _re.search(r'card_\d{2}(\d{3})(\d{3})_', url_val)
+        m2 = re.search(r'card_\d{2}(\d{3})(\d{3})_', url_val)
         if m2:
             num = str(int(m2.group(2)))
             key = f"{r['set_code']}_{num.zfill(3)}"
@@ -5329,7 +5326,7 @@ def generate_deck(
     suggested_base = max(base_counts, key=base_counts.get) if base_counts else None
 
     # ── Step 2: aggregate cards from reference standings ──────────────────────
-    card_rows = db.fetchall(f"""
+    card_rows = db.fetchall("""
         SELECT
             dc.card_name,
             dc.is_sideboard,
