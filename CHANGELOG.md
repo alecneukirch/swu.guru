@@ -59,7 +59,23 @@
 
 **All API endpoints: 200 ✓**
 
+### Loop Pass 4 — Query Optimization, ARIA, & Markup Fixes
+
+**DB index**
+- Added `idx_dc_synergy` partial index on `decklist_cards (standing_id, card_name) WHERE is_sideboard = FALSE` — removes full-table seq scan from synergy self-join (Boba Fett 2249-deck query: ~1s, acceptable for async tab load; base-scoped is 40ms)
+
+**Synergy query refactor**
+- Unified base-scoped and unscoped branches into single CTE (`leader_sids` → `leader_cards`), using `has_decklist = TRUE` to avoid the old `INNER JOIN (SELECT DISTINCT standing_id FROM decklist_cards)` subquery
+- Cleaner parameter passing (no repeated `[leader] × 3`)
+
+**ARIA accessibility**
+- Added `role="dialog" aria-modal="true" aria-labelledby/aria-label` and `aria-label="Close"` on close buttons for: card detail modal, player detail panel, merge review modal
+
+**Loading state markup fix**
+- `loadLeaderCards()` was writing `<tr><td class="loading">` into a `<div class="card-grid">` — invalid HTML that the browser strips; replaced with `<div class="loading" style="grid-column:1/-1">`
+
+**All API endpoints: 200 ✓**
+
 ### Notes for next pass
 - `mv_card_copy_matrix` materialized view may be stale — verify HMW data is reflected
-- Consider creating `mv_card_synergy` materialized view to speed up the now-active Synergy tab (live CTE works but is heavier for high-volume leaders)
 - No build/lint pipeline (vanilla JS + FastAPI) — worth adding `eslint` / `pyflakes` to CI
