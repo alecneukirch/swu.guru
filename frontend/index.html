@@ -5364,7 +5364,7 @@ async function openGenerateDeck() {
       `<br>Top opponents: ${topOpp}`;
 
     jsonEl.value = JSON.stringify(data, null, 2);
-    statusEl.textContent = `${data.mainDeck.reduce((s,c)=>s+c.count,0)} main · ${data.sideboard.reduce((s,c)=>s+c.count,0)} sideboard`;
+    statusEl.textContent = `${(data.deck||[]).reduce((s,c)=>s+c.count,0)} main · ${(data.sideboard||[]).reduce((s,c)=>s+c.count,0)} sideboard`;
   } catch(e) {
     jsonEl.value = '// Error: ' + e.message;
     statusEl.textContent = '';
