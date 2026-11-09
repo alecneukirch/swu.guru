@@ -5321,7 +5321,8 @@ def generate_deck(
         WHERE dc.standing_id = ANY(%s::int[])
           AND NOT EXISTS (
               SELECT 1 FROM cards c
-              WHERE split_part(dc.card_name, ' | ', 1) = c.name
+              WHERE c.name || CASE WHEN c.subtitle IS NOT NULL AND c.subtitle != ''
+                                   THEN ' | ' || c.subtitle ELSE '' END = dc.card_name
                 AND (c.is_leader OR c.is_base)
           )
     """, [standing_ids])
@@ -5357,12 +5358,19 @@ def generate_deck(
             slot_key = f"Unit:{arena}" if ctype == "Unit" else ctype
             deck_type_counts[row["standing_id"]][slot_key] += row["quantity"]
 
-    # Weighted average type targets for the main deck
+    # Filter out corrupt reference decks (main deck far from 50 cards)
+    valid_sids = {
+        sid for sid, td in deck_type_counts.items()
+        if 44 <= sum(td.values()) <= 56
+    }
+    valid_score = sum(score_by_id[s] for s in valid_sids if s in score_by_id) or total_score
+
+    # Weighted average type targets for the main deck (corrupt decks excluded)
     type_targets: dict[str, float] = defaultdict(float)
-    for sid, type_dict in deck_type_counts.items():
+    for sid in valid_sids:
         w = score_by_id.get(sid, 0)
-        for slot_key, count in type_dict.items():
-            type_targets[slot_key] += count * w / total_score
+        for slot_key, count in deck_type_counts[sid].items():
+            type_targets[slot_key] += count * w / valid_score
     type_targets = {k: round(v) for k, v in type_targets.items()}
 
     def _card_slot_key(d: dict) -> str:
@@ -5391,31 +5399,58 @@ def generate_deck(
         for bucket in type_buckets.values():
             bucket.sort(key=lambda x: x["card_score"], reverse=True)
 
-        result, total, used = [], 0, set()
+        result, total = [], 0
+        used: set[str] = set()
+        type_filled: dict[str, int] = defaultdict(int)
 
-        # Fill each type bucket up to its weighted-average target
+        # Phase 1: fill each type to its weighted-average target
         for slot_key, slot_target in sorted(type_targets.items(), key=lambda x: -x[1]):
-            bucket = type_buckets.get(slot_key, [])
-            bucket_total = 0
-            for e in bucket:
-                if bucket_total >= slot_target or total >= target:
+            for e in type_buckets.get(slot_key, []):
+                if type_filled[slot_key] >= slot_target or total >= target:
                     break
                 copies = max(1, round(e["avg_copies"]))
-                copies = min(copies, 3, slot_target - bucket_total, target - total)
+                copies = min(copies, 3, slot_target - type_filled[slot_key], target - total)
+                if copies <= 0:
+                    break
                 result.append({"name": e["card_name"], "count": copies,
                                "incRate": round(e["inc_rate_raw"], 3)})
                 used.add(e["card_name"])
                 total += copies
-                bucket_total += copies
+                type_filled[slot_key] += copies
 
-        # Fill any remaining slots with highest-scoring unused cards
+        # Phase 2: fill rounding gaps — only from types still under their target
         if total < target:
-            remaining = [
-                e for bucket in type_buckets.values()
-                for e in bucket if e["card_name"] not in used
+            sub_target = [
+                (slot_key, e)
+                for slot_key, bucket in type_buckets.items()
+                for e in bucket
+                if e["card_name"] not in used
+                   and type_filled[slot_key] < type_targets.get(slot_key, 0)
             ]
-            remaining.sort(key=lambda x: x["card_score"], reverse=True)
-            for e in remaining:
+            sub_target.sort(key=lambda x: x[1]["card_score"], reverse=True)
+            for slot_key, e in sub_target:
+                if total >= target:
+                    break
+                slot_target = type_targets.get(slot_key, 0)
+                if type_filled[slot_key] >= slot_target:
+                    continue
+                copies = max(1, round(e["avg_copies"]))
+                copies = min(copies, 3, slot_target - type_filled[slot_key], target - total)
+                if copies <= 0:
+                    continue
+                result.append({"name": e["card_name"], "count": copies,
+                               "incRate": round(e["inc_rate_raw"], 3)})
+                used.add(e["card_name"])
+                total += copies
+                type_filled[slot_key] += copies
+
+        # Phase 3: last resort — all type targets met but deck still short (data gap)
+        if total < target:
+            all_remaining = sorted(
+                [e for bucket in type_buckets.values() for e in bucket if e["card_name"] not in used],
+                key=lambda x: x["card_score"], reverse=True
+            )
+            for e in all_remaining:
                 if total >= target:
                     break
                 copies = max(1, round(e["avg_copies"]))
