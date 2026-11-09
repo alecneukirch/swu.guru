@@ -5368,7 +5368,7 @@ def generate_deck(
     sideboard_entries = build_slot(is_sb=True,  target=10)
 
     # ── Step 3: resolve card collector_number IDs ─────────────────────────────
-    all_names = [e["card_name"] for e in main_deck_entries + sideboard_entries]
+    all_names = [e["name"] for e in main_deck_entries + sideboard_entries]
     all_names += [leader, suggested_base] if suggested_base else [leader]
 
     id_rows = db.fetchall("""
@@ -5439,14 +5439,14 @@ def generate_deck(
         "leader": {"id": leader_id, "count": 1} if leader_id else None,
         "base":   {"id": base_id,   "count": 1} if base_id   else None,
         "deck": [
-            {"id": resolve_id(e["card_name"]), "count": e["count"], "_name": e["card_name"], "_incRate": e["incRate"]}
+            {"id": resolve_id(e["name"]), "count": e["count"], "_name": e["name"], "_incRate": e["incRate"]}
             for e in main_deck_entries
-            if resolve_id(e["card_name"])
+            if resolve_id(e["name"])
         ],
         "sideboard": [
-            {"id": resolve_id(e["card_name"]), "count": e["count"], "_name": e["card_name"], "_incRate": e["incRate"]}
+            {"id": resolve_id(e["name"]), "count": e["count"], "_name": e["name"], "_incRate": e["incRate"]}
             for e in sideboard_entries
-            if resolve_id(e["card_name"])
+            if resolve_id(e["name"])
         ],
         "_meta": {
             "referenceDecks": n_ref,
