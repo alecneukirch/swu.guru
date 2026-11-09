@@ -5269,7 +5269,7 @@ def generate_deck(
     Algorithm:
     1. Find the top N standings (by combined win-rate + placement score) that have decklists.
     2. Aggregate main deck cards from those standings, weighted by deck score.
-    3. Build a 50-card main deck greedily by card score (inclusion rate × avg copies).
+    3. Build a main deck greedily by card score (inclusion rate × avg copies); target size derived from reference decks.
     4. Build a 10-card sideboard the same way from sideboard cards.
     5. Return meta context: reference deck count, avg win rate, top opponents by meta share.
     """
@@ -5383,12 +5383,24 @@ def generate_deck(
             slot_key = f"Unit:{arena}" if ctype == "Unit" else ctype
             deck_type_counts[row["standing_id"]][slot_key] += row["quantity"]
 
-    # Filter out corrupt reference decks (main deck far from 50 cards)
-    valid_sids = {
-        sid for sid, td in deck_type_counts.items()
-        if 44 <= sum(td.values()) <= 56
-    }
+    # Compute per-deck main card totals; derive expected deck size from the median
+    # so the target adapts to whatever format the reference decklists represent.
+    raw_totals = {sid: sum(td.values()) for sid, td in deck_type_counts.items()}
+    if raw_totals:
+        median_size = sorted(raw_totals.values())[len(raw_totals) // 2]
+        lo, hi = round(median_size * 0.85), round(median_size * 1.15)
+    else:
+        median_size, lo, hi = 50, 42, 58
+    valid_sids = {sid for sid, total in raw_totals.items() if lo <= total <= hi}
     valid_score = sum(score_by_id[s] for s in valid_sids if s in score_by_id) or total_score
+
+    # Weighted average deck size across valid reference decks — used as build target
+    if valid_sids and valid_score:
+        target_main = round(
+            sum(raw_totals[sid] * score_by_id.get(sid, 1) for sid in valid_sids) / valid_score
+        )
+    else:
+        target_main = int(median_size)
 
     # Weighted average type targets for the main deck (corrupt decks excluded)
     type_targets: dict[str, float] = defaultdict(float)
@@ -5529,7 +5541,7 @@ def generate_deck(
 
         return result
 
-    main_deck_entries = build_main_deck(target=50)
+    main_deck_entries = build_main_deck(target=target_main)
     main_copies       = {e["name"]: e["count"] for e in main_deck_entries}
     sideboard_entries = build_sideboard(main_copies, target=10)
 
