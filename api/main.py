@@ -5329,19 +5329,21 @@ def karabast_leader_matchups(leader_id: str, base_id: str):
 
 @app.get("/api/leader/{leader}/generate-deck")
 def generate_deck(
-    leader:      str,
-    base_group:  Optional[str] = Query(None),
-    base_label:  Optional[str] = Query(None),
-    meta_id:     Optional[str] = Query(None),
-    format:      str           = Query("standard"),
-    ref_decks:   int           = Query(50, ge=1, le=200, description="Max reference decks to aggregate from"),
-    min_decks:   int           = Query(1,               description="Minimum reference decks required"),
+    leader:           str,
+    base_group:       Optional[str] = Query(None),
+    base_label:       Optional[str] = Query(None),
+    meta_id:          Optional[str] = Query(None),
+    format:           str           = Query("standard"),
+    ref_decks:        int           = Query(50, ge=1, le=200, description="Max reference decks to aggregate from"),
+    min_decks:        int           = Query(1,               description="Minimum reference decks required"),
+    placement_cutoff: Optional[int] = Query(None, ge=1, le=64, description="Only use decklists from top-N finishers (e.g. 8 = top-8 only)"),
 ):
     """
     Generate a starting-point deck estimate for a leader.
 
     Algorithm:
     1. Find the top N standings (by combined win-rate + placement score) that have decklists.
+       When placement_cutoff is set, only standings finishing in that position or better are used.
     2. Aggregate main deck cards from those standings, weighted by deck score.
     3. Build a main deck greedily by card score (inclusion rate × avg copies); target size derived from reference decks.
     4. Build a 10-card sideboard the same way from sideboard cards.
@@ -5373,6 +5375,23 @@ def generate_deck(
 
     # ── Step 1: find top reference standings ─────────────────────────────────
     # Score = 0.5 × match_win_rate + 0.5 × (1 - placement / player_count)
+    # When placement_cutoff is set:
+    #   • All finishers within the cutoff are used (cap raised to 10 000) to
+    #     avoid sampling-bias from cherry-picking the top-N within an already-
+    #     restricted pool.
+    #   • The PQ+ tier filter is enforced so Store Showdown results don't
+    #     pollute top-cut card signals.
+    cutoff_filter = "AND s.placement <= %s" if placement_cutoff else ""
+    cutoff_params = [placement_cutoff] if placement_cutoff else []
+    effective_limit = 10_000 if placement_cutoff else ref_decks
+
+    # Apply the PQ+ tier filter only when placement_cutoff is set and no
+    # explicit meta/date filter is already in play (meta_date_filter already
+    # appends a tier filter when meta_id or days is specified).
+    _tier_sql, _tier_params = tier_filter_sql()      # default → PQ+
+    extra_tier_sql    = _tier_sql    if (placement_cutoff and not date_sql) else ""
+    extra_tier_params = _tier_params if (placement_cutoff and not date_sql) else []
+
     ref_rows = db.fetchall(f"""
         SELECT
             s.id                                                       AS standing_id,
@@ -5394,9 +5413,11 @@ def generate_deck(
           {date_sql}
           {base_filter}
           {world_filter}
+          {cutoff_filter}
+          {extra_tier_sql}
         ORDER BY deck_score DESC
         LIMIT %s
-    """, [leader, *date_params, *base_params, *world_params, ref_decks])
+    """, [leader, *date_params, *base_params, *world_params, *cutoff_params, *extra_tier_params, effective_limit])
 
     if len(ref_rows) < min_decks:
         raise HTTPException(
@@ -5805,8 +5826,9 @@ def generate_deck(
             if resolve_id(e["name"])
         ],
         "_meta": {
-            "referenceDecks": n_ref,
-            "avgWinRate":     round(avg_win_rate, 3),
+            "referenceDecks":   n_ref,
+            "avgWinRate":       round(avg_win_rate, 3),
+            "placementCutoff":  placement_cutoff,
             "topOpponents":   [
                 {"leader": r["leader_name"], "metaShare": round(float(r["meta_share"]), 4)}
                 for r in opp_rows

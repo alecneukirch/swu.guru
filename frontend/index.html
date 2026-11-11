@@ -3861,7 +3861,16 @@ select.sl-input { cursor: pointer; }
       <div id="gendeck-title" style="font-family:var(--display);font-size:18px;font-weight:700;flex:1"></div>
       <button class="modal-close" onclick="closeGenerateDeck()" aria-label="Close">✕</button>
     </div>
-    <div id="gendeck-meta" style="padding:10px 20px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text3)"></div>
+    <div style="padding:8px 20px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <label style="font-family:var(--mono);font-size:12px;color:var(--text3);white-space:nowrap">Reference pool:</label>
+      <select id="gendeck-cutoff" onchange="openGenerateDeck()" style="font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:4px;padding:3px 8px;cursor:pointer">
+        <option value="">All finishers</option>
+        <option value="32">Top 32</option>
+        <option value="16">Top 16</option>
+        <option value="8">Top 8</option>
+      </select>
+      <div id="gendeck-meta" style="font-family:var(--mono);font-size:12px;color:var(--text3);flex:1"></div>
+    </div>
     <div style="flex:1;overflow-y:auto;padding:16px 20px">
       <div style="width:100%;height:420px;background:#1a1a2a;border:1px solid var(--border);border-radius:8px;overflow:auto;box-sizing:border-box"><pre id="gendeck-json" style="margin:0;padding:12px;color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.5;white-space:pre;cursor:text;min-height:100%;background:#1a1a2a"></pre></div>
     </div>
@@ -4628,11 +4637,12 @@ function shareLeader(btn) {
 
 async function openGenerateDeck() {
   if (!currentLeader) return;
-  const backdrop = document.getElementById('gendeck-backdrop');
-  const title    = document.getElementById('gendeck-title');
-  const metaEl   = document.getElementById('gendeck-meta');
-  const jsonEl   = document.getElementById('gendeck-json');
-  const statusEl = document.getElementById('gendeck-status');
+  const backdrop  = document.getElementById('gendeck-backdrop');
+  const title     = document.getElementById('gendeck-title');
+  const metaEl    = document.getElementById('gendeck-meta');
+  const jsonEl    = document.getElementById('gendeck-json');
+  const statusEl  = document.getElementById('gendeck-status');
+  const cutoffSel = document.getElementById('gendeck-cutoff');
 
   backdrop.style.display = 'flex';
   document.addEventListener('keydown', _gendeckEscHandler);
@@ -4645,6 +4655,8 @@ async function openGenerateDeck() {
     let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/generate-deck?format=' + currentFormat + metaParam();
     if (currentLeaderBase)      url += '&base_group=' + encodeURIComponent(currentLeaderBase);
     if (currentLeaderBaseGroup) url += '&base_label=' + encodeURIComponent(currentLeaderBaseGroup);
+    const cutoff = cutoffSel ? cutoffSel.value : '';
+    if (cutoff) url += '&placement_cutoff=' + cutoff;
     const data = await api(url);
 
     const m = data._meta;
@@ -4653,8 +4665,9 @@ async function openGenerateDeck() {
       .map(o => shortName(o.leader) + ' ' + (o.metaShare * 100).toFixed(1) + '%')
       .join(' · ');
 
+    const cutoffLabel = m.placementCutoff ? ` <span style="color:var(--conv-mid)">· top-${m.placementCutoff} only</span>` : '';
     metaEl.innerHTML =
-      `<strong style="color:var(--text2)">${m.referenceDecks} reference decks</strong>` +
+      `<strong style="color:var(--text2)">${m.referenceDecks} reference decks</strong>${cutoffLabel}` +
       ` · avg win rate <strong style="color:var(--green)">${(m.avgWinRate * 100).toFixed(1)}%</strong>` +
       `<br>Top opponents: ${topOpp}`;
 
