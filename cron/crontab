@@ -6,11 +6,6 @@
 0 *     * * 0 python -m scraper.melee --cards
 0 0-12  * * 1 python -m scraper.melee --cards
 
-# Eternal: staggered 30 min past the hour, same window
-30 12-23 * * 5 python -m scraper.melee --cards --eternal
-30 *     * * 6 python -m scraper.melee --cards --eternal
-30 *     * * 0 python -m scraper.melee --cards --eternal
-30 0-12  * * 1 python -m scraper.melee --cards --eternal
 
 # Midweek: keep upcoming events fresh
 0 2 * * 2-4 python -m scraper.melee --days 90
