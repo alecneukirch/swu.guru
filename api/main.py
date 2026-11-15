@@ -3101,20 +3101,24 @@ def meta_call(
     ban_s, ban_m = ban_snippets(ban)
     ban_m_a = ban_m.replace("p1_leader", "m.p1_leader").replace("p2_leader", "m.p2_leader")
 
+    # Use scanned_marker (1 or NULL) instead of standing_id so GROUP BY
+    # aggregates multiple decklists per leader+base+world rather than
+    # splitting every standing into its own group.
     combos_raw = db.fetchall(f"""
         SELECT s.leader, s.base,
-               {_bg('swt.world','s.base','swt.standing_id')} AS base_group,
-               {_bk('swt.world','s.base','swt.standing_id')} AS base_key,
+               {_bg('swt.world','s.base','swt.scanned_marker')} AS base_group,
+               {_bk('swt.world','s.base','swt.scanned_marker')} AS base_key,
                br.aspect    AS base_aspect,
                COUNT(DISTINCT s.id)::INT AS decks
         FROM {t['standings']} s
         JOIN {t['events']} e ON e.id = s.event_id
         LEFT JOIN base_reference br ON br.name = s.base
-        {SWT_JOIN}
+        LEFT JOIN (SELECT standing_id, world, 1 AS scanned_marker FROM standing_world_tag) swt
+               ON swt.standing_id = s.id
         WHERE s.leader IS NOT NULL AND s.leader != ''
           AND s.base   IS NOT NULL AND s.base   != ''
           AND e.date <= CURRENT_DATE {date_sql} {ban_s}
-        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world, swt.standing_id
+        GROUP BY s.leader, s.base, br.label, br.group_key, br.aspect, swt.world, swt.scanned_marker
         HAVING COUNT(DISTINCT s.id) >= %s
         ORDER BY decks DESC
         LIMIT %s
