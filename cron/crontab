@@ -7,6 +7,11 @@
 0 0-12  * * 1 python -m scraper.melee --cards
 
 
+# Monday 2am: validate weekend tournament data
+# Re-scrapes stale events, fills missing decklists, fixes bracket placements,
+# flags MWR drift (possible missing rounds), refreshes views.
+17 2 * * 1 python -m scraper.validate
+
 # Midweek: keep upcoming events fresh
 0 2 * * 2-4 python -m scraper.melee --days 90
 
