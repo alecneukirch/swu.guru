@@ -14,6 +14,7 @@ Refreshes materialized views when done.
 """
 import argparse
 import logging
+import math
 import sys
 from datetime import date, timedelta, timezone
 
@@ -134,7 +135,7 @@ def validate(days: int = 8, dry_run: bool = False) -> None:
     short_round_ids: list[str] = []
     for ev in round_counts:
         pc = ev["player_count"] or 0
-        expected = 4 if pc < 16 else (5 if pc < 32 else 6)
+        expected = (math.floor(math.log2(pc)) + 1) if pc >= 2 else 0
         scraped  = ev["scraped_swiss_rounds"] or 0
         if scraped < expected:
             short_round_ids.append(ev["melee_id"])
