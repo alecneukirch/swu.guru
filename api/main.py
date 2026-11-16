@@ -1118,8 +1118,9 @@ def leader_stats(
         raise HTTPException(404, f"Leader '{leader}' not found")
 
     meta_t8_rate = (meta["all_t8s"] / meta["all_decks"]) if meta and meta["all_decks"] else 0
-    t8_rate      = row["top8_count"] / row["total_decks"] if row["total_decks"] else 0
-    conversion   = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
+    _k           = 10
+    _adjusted    = (row["top8_count"] + meta_t8_rate * _k) / (row["total_decks"] + _k) if row["total_decks"] else 0
+    conversion   = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
 
     pct = db.fetchone(f"""
         SELECT
