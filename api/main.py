@@ -5539,7 +5539,7 @@ def generate_deck(
             continue
         _inc = {s for s in _all_sids if _cname in _sid_to_cards.get(s, set())}
         _exc = _all_sids - _inc
-        if len(_inc) < 3 or len(_exc) < 3:
+        if len(_inc) < 2 or len(_exc) < 2:
             continue
         _avg_inc = sum(score_by_id.get(s, 0) for s in _inc) / len(_inc)
         _avg_exc = sum(score_by_id.get(s, 0) for s in _exc) / len(_exc)
