@@ -815,6 +815,31 @@ def import_tournament(
 
     log.info(f"  Total matches: {total_matches}")
 
+    # Bracket reconciliation: if we couldn't get Finals standings from Melee
+    # (it often returns empty), infer placements 1 and 2 from the Finals match.
+    if final_round and final_round["name"].lower() != "finals":
+        finals_match = db.fetchone(
+            f"""SELECT p1_standing_id, p2_standing_id, winner
+                FROM {tbls['matches']}
+                WHERE event_id = %s AND round_name ILIKE 'Finals'
+                ORDER BY id DESC LIMIT 1""",
+            (ev_id,)
+        )
+        if finals_match and finals_match["winner"] in ("p1", "p2"):
+            winner_sid = finals_match["p1_standing_id"] if finals_match["winner"] == "p1" else finals_match["p2_standing_id"]
+            loser_sid  = finals_match["p2_standing_id"] if finals_match["winner"] == "p1" else finals_match["p1_standing_id"]
+            if winner_sid:
+                db.execute(
+                    f"UPDATE {tbls['standings']} SET placement = 1 WHERE id = %s",
+                    (winner_sid,)
+                )
+            if loser_sid:
+                db.execute(
+                    f"UPDATE {tbls['standings']} SET placement = 2 WHERE id = %s",
+                    (loser_sid,)
+                )
+            log.info(f"  Bracket fix: standing {winner_sid} → 1st, {loser_sid} → 2nd (from Finals match)")
+
     # Update player count now that we have full standings
     db.execute(
         f"UPDATE {tbls['events']} SET player_count=%s WHERE id=%s AND (player_count IS NULL OR player_count < %s)",
@@ -1331,6 +1356,25 @@ def refresh_placements(
 
             log.info(f"  Processed {len(standings)} standings")
             updated_total += len(standings)
+
+            # Bracket reconciliation: fix 1st/2nd from Finals match if
+            # Melee's Finals standings API returned empty.
+            if final_round and final_round["name"].lower() != "finals":
+                finals_match = db.fetchone(
+                    f"""SELECT p1_standing_id, p2_standing_id, winner
+                        FROM {tbls['matches']}
+                        WHERE event_id = %s AND round_name ILIKE 'Finals'
+                        ORDER BY id DESC LIMIT 1""",
+                    (ev_id,)
+                )
+                if finals_match and finals_match["winner"] in ("p1", "p2"):
+                    winner_sid = finals_match["p1_standing_id"] if finals_match["winner"] == "p1" else finals_match["p2_standing_id"]
+                    loser_sid  = finals_match["p2_standing_id"] if finals_match["winner"] == "p1" else finals_match["p1_standing_id"]
+                    if winner_sid:
+                        db.execute(f"UPDATE {tbls['standings']} SET placement = 1 WHERE id = %s", (winner_sid,))
+                    if loser_sid:
+                        db.execute(f"UPDATE {tbls['standings']} SET placement = 2 WHERE id = %s", (loser_sid,))
+                    log.info(f"  Bracket fix: standing {winner_sid} → 1st, {loser_sid} → 2nd")
 
         except Exception as e:
             log.error(f"  Failed: {e}")
