@@ -5530,6 +5530,29 @@ def generate_deck(
             type_targets[slot_key] += count * w / valid_score
     type_targets = {k: round(v) for k, v in type_targets.items()}
 
+    # ── 0-copy filter ─────────────────────────────────────────────────────────
+    # For each main-deck card, compare avg deck_score of standings that include
+    # it vs standings that don't. If non-runners outperform runners by >5%,
+    # remove the card — including it hurts more than helps.
+    _sid_to_cards: dict[int, set[str]] = defaultdict(set)
+    for _r in card_rows:
+        if not _r["is_sideboard"]:
+            _sid_to_cards[_r["standing_id"]].add(_r["card_name"])
+    _all_sids = set(standing_ids)
+    _zero_copy_removed: list[str] = []
+    for (_cname, _is_sb) in list(card_data.keys()):
+        if _is_sb:
+            continue
+        _inc = {s for s in _all_sids if _cname in _sid_to_cards.get(s, set())}
+        _exc = _all_sids - _inc
+        if len(_inc) < 3 or len(_exc) < 3:
+            continue
+        _avg_inc = sum(score_by_id.get(s, 0) for s in _inc) / len(_inc)
+        _avg_exc = sum(score_by_id.get(s, 0) for s in _exc) / len(_exc)
+        if _avg_exc > _avg_inc * 1.05:
+            del card_data[(_cname, _is_sb)]
+            _zero_copy_removed.append(_cname)
+
     def _best_copies(d: dict) -> int:
         """Win-rate-weighted mode: pick the copy count most favoured by top-performing decks."""
         votes = d.get("copy_votes") or {}
@@ -5837,6 +5860,7 @@ def generate_deck(
                 {"leader": r["leader_name"], "metaShare": round(float(r["meta_share"]), 4)}
                 for r in opp_rows
             ],
+            "zeroCopyFiltered": _zero_copy_removed,
         },
     }
 

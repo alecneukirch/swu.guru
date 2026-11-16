@@ -4672,10 +4672,14 @@ async function openGenerateDeck() {
       .join(' · ');
 
     const cutoffLabel = m.placementCutoff ? ` <span style="color:var(--conv-mid)">· top-${m.placementCutoff} only</span>` : '';
+    const filteredLabel = (m.zeroCopyFiltered && m.zeroCopyFiltered.length)
+      ? `<br><span style="color:#e74c3c">0-copy filtered: ${m.zeroCopyFiltered.join(', ')}</span>`
+      : '';
     metaEl.innerHTML =
       `<strong style="color:var(--text2)">${m.referenceDecks} reference decks</strong>${cutoffLabel}` +
       ` · avg win rate <strong style="color:var(--green)">${(m.avgWinRate * 100).toFixed(1)}%</strong>` +
-      `<br>Top opponents: ${topOpp}`;
+      `<br>Top opponents: ${topOpp}` +
+      filteredLabel;
 
     jsonEl.textContent = JSON.stringify(data, null, 2);
     statusEl.textContent = `${(data.deck||[]).reduce((s,c)=>s+c.count,0)} main · ${(data.sideboard||[]).reduce((s,c)=>s+c.count,0)} sideboard`;
