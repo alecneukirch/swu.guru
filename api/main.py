@@ -5580,9 +5580,9 @@ def generate_deck(
                 "rate_2":       qc.get(2, 0) / n_ref,
             })
 
-        # Fill order: highest 3-of conversion rate first, then 2-of, then card_score
+        # Fill order: highest card_score (inc_rate × copies) first; rate_3/rate_2 break ties
         for bucket in type_buckets.values():
-            bucket.sort(key=lambda x: (-x["rate_3"], -x["rate_2"], -x["card_score"]))
+            bucket.sort(key=lambda x: (-x["card_score"], -x["rate_3"], -x["rate_2"]))
 
         result, total = [], 0
         used: set[str] = set()
