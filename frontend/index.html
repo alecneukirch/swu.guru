@@ -5570,9 +5570,22 @@ function pqFormatDist(distKm, useMiles) {
 }
 
 function pqEstimateDrive(distKm) {
-  // Roads aren't straight — apply ~1.3× tortuosity, then tier average speeds
-  const roadKm = distKm * 1.3;
-  const speedKmh = distKm < 50 ? 50 : distKm < 200 ? 80 : 105;
+  // Tortuosity (road/straight-line ratio) and avg speed vary significantly by trip type.
+  // Urban short trips have high circuity and low effective speeds due to lights/turns;
+  // long highway trips are more direct and faster.
+  let tortuosity, speedKmh;
+  if (distKm < 15) {
+    tortuosity = 1.45; speedKmh = 30;   // dense urban — lights, turns, traffic
+  } else if (distKm < 40) {
+    tortuosity = 1.35; speedKmh = 50;   // suburban / mixed surface roads
+  } else if (distKm < 150) {
+    tortuosity = 1.28; speedKmh = 72;   // regional with highway sections
+  } else if (distKm < 400) {
+    tortuosity = 1.22; speedKmh = 95;   // mostly highway
+  } else {
+    tortuosity = 1.18; speedKmh = 100;  // long-haul highway
+  }
+  const roadKm     = distKm * tortuosity;
   const totalHours = roadKm / speedKmh;
   const h = Math.floor(totalHours);
   const m = Math.round((totalHours - h) * 60);
