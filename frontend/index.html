@@ -3237,12 +3237,6 @@ select.sl-input { cursor: pointer; }
             <option value="deck_count">Sort: Decks</option>
             <option value="t8_count">Sort: T8s</option>
           </select>
-          <div class="sep cgh-sep" style="margin:0 4px"></div>
-          <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
-          <input type="number" id="lp-min-decks" value="2" min="1" max="999"
-            aria-label="Minimum decks"
-            style="width:52px;padding:3px 6px;font-size:12px"
-            oninput="loadLeaderCards()">
         </div>
         <!-- Row 2: filter + sideboard -->
         <div class="cgh-row">
@@ -3549,10 +3543,6 @@ select.sl-input { cursor: pointer; }
       <button class="btn"        id="cp-sort-incl"  onclick="setCpSort('in_color_rate')">Inclusion</button>
       <button class="btn"        id="cp-sort-t8s"   onclick="setCpSort('t8_count')">T8s</button>
     </div>
-    <div class="sep"></div>
-    <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">Min</span>
-    <input type="number" id="cp-min-decks" value="5" min="1" max="999"
-      aria-label="Minimum decks" style="width:52px;padding:3px 6px;font-size:12px" oninput="loadCardsPage()">
     <div class="sep"></div>
     <input type="text" id="cp-search" placeholder="Search cards…" oninput="filterGlobalCards()" style="width:130px;padding:3px 8px;font-size:12px">
     <div class="sep"></div>
@@ -4054,8 +4044,27 @@ function aspectsDisplay(aspects, iconSize = 18) {
 
 
 // ── Tier grade ───────────────────────────────────────────────────────────────
+// Percentile thresholds computed from live data each render: {s, a, b, c, d}
+let _tierThr = null;
+
+function computeTierThresholds(values) {
+  const sorted = [...values].filter(v => v != null).sort((a, b) => a - b);
+  if (sorted.length < 6) return null;
+  const pct = p => sorted[Math.min(Math.floor(sorted.length * p / 100), sorted.length - 1)];
+  return { s: pct(90), a: pct(75), b: pct(50), c: pct(25), d: pct(10) };
+}
+
 function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
+  const t = _tierThr;
+  if (t) {
+    if (v >= t.s) return { grade: 'S', cls: 'tier-s' };
+    if (v >= t.a) return { grade: 'A', cls: 'tier-a' };
+    if (v >= t.b) return { grade: 'B', cls: 'tier-b' };
+    if (v >= t.c) return { grade: 'C', cls: 'tier-c' };
+    if (v >= t.d) return { grade: 'D', cls: 'tier-d' };
+    return { grade: 'F', cls: 'tier-f' };
+  }
   if (v >= 1.7)  return { grade: 'S',  cls: 'tier-s' };
   if (v >= 1.4)  return { grade: 'A',  cls: 'tier-a' };
   if (v >= 1.1)  return { grade: 'B',  cls: 'tier-b' };
@@ -4455,9 +4464,16 @@ function renderLeaderGrid() {
   if (rogueBtn) rogueBtn.style.display = rogueGems.length ? '' : 'none';
   const maxD = Math.max(...rows.map(r => r.total_decks), 1);
 
+  // Compute dynamic percentile thresholds from main rows' conversion values
+  _tierThr = computeTierThresholds(mainRows.map(r => r.conversion));
+
   const TIER_ORDER = ['S','A','B','C','D','F'];
   const TIER_LABEL   = { S:'S Tier', A:'A Tier', B:'B Tier', C:'C Tier', D:'D Tier', F:'F Tier' };
-  const TIER_TOOLTIP = { S:'≥ 1.7× expected — dominant', A:'≥ 1.4× expected — significantly above average', B:'≥ 1.1× expected — above average', C:'≥ 0.8× expected — field average', D:'≥ 0.6× expected — below average', F:'< 0.6× expected — well below field average' };
+  const fmt1 = v => v != null ? v.toFixed(2) + '×' : '?';
+  const t = _tierThr;
+  const TIER_TOOLTIP = t
+    ? { S:`Top 10% — ≥ ${fmt1(t.s)}`, A:`Top 25% — ≥ ${fmt1(t.a)}`, B:`Top 50% — ≥ ${fmt1(t.b)}`, C:`Top 75% — ≥ ${fmt1(t.c)}`, D:`Top 90% — ≥ ${fmt1(t.d)}`, F:`Bottom 10% — < ${fmt1(t.d)}` }
+    : { S:'≥ 1.7× expected', A:'≥ 1.4× expected', B:'≥ 1.1× expected', C:'≥ 0.8× expected', D:'≥ 0.6× expected', F:'< 0.6× expected' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
 
   // Assign tiers using recalculated conversion (excludes rogue from baseline)
@@ -4711,8 +4727,7 @@ async function loadLeaderCards() {
 
   document.getElementById('leader-cards-tbody').innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
   try {
-    const minDecks = parseInt(document.getElementById('lp-min-decks')?.value) || 5;
-    let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?min_decks=' + minDecks + '&format=' + currentFormat + metaParam();
+    let url = '/api/leader/' + encodeURIComponent(currentLeader) + '/cards?format=' + currentFormat + metaParam();
     if (currentLeaderBase)         url += '&base_group=' + encodeURIComponent(currentLeaderBase);
     if (_eloFilterBucket !== null) url += '&elo_bucket=' + _eloFilterBucket;
     leaderData = await api(url) || [];
@@ -6486,7 +6501,7 @@ async function loadMatrix() {
   // top_n uses max of rows/cols so we always have enough combos for both axes
   const topN = Math.max(matrixRows, matrixCols);
 
-  let url = `/api/matrix?min_decks=5&min_matches=1&top_n=${topN}&format=${currentFormat}` + metaParam();
+  let url = `/api/matrix?min_matches=1&top_n=${topN}&format=${currentFormat}` + metaParam();
   if (matrixMinElo > 0)    url += `&min_elo=${matrixMinElo}`;
   if (matrixOppMinElo > 0) url += `&opp_min_elo=${matrixOppMinElo}`;
 
@@ -8200,8 +8215,7 @@ async function loadCardsPage() {
   const wrap = document.getElementById('cp-grid');
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading" style="padding:24px;grid-column:1/-1">loading…</div>';
-  const minDecks = parseInt(document.getElementById('cp-min-decks')?.value) || 5;
-  let url = `/api/cards/stats?format=${currentFormat}&min_decks=${minDecks}` + metaParam();
+  let url = `/api/cards/stats?format=${currentFormat}` + metaParam();
   try {
     _cpData = await api(url) || [];
     initCpCostFilters();
