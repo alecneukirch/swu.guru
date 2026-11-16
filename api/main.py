@@ -562,10 +562,7 @@ def leaders(
     result = []
     for r in rows:
         t8_rate = r["top8_count"] / r["total_decks"] if r["total_decks"] else 0
-        # Bayesian shrinkage: pull conversion toward meta average for small samples
-        _k = 10
-        _adjusted = (r["top8_count"] + meta_t8_rate * _k) / (r["total_decks"] + _k)
-        conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
+        conversion = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
         pct = pct_by_leader.get(r['leader'], {})
 
         hri_all = hri_by_leader.get(r['leader'])
@@ -913,10 +910,7 @@ def leaders_by_base(
     result = []
     for g in groups.values():
         t8_rate = g['top8_count'] / g['total_decks'] if g['total_decks'] else 0
-        # Bayesian shrinkage: pull conversion toward meta average for small samples
-        _k = 10
-        _adjusted = (g['top8_count'] + meta_t8_rate * _k) / (g['total_decks'] + _k)
-        conversion = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
+        conversion = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
         avg_hri    = round(g['_hri_sum']    / g['_hri_count'])    if g['_hri_count']    else None
         avg_hri_t8 = round(g['_hri_t8_sum'] / g['_hri_t8_count']) if g['_hri_t8_count'] else None
         skill_delta = (avg_hri_t8 - global_avg_hri) if (global_avg_hri and avg_hri_t8 and g['_hri_t8_count'] >= 1) else None
@@ -1118,9 +1112,8 @@ def leader_stats(
         raise HTTPException(404, f"Leader '{leader}' not found")
 
     meta_t8_rate = (meta["all_t8s"] / meta["all_decks"]) if meta and meta["all_decks"] else 0
-    _k           = 10
-    _adjusted    = (row["top8_count"] + meta_t8_rate * _k) / (row["total_decks"] + _k) if row["total_decks"] else 0
-    conversion   = round(_adjusted / meta_t8_rate, 3) if meta_t8_rate else None
+    t8_rate      = row["top8_count"] / row["total_decks"] if row["total_decks"] else 0
+    conversion   = round(t8_rate / meta_t8_rate, 3) if meta_t8_rate else None
 
     pct = db.fetchone(f"""
         SELECT
