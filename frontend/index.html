@@ -4049,9 +4049,10 @@ let _tierThr = null;
 
 function computeTierThresholds(values) {
   const sorted = [...values].filter(v => v != null && v > 0).sort((a, b) => a - b);
-  if (sorted.length < 6) return null;
+  if (sorted.length < 5) return null;
   const pct = p => sorted[Math.min(Math.floor(sorted.length * p / 100), sorted.length - 1)];
-  return { s: pct(90), a: pct(75), b: pct(50), c: pct(25), d: pct(10) };
+  // S/A/B/C/D split non-zero values into 5 equal buckets; F = exactly 0
+  return { s: pct(80), a: pct(60), b: pct(40), c: pct(20) };
 }
 
 function tierGrade(v) {
@@ -4063,8 +4064,7 @@ function tierGrade(v) {
     if (v >= t.a) return { grade: 'A', cls: 'tier-a' };
     if (v >= t.b) return { grade: 'B', cls: 'tier-b' };
     if (v >= t.c) return { grade: 'C', cls: 'tier-c' };
-    if (v >= t.d) return { grade: 'D', cls: 'tier-d' };
-    return { grade: 'F', cls: 'tier-f' };
+    return { grade: 'D', cls: 'tier-d' };
   }
   if (v >= 1.7)  return { grade: 'S',  cls: 'tier-s' };
   if (v >= 1.4)  return { grade: 'A',  cls: 'tier-a' };
@@ -4473,8 +4473,8 @@ function renderLeaderGrid() {
   const fmt1 = v => v != null ? v.toFixed(2) + '×' : '?';
   const t = _tierThr;
   const TIER_TOOLTIP = t
-    ? { S:`Top 10% — ≥ ${fmt1(t.s)}`, A:`Top 25% — ≥ ${fmt1(t.a)}`, B:`Top 50% — ≥ ${fmt1(t.b)}`, C:`Top 75% — ≥ ${fmt1(t.c)}`, D:`Top 90% — ≥ ${fmt1(t.d)}`, F:`Bottom 10% — < ${fmt1(t.d)}` }
-    : { S:'≥ 1.7× expected', A:'≥ 1.4× expected', B:'≥ 1.1× expected', C:'≥ 0.8× expected', D:'≥ 0.6× expected', F:'< 0.6× expected' };
+    ? { S:`Top 20% — ≥ ${fmt1(t.s)}`, A:`Top 40% — ≥ ${fmt1(t.a)}`, B:`Top 60% — ≥ ${fmt1(t.b)}`, C:`Top 80% — ≥ ${fmt1(t.c)}`, D:'Bottom 20% (non-zero)', F:'No top 8 finishes' }
+    : { S:'≥ 1.7× expected', A:'≥ 1.4× expected', B:'≥ 1.1× expected', C:'≥ 0.8× expected', D:'≥ 0.6× expected', F:'No top 8 finishes' };
   const byTier = Object.fromEntries(TIER_ORDER.map(t => [t, []]));
 
   // Assign tiers using recalculated conversion (excludes rogue from baseline)
