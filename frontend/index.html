@@ -3189,7 +3189,7 @@ select.sl-input { cursor: pointer; }
     <div class="sep"></div>
     <input type="text" id="home-search" placeholder="Search leader…" oninput="renderLeaderGrid()" style="width:160px">
     <div class="sep"></div>
-    <button class="btn" id="btn-rogue-scroll" style="display:none" data-tooltip="&lt; 0.6% meta share · excluded from tier grades" onclick="document.getElementById('rogue-anchor')?.scrollIntoView({behavior:'smooth'})"><svg width="22" height="14" viewBox="0 0 100 65" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" fill-rule="evenodd" d="M2 20 C2 5 18 2 28 8 C34 12 40 15 50 15 C60 15 66 12 72 8 C82 2 98 5 98 20 C98 38 86 48 72 48 C63 48 56 43 52 36 L50 32 L48 36 C44 43 37 48 28 48 C14 48 2 38 2 20 Z M15 26 A13 10 0 1 0 41 26 A13 10 0 1 0 15 26 Z M59 26 A13 10 0 1 0 85 26 A13 10 0 1 0 59 26 Z"/></svg>Rogue ↓</button>
+    <button class="btn" id="btn-rogue-scroll" style="display:none" data-tooltip="Low meta share but conversion ≥ 1.0 — hidden gems" onclick="document.getElementById('rogue-anchor')?.scrollIntoView({behavior:'smooth'})"><svg width="22" height="14" viewBox="0 0 100 65" style="vertical-align:middle;margin-right:6px"><path fill="currentColor" fill-rule="evenodd" d="M2 20 C2 5 18 2 28 8 C34 12 40 15 50 15 C60 15 66 12 72 8 C82 2 98 5 98 20 C98 38 86 48 72 48 C63 48 56 43 52 36 L50 32 L48 36 C44 43 37 48 28 48 C14 48 2 38 2 20 Z M15 26 A13 10 0 1 0 41 26 A13 10 0 1 0 15 26 Z M59 26 A13 10 0 1 0 85 26 A13 10 0 1 0 59 26 Z"/></svg>Rogue ↓</button>
   </div>
   <div id="leader-grid"></div>
 </div>
@@ -4440,17 +4440,19 @@ function renderLeaderGrid() {
     rogueRows.length = 0;
   }
 
-  // Show/hide rogue scroll button
-  const rogueBtn = document.getElementById('btn-rogue-scroll');
-  if (rogueBtn) rogueBtn.style.display = rogueRows.length ? '' : 'none';
-
   // Recalculate conversion baseline from main rows only (excludes rogue outliers)
   const mainTotalDecks = mainRows.reduce((s, r) => s + (r.total_decks || 0), 0);
   const mainTotalT8s   = mainRows.reduce((s, r) => s + (r.top8_count  || 0), 0);
   const mainMetaT8Rate = mainTotalDecks ? mainTotalT8s / mainTotalDecks : 0;
 
   mainRows.sort((a, b) => (b[homeSort] ?? 0) - (a[homeSort] ?? 0));
-  rogueRows.sort((a, b) => (b[homeSort] ?? 0) - (a[homeSort] ?? 0));
+  const rogueGems = rogueRows.filter(r => (r.conversion ?? 0) >= 1.0);
+  const rogueLow  = rogueRows.filter(r => (r.conversion ?? 0) <  1.0);
+  rogueGems.sort((a, b) => (b.conversion ?? 0) - (a.conversion ?? 0));
+
+  // Show/hide rogue scroll button — only shown when there are gems
+  const rogueBtn = document.getElementById('btn-rogue-scroll');
+  if (rogueBtn) rogueBtn.style.display = rogueGems.length ? '' : 'none';
   const maxD = Math.max(...rows.map(r => r.total_decks), 1);
 
   const TIER_ORDER = ['S','A','B','C','D','F'];
@@ -4466,6 +4468,10 @@ function renderLeaderGrid() {
     const g = tierGrade(conv).grade;
     byTier[g in byTier ? g : 'C'].push({ ...r, _conv: conv });
   });
+
+  // Rogue decks below 1.0 conversion join F tier
+  rogueLow.forEach(r => byTier['F'].push({ ...r, _conv: r.conversion ?? 0 }));
+  byTier['F'].sort((a, b) => (b._conv ?? 0) - (a._conv ?? 0));
 
   let html = '';
   let imgIdx = 0;
@@ -4492,12 +4498,12 @@ function renderLeaderGrid() {
     html += renderTierBlock(t, byTier[t]);
   });
 
-  // Rogue section
-  if (rogueRows.length) {
+  // Rogue Gems section — low meta share but conversion ≥ 1.0
+  if (rogueGems.length) {
     html += `<div class="tier-wrap collapsed">`;
-    html += `<div id="rogue-anchor" class="rogue-section-header"><span class="rogue-label">Rogue Decks</span><span class="rogue-sub">&lt; 0.6% meta share · excluded from tier grades</span><span class="tsh-count">${rogueRows.length}</span><span class="tsh-chevron">▾</span></div>`;
+    html += `<div id="rogue-anchor" class="rogue-section-header"><span class="rogue-label">Rogue Gems</span><span class="rogue-sub">&lt; 0.6% meta share · overperforming relative to play rate</span><span class="tsh-count">${rogueGems.length}</span><span class="tsh-chevron">▾</span></div>`;
     html += `<div class="tier-section-grid rogue-grid">`;
-    rogueRows.forEach(r => {
+    rogueGems.forEach(r => {
       const i = imgIdx++;
       html += mkCard(r, i, r.conversion, maxD);
       allRows.push({ r, i });
