@@ -544,10 +544,18 @@ def upsert_event(ev: dict, tbl: str = "events") -> int:
     set_code = ev.get("set_code") or None  # normalize "" to None to avoid FK violation
     row = db.fetchone(f"SELECT id FROM {tbl} WHERE melee_id = %s", (melee_id,))
     if row:
+        # Only overwrite a column if the incoming value is non-null — never
+        # clobber existing good data with nulls from a partial re-scrape.
         db.execute(
             f"""UPDATE {tbl}
-               SET name=%s, date=%s, player_count=%s, set_code=%s,
-                   melee_url=%s, venue=%s, country=%s, event_level=%s
+               SET name        = COALESCE(%s, name),
+                   date        = COALESCE(%s, date),
+                   player_count= COALESCE(%s, player_count),
+                   set_code    = COALESCE(%s, set_code),
+                   melee_url   = COALESCE(%s, melee_url),
+                   venue       = COALESCE(%s, venue),
+                   country     = COALESCE(%s, country),
+                   event_level = COALESCE(%s, event_level)
                WHERE id=%s""",
             (ev.get("name"), ev.get("date"), ev.get("player_count"),
              set_code, ev.get("melee_url"),
