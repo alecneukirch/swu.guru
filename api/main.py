@@ -5348,13 +5348,7 @@ def generate_deck(
     5. Return meta context: reference deck count, avg win rate, top opponents by meta share.
     """
     t = _tnames(format)
-    # Default to current meta window so new cards aren't buried by historical data
-    _effective_meta = meta_id
-    if not _effective_meta:
-        _cur = db.fetchone("SELECT id FROM metas WHERE is_current = TRUE AND format = 'premiere' LIMIT 1")
-        if _cur:
-            _effective_meta = _cur["id"]
-    date_sql, date_params = meta_date_filter(_effective_meta)
+    date_sql, date_params = meta_date_filter(meta_id)
 
     base_names  = [b.strip() for b in base_group.split('|') if b.strip()] if base_group else []
     base_filter = "AND s.base = ANY(%s::text[])" if base_names else ""
