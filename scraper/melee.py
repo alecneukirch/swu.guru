@@ -1213,6 +1213,19 @@ def sync_from_hub(
                 except ValueError:
                     pass
 
+            event_meta = {
+                "name":        stub.get("name") or hub_data.get("name"),
+                "date":        stub.get("date"),
+                "player_count": stub.get("player_count"),
+                "set_code":    None if eternal else (stub.get("set_code") or hub_data.get("set_code")),
+                "venue":       hub_data.get("venue"),
+                "country":     stub.get("country") or hub_data.get("country"),
+                "event_level": stub.get("event_level"),
+            }
+
+            # Always upsert hub metadata so events scraped without it get their name/date filled in
+            upsert_event({"melee_id": melee_id, **event_meta}, tbl=tbls["events"])
+
             # Skip if already fully scraped with leader data
             existing = db.fetchone(
                 f"""SELECT e.id, COUNT(s.id) AS n,
@@ -1231,16 +1244,6 @@ def sync_from_hub(
                 continue
             if n > 0:
                 log.info(f"  Re-scraping ({n} standings, no leader data yet)")
-
-            event_meta = {
-                "name":        stub.get("name") or hub_data.get("name"),
-                "date":        stub.get("date"),
-                "player_count": stub.get("player_count"),
-                "set_code":    None if eternal else (stub.get("set_code") or hub_data.get("set_code")),
-                "venue":       hub_data.get("venue"),
-                "country":     stub.get("country") or hub_data.get("country"),
-                "event_level": stub.get("event_level"),
-            }
 
             result = import_tournament(melee_id, event_meta, fetch_cards, eternal=eternal)
             if result:
