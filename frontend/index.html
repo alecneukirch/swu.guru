@@ -4048,7 +4048,7 @@ function aspectsDisplay(aspects, iconSize = 18) {
 let _tierThr = null;
 
 function computeTierThresholds(values) {
-  const sorted = [...values].filter(v => v != null).sort((a, b) => a - b);
+  const sorted = [...values].filter(v => v != null && v > 0).sort((a, b) => a - b);
   if (sorted.length < 6) return null;
   const pct = p => sorted[Math.min(Math.floor(sorted.length * p / 100), sorted.length - 1)];
   return { s: pct(90), a: pct(75), b: pct(50), c: pct(25), d: pct(10) };
@@ -4056,6 +4056,7 @@ function computeTierThresholds(values) {
 
 function tierGrade(v) {
   if (v == null) return { grade: '?', cls: 'tier-c' };
+  if (v <= 0)    return { grade: 'F', cls: 'tier-f' };
   const t = _tierThr;
   if (t) {
     if (v >= t.s) return { grade: 'S', cls: 'tier-s' };
