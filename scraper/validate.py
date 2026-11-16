@@ -114,54 +114,46 @@ def validate(days: int = 8, dry_run: bool = False) -> None:
         # have a --days flag, so filter by calling it with a custom query.
         _bracket_reconcile(tbls, cutoff)
 
-    # ── 5. MWR consistency check (event-level) ───────────────────────────────
-    # Flag events where ≥30% of players have a significant MWR mismatch —
-    # this usually means a whole round of matches was not scraped.
-    log.info(f"\n--- MWR consistency check ---")
-    mwr_events = db.fetchall(f"""
+    # ── 5. Round count check ──────────────────────────────────────────────────
+    # Expected Swiss rounds: <32 players → 5 rounds, 32+ → 6 rounds.
+    # If we scraped fewer Swiss rounds than expected, re-scrape the event.
+    log.info(f"\n--- Round count check ---")
+    round_counts = db.fetchall(f"""
         SELECT
-            e.name, e.melee_id,
-            COUNT(*)                                            AS total,
-            COUNT(*) FILTER (WHERE mismatch)                   AS mismatched,
-            ROUND(100.0 * COUNT(*) FILTER (WHERE mismatch)
-                        / NULLIF(COUNT(*), 0), 1)              AS pct_mismatch
-        FROM (
-            SELECT
-                s.event_id,
-                ABS(CAST(s.match_win_rate AS float) - m.computed_mwr) > 0.08
-                    AS mismatch
-            FROM {tbls['standings']} s
-            JOIN LATERAL (
-                SELECT
-                    CASE WHEN COUNT(*) FILTER (WHERE winner IN ('p1','p2')) = 0 THEN NULL
-                    ELSE
-                        SUM(CASE
-                            WHEN p1_standing_id = s.id AND winner = 'p1' THEN 1
-                            WHEN p2_standing_id = s.id AND winner = 'p2' THEN 1
-                            ELSE 0 END)::float
-                        / NULLIF(COUNT(*) FILTER (WHERE winner IN ('p1','p2')), 0)
-                    END AS computed_mwr
-                FROM {tbls['matches']}
-                WHERE (p1_standing_id = s.id OR p2_standing_id = s.id)
-                  AND round_name NOT ILIKE '%%bye%%'
-            ) m ON TRUE
-            WHERE s.match_win_rate IS NOT NULL
-              AND m.computed_mwr   IS NOT NULL
-        ) sub
-        JOIN {tbls['events']} e ON e.id = sub.event_id
+            e.id, e.melee_id, e.name, e.player_count,
+            COUNT(DISTINCT m.round_name) FILTER (
+                WHERE m.round_name ~* '^round'
+            ) AS scraped_swiss_rounds
+        FROM {tbls['events']} e
+        LEFT JOIN {tbls['matches']} m ON m.event_id = e.id
         WHERE e.date >= %s
-        GROUP BY e.id, e.name, e.melee_id
-        HAVING COUNT(*) FILTER (WHERE mismatch) * 1.0 / NULLIF(COUNT(*), 0) >= 0.30
-        ORDER BY pct_mismatch DESC
+          AND e.player_count IS NOT NULL
+        GROUP BY e.id, e.melee_id, e.name, e.player_count
     """, [cutoff])
 
-    if mwr_events:
-        log.warning(f"  {len(mwr_events)} event(s) with possible missing match rounds:")
-        for ev in mwr_events:
-            log.warning(f"    {ev['name']} (melee_id={ev['melee_id']}): "
-                        f"{ev['mismatched']}/{ev['total']} players ({ev['pct_mismatch']}%) have MWR mismatch")
-    else:
-        log.info("  No events with significant MWR drift.")
+    short_round_ids: list[str] = []
+    for ev in round_counts:
+        pc = ev["player_count"] or 0
+        expected = 4 if pc < 16 else (5 if pc < 32 else 6)
+        scraped  = ev["scraped_swiss_rounds"] or 0
+        if scraped < expected:
+            short_round_ids.append(ev["melee_id"])
+            log.warning(f"  MISSING ROUNDS — {ev['name']} (melee_id={ev['melee_id']}): "
+                        f"{scraped}/{expected} Swiss rounds scraped "
+                        f"({ev['player_count']} players)")
+
+    if not short_round_ids:
+        log.info("  All events have the expected number of Swiss rounds.")
+
+    if short_round_ids:
+        log.info(f"\n--- Re-scraping {len(short_round_ids)} event(s) with missing rounds ---")
+        for melee_id in short_round_ids:
+            log.info(f"  Re-scraping {melee_id}...")
+            if not dry_run:
+                try:
+                    import_tournament(melee_id, fetch_cards=True)
+                except Exception as exc:
+                    log.error(f"  Failed: {exc}", exc_info=True)
 
     # ── 6. Refresh views ──────────────────────────────────────────────────────
     if not dry_run:
